@@ -1,0 +1,26 @@
+sha,date,author_domain,category,nth_commit_of_author,author_total_commits,sensitive_files_touched,matched_patterns,files
+abd3e1c85d4b,2021-07-02,mailoo.org,other org domain,2,5,1,*/Dockerfile*,cosmos-redis/Dockerfile
+ecf21d00e180,2021-07-02,mailoo.org,other org domain,3,5,1,*/Dockerfile*,cosmos-frontend-init/Dockerfile
+70be2ae5222f,2021-09-21,ballaerospace.com,other org domain,5,50,2,*/Dockerfile*,cosmos-init/Dockerfile;cosmos-ruby/Dockerfile
+f397dd07eedd,2022-02-01,users.noreply.github.com,github noreply/web,1,9,1,.github/workflows/**,.github/workflows/build.yml
+6ad78b75a3ea,2022-07-16,openc3.com,vendor (openc3.com),1,3970,4,.github/workflows/**,.github/workflows/api_tests.yml;.github/workflows/playwright.yml;.github/workflows/release.yml;.github/workflows/ruby_unit_tests.yml
+3f049eb2e2d8,2022-07-16,openc3.com,vendor (openc3.com),2,3970,1,.github/workflows/**,.github/workflows/api_tests.yml
+4e23f64b70ce,2022-07-22,openc3.com,vendor (openc3.com),4,3970,1,openc3/lib/openc3/models/plugin_model.rb,openc3/lib/openc3/models/plugin_model.rb
+e4119f05ffca,2022-07-22,openc3.com,vendor (openc3.com),5,3970,2,openc3/lib/openc3/api/**,openc3/lib/openc3/api/cmd_api.rb;openc3/lib/openc3/api/tlm_api.rb
+ccc9975cfe44,2022-07-27,openc3.com,vendor (openc3.com),1,1451,6,openc3/lib/openc3/script/**,openc3/lib/openc3/script/calendar.rb;openc3/lib/openc3/script/commands.rb;openc3/lib/openc3/script/limits.rb;openc3/lib/openc3/script/script.rb;openc3/lib/openc3/script/script_runner.rb;openc3/lib/openc3/script/storage.rb
+42febf136cf5,2022-07-29,openc3.com,vendor (openc3.com),3,1451,1,.github/workflows/**,.github/workflows/release.yml
+5768b023ab86,2023-02-09,turionspace.com,other org domain,1,5,1,.env,.env
+4487d9b6250a,2023-02-23,turionspace.com,other org domain,4,5,1,openc3/bin/*,openc3/bin/openc3cli
+59dfc71ac2d1,2023-02-23,turionspace.com,other org domain,5,5,1,openc3/bin/*,openc3/bin/openc3cli
+6f7236de9ced,2024-03-25,ssclab.loc,other org domain,1,1,1,compose.yaml,compose.yaml
+89ba72aac85b,2024-06-24,is4s.com,other org domain,4,14,1,.github/workflows/**,.github/workflows/playwright.yml
+f39210578682,2024-06-26,is4s.com,other org domain,3,3,1,*/Dockerfile*,openc3-cosmos-init/Dockerfile
+a3a733d21621,2025-06-12,users.noreply.github.com,github noreply/web,5,82,1,.github/workflows/**,.github/workflows/generate-docs.yml
+e726ed98894c,2025-09-14,gmail.com,personal webmail,1,10,1,openc3/lib/openc3/models/plugin_model.rb,openc3/lib/openc3/models/plugin_model.rb
+e746b020cd41,2025-10-29,openc3.com,vendor (openc3.com),3,93,1,.github/workflows/**,.github/workflows/eslint.yml
+a660b1f6da4b,2025-11-03,gmail.com,personal webmail,5,10,1,openc3/lib/openc3/models/plugin_model.rb,openc3/lib/openc3/models/plugin_model.rb
+5e243d606080,2025-11-04,sdl.usu.edu,other org domain,1,41,1,openc3/bin/*,openc3/bin/openc3cli
+c533ce7675d7,2025-11-04,sdl.usu.edu,other org domain,2,41,1,openc3/bin/*,openc3/bin/openc3cli
+2ffac48ace91,2025-11-13,sdl.usu.edu,other org domain,5,41,2,openc3/bin/*;openc3/lib/openc3/models/plugin_model.rb,openc3/bin/openc3cli;openc3/lib/openc3/models/plugin_model.rb
+439b62128618,2026-03-24,stepsecurity.io,other org domain,1,1,20,.github/workflows/**,.github/workflows/api_tests.yml;.github/workflows/build_ubi.yml;.github/workflows/clamav.yml;.github/workflows/cli.yml;.github/workflows/codeql.yaml;.github/workflows/dependency-review.yml;.github/workflows/eslint.yml;.github/workflows/generate-docs.yml;.github/workflows/playwright-firefox-nightly.yml;.github/workflows/playwright.yml;.github/workflows/post_release_clamav.yml;.github/workflows/post
+caaf839934b6,2026-04-21,users.noreply.github.com,github noreply/web,1,1,1,openc3/lib/openc3/models/plugin_model.rb,openc3/lib/openc3/models/plugin_model.rb

@@ -1,0 +1,82 @@
+{
+ "components_total": 2663,
+ "components_by_ecosystem": {
+  "library": 6,
+  "gem": 623,
+  "npm": 1751,
+  "github-action": 90,
+  "pypi": 50,
+  "go-module (from vendored anycable-go binaries)": 88,
+  "file": 55
+ },
+ "gems_by_lockfile": {
+  "/openc3/templates/plugin/plugin.gemspec": 1,
+  "/openc3-cosmos-cmd-tlm-api/Gemfile.lock": 190,
+  "/openc3-cosmos-script-runner-api/Gemfile.lock": 188,
+  "/openc3/Gemfile.lock": 191,
+  "/Gemfile.lock": 32,
+  "/openc3/openc3.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/openc3-cosmos-demo.gemspec": 1,
+  "/examples/openc3-cosmos-erb-test/openc3-cosmos-erb-test.gemspec": 1,
+  "/examples/openc3-cosmos-http-example/openc3-cosmos-http-example.gemspec": 1,
+  "/examples/openc3-cosmos-mqtt-test/openc3-cosmos-mqtt-test.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-admin/openc3-cosmos-tool-admin.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplorer/openc3-cosmos-tool-bucketexplorer.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdsender/openc3-cosmos-tool-cmdsender.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdtlmserver/openc3-cosmos-tool-cmdtlmserver.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataextractor/openc3-cosmos-tool-dataextractor.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataviewer/openc3-cosmos-tool-dataviewer.gemspec": 1,
+  "/docs.openc3.com/openc3-cosmos-tool-docs.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-handbooks/openc3-cosmos-tool-handbooks.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-iframe/openc3-cosmos-tool-iframe.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-limitsmonitor/openc3-cosmos-tool-limitsmonitor.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-packetviewer/openc3-cosmos-tool-packetviewer.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-scriptrunner/openc3-cosmos-tool-scriptrunner.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tablemanager/openc3-cosmos-tool-tablemanager.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmgrapher/openc3-cosmos-tool-tlmgrapher.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmviewer/openc3-cosmos-tool-tlmviewer.gemspec": 1,
+  "/openc3-cosmos-init/plugins/packages/openc3-tool-base/openc3-tool-base.gemspec": 1
+ },
+ "grype_matches": 208,
+ "grype_matches_by_severity": {
+  "Critical": 19,
+  "High": 95,
+  "Medium": 68,
+  "Low": 16,
+  "Unknown": 10
+ },
+ "vulnerable_components": 44,
+ "vulnerable_components_by_ecosystem": {
+  "go-module (from vendored anycable-go binaries)": 8,
+  "npm": 34,
+  "gem": 1,
+  "github-action": 1
+ },
+ "vulnerable_components_direct_transitive": {
+  "n/a (not a manifest ecosystem)": 9,
+  "transitive": 31,
+  "direct": 4
+ },
+ "license_source_counts": {
+  "none": 241,
+  "sbom": 3,
+  "registry": 2398,
+  "registry-lookup-failed": 21
+ },
+ "license_flag_counts_all_components": {
+  "not-applicable (non-registry component)": 237,
+  "ok": 2393,
+  "GPL": 4,
+  "LGPL": 4,
+  "unknown (registry lookup failed)": 21,
+  "none-declared": 4
+ },
+ "license_flag_rows_deduplicated": 29,
+ "license_flag_rows_by_kind": {
+  "GPL": 2,
+  "LGPL": 4,
+  "unknown (registry lookup failed)": 21,
+  "none-declared": 2
+ },
+ "registry_license_lookups": 1853
+}

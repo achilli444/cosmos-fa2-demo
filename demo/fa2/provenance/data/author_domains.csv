@@ -1,0 +1,29 @@
+domain,category,commits,pct,distinct_emails
+openc3.com,vendor (openc3.com),6130,53.6,6
+ball.com,other org domain,3806,33.3,10
+users.noreply.github.com,github noreply/web,720,6.3,23
+gmail.com,personal webmail,419,3.7,19
+ballaerospace.com,other org domain,224,2.0,5
+sdl.usu.edu,other org domain,42,0.4,2
+(no-domain),local/unresolvable host,22,0.2,1
+is4s.com,other org domain,17,0.1,2
+emilys-macbook-pro.local,local/unresolvable host,14,0.1,1
+windhoverlabs.com,other org domain,8,0.1,1
+phillips101.com,other org domain,7,0.1,1
+turionspace.com,other org domain,5,0.0,1
+mailoo.org,other org domain,5,0.0,1
+nasa.gov,other org domain,4,0.0,1
+rmelton-vlx.aero.ball.com,other org domain,4,0.0,1
+tangibletec.com,other org domain,3,0.0,1
+blueorigin.com,other org domain,2,0.0,1
+gd-ms.com,other org domain,1,0.0,1
+stepsecurity.io,other org domain,1,0.0,1
+brooks.cx,other org domain,1,0.0,1
+mit.edu,other org domain,1,0.0,1
+ssclab.loc,other org domain,1,0.0,1
+tinmith.net,other org domain,1,0.0,1
+aggiemail.usu.edu,other org domain,1,0.0,1
+aacmicrotec.com,other org domain,1,0.0,1
+ajordan-imac.aero.ball.com,other org domain,1,0.0,1
+crimson.ua.edu,other org domain,1,0.0,1
+rmelton-vlx.(none),other org domain,1,0.0,1

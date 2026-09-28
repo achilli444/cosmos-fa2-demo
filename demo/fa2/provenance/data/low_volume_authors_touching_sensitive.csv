@@ -1,0 +1,7 @@
+author_domain,category,author_total_commits,commits_touching_sensitive,shas
+turionspace.com,other org domain,5,3,5768b023ab86;4487d9b6250a;59dfc71ac2d1
+mailoo.org,other org domain,5,2,abd3e1c85d4b;ecf21d00e180
+is4s.com,other org domain,3,1,f39210578682
+ssclab.loc,other org domain,1,1,6f7236de9ced
+stepsecurity.io,other org domain,1,1,439b62128618
+users.noreply.github.com,github noreply/web,1,1,caaf839934b6

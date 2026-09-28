@@ -1,0 +1,26 @@
+rank,cve_or_ghsa,grype_id,severity,cvss,component,version,ecosystem,direct_or_transitive,fixed_version,location
+1,CVE-2026-46595,GHSA-x527-x647-q7gg,Critical,10.0,golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.52.0,/openc3-ruby/anycable-go-linux-arm64
+2,CVE-2026-77602,GHSA-jjq7-m736-w977,Critical,9.9,openc3,7.2.0,gem,direct,7.3.0,/openc3/Gemfile.lock
+3,CVE-2026-54466,GHSA-xv26-6w52-cph6,Critical,9.2,websocket-driver,0.7.4,npm,transitive,0.7.5,/docs.openc3.com/pnpm-lock.yaml
+4,CVE-2026-39832,GHSA-f5wc-c3c7-36mc,Critical,9.1,golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.52.0,/openc3-ruby/anycable-go-linux-arm64
+5,CVE-2026-42508,GHSA-5cgq-3rg8-m6cv,Critical,9.1,golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.52.0,/openc3-ruby/anycable-go-linux-amd64
+6,CVE-2026-39834,GHSA-rm3j-f69w-wqmq,Critical,9.1,golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.52.0,/openc3-ruby/anycable-go-linux-arm64
+7,CVE-2026-39830,GHSA-vgwf-h737-ff37,Critical,9.1,golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.52.0,/openc3-ruby/anycable-go-linux-arm64
+8,CVE-2026-39831,GHSA-89gr-r52h-f8rx,Critical,9.1,golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.52.0,/openc3-ruby/anycable-go-linux-arm64
+9,CVE-2026-39833,GHSA-jppx-rxg9-jmrx,Critical,9.1,golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.52.0,/openc3-ruby/anycable-go-linux-arm64
+10,GHSA-hrxh-6v49-42gf,GHSA-hrxh-6v49-42gf,High,8.8,google.golang.org/grpc,v1.80.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),1.82.1,/openc3-ruby/anycable-go-linux-arm64
+11,CVE-2026-77601,GHSA-vp3w-52v9-q57f,High,8.8,openc3,7.2.0,gem,direct,7.3.0,/openc3-cosmos-cmd-tlm-api/Gemfile.lock
+12,CVE-2026-12143,GHSA-hmw2-7cc7-3qxx,High,8.7,form-data,4.0.5,npm,transitive,4.0.6,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+13,CVE-2026-84445,GHSA-2v4p-qf9q-27wj,High,8.7,google.golang.org/grpc,v1.80.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),1.82.2,/openc3-ruby/anycable-go-linux-amd64
+14,CVE-2026-84304,GHSA-vp52-pcj8-j9qc,High,8.7,google.golang.org/grpc,v1.80.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),1.83.1,/openc3-ruby/anycable-go-linux-amd64
+15,CVE-2025-71329,GHSA-5p2g-fcmc-qvqq,High,8.7,image-size,2.0.2,npm,transitive,2.0.3,/docs.openc3.com/pnpm-lock.yaml
+16,CVE-2025-71330,GHSA-w3rx-r6r6-pgpr,High,8.7,image-size,2.0.2,npm,transitive,2.0.3,/docs.openc3.com/pnpm-lock.yaml
+17,CVE-2026-59880,GHSA-xvcm-6775-5m9r,High,8.7,immutable,5.1.5,npm,transitive,5.1.8,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+18,CVE-2026-59879,GHSA-v56q-mh7h-f735,High,8.7,immutable,5.1.5,npm,transitive,5.1.8,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+19,CVE-2026-13311,GHSA-395f-4hp3-45gv,High,8.7,shell-quote,1.8.4,npm,transitive,1.9.0,/docs.openc3.com/pnpm-lock.yaml
+20,CVE-2026-67320,GHSA-gcfj-64vw-6mp9,High,8.3,axios,1.16.1,npm,direct,1.18.0,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+21,CVE-2026-39821,GO-2026-5026,High,8.2,golang.org/x/net,v0.53.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),0.55.0,/openc3-ruby/anycable-go-linux-amd64
+22,CVE-2026-67213,GHSA-2v37-7h3g-55p8,High,8.2,nanoid,3.3.12,npm,transitive,3.3.18,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+23,CVE-2026-67214,GHSA-28wg-ghj8-5hjv,High,8.2,nanoid,3.3.12,npm,transitive,3.3.16,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+24,CVE-2026-39821,GO-2026-5026,High,8.2,stdlib,go1.26.3,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),"1.25.13,1.26.6,1.27.0-rc.3",/openc3-ruby/anycable-go-linux-arm64
+25,CVE-2026-84370,GHSA-w27v-7q3p-w38r,High,8.2,svgo,3.3.3,npm,transitive,3.3.5,/docs.openc3.com/pnpm-lock.yaml

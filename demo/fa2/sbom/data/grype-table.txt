@@ -1,0 +1,139 @@
+NAME                           INSTALLED                                 FIXED IN                       TYPE           VULNERABILITY        SEVERITY  EPSS         RISK   
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-f5wc-c3c7-36mc  Critical  0.7% (51st)  0.6    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-5cgq-3rg8-m6cv  Critical  0.7% (49th)  0.6    
+undici                         7.24.7                                    7.28.0                         npm            GHSA-vxpw-j846-p89q  High      0.8% (54th)  0.6    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-rm3j-f69w-wqmq  Critical  0.6% (48th)  0.6    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-x527-x647-q7gg  Critical  0.6% (46th)  0.6    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-vgwf-h737-ff37  Critical  0.6% (47th)  0.6    
+golang.org/x/net               v0.53.0                                   0.55.0                         go-module      GO-2026-5026         High      0.7% (50th)  0.5    
+stdlib                         go1.26.3                                  1.25.13, *1.26.6, 1.27.0-rc.3  go-module      GO-2026-5026         High      0.7% (50th)  0.5    
+openc3                         7.2.0                                     7.3.0                          gem            GHSA-jjq7-m736-w977  Critical  0.6% (45th)  0.5    
+immutable                      5.1.5                                     5.1.8                          npm            GHSA-xvcm-6775-5m9r  High      0.7% (49th)  0.5    
+form-data                      4.0.5                                     4.0.6                          npm            GHSA-hmw2-7cc7-3qxx  High      0.7% (49th)  0.5    
+google.golang.org/grpc         v1.80.0                                   1.82.2                         go-module      GHSA-2v4p-qf9q-27wj  High      0.6% (48th)  0.5    
+immutable                      5.1.5                                     5.1.8                          npm            GHSA-v56q-mh7h-f735  High      0.7% (49th)  0.5    
+browserslist                   4.28.2                                    4.28.7                         npm            GHSA-73wf-gq98-2v4g  High      0.7% (49th)  0.5    
+google.golang.org/grpc         v1.80.0                                   1.83.1                         go-module      GHSA-vp52-pcj8-j9qc  High      0.6% (46th)  0.5    
+browserslist                   4.28.2                                    4.28.7                         npm            GHSA-c83g-rgw3-j3cx  High      0.7% (49th)  0.5    
+brace-expansion                1.1.15                                    1.1.18                         npm            GHSA-rgw5-rvv9-x895  High      0.6% (48th)  0.5    
+brace-expansion                5.0.6                                     5.0.9                          npm            GHSA-rgw5-rvv9-x895  High      0.6% (48th)  0.5    
+brace-expansion                1.1.15                                    1.1.17                         npm            GHSA-mh99-v99m-4gvg  High      0.6% (48th)  0.5    
+brace-expansion                5.0.6                                     5.0.8                          npm            GHSA-mh99-v99m-4gvg  High      0.6% (48th)  0.5    
+openc3                         7.2.0                                     7.3.0                          gem            GHSA-vp3w-52v9-q57f  High      0.6% (45th)  0.5    
+golang.org/x/net               v0.53.0                                   0.56.0                         go-module      GO-2026-5942         High      0.6% (48th)  0.5    
+stdlib                         go1.26.3                                  *1.26.6, 1.27.0-rc.3           go-module      GO-2026-5942         High      0.6% (48th)  0.5    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-w879-237q-wc7r  High      0.6% (47th)  0.5    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-q4h4-gmj2-qvw2  High      0.6% (47th)  0.5    
+shell-quote                    1.8.4                                     1.9.0                          npm            GHSA-395f-4hp3-45gv  High      0.6% (46th)  0.5    
+stdlib                         go1.26.3                                  1.25.11, *1.26.4               go-module      GO-2026-5037         High      0.6% (46th)  0.4    
+vite                           7.3.3                                     7.3.5                          npm            GHSA-fx2h-pf6j-xcff  High      0.6% (45th)  0.4    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-89gr-r52h-f8rx  Critical  0.5% (39th)  0.4    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-jppx-rxg9-jmrx  Critical  0.5% (39th)  0.4    
+js-yaml                        3.14.2                                    3.15.0                         npm            GHSA-52cp-r559-cp3m  High      0.6% (45th)  0.4    
+js-yaml                        4.1.1                                     4.3.0                          npm            GHSA-52cp-r559-cp3m  High      0.6% (45th)  0.4    
+nanoid                         3.3.12                                    3.3.18                         npm            GHSA-2v37-7h3g-55p8  High      0.6% (45th)  0.4    
+stdlib                         go1.26.3                                  1.25.13, *1.26.6, 1.27.0-rc.3  go-module      GO-2026-6088         High      0.6% (44th)  0.4    
+stdlib                         go1.26.3                                  1.25.13, *1.26.6, 1.27.0-rc.3  go-module      GO-2026-6089         High      0.6% (44th)  0.4    
+stdlib                         go1.26.3                                  1.25.13, *1.26.6, 1.27.0-rc.3  go-module      GO-2026-6090         High      0.6% (44th)  0.4    
+stdlib                         go1.26.3                                  1.25.13, *1.26.6, 1.27.0-rc.3  go-module      GO-2026-5972         High      0.6% (44th)  0.4    
+undici                         7.24.7                                    7.29.0                         npm            GHSA-4cwx-7wf7-3272  High      0.6% (44th)  0.4    
+stdlib                         go1.26.3                                  1.25.11, *1.26.4               go-module      GO-2026-5038         High      0.6% (44th)  0.4    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-gcfj-64vw-6mp9  High      0.5% (42nd)  0.4    
+undici                         7.24.7                                    7.28.0                         npm            GHSA-vmh5-mc38-953g  High      0.6% (44th)  0.4    
+svgo                           3.3.3                                     3.3.5                          npm            GHSA-w27v-7q3p-w38r  High      0.5% (42nd)  0.4    
+postcss                        8.5.15                                    8.5.18                         npm            GHSA-r28c-9q8g-f849  High      0.5% (42nd)  0.4    
+js-yaml                        3.14.2                                    3.15.2                         npm            GHSA-2883-xcg3-v3hh  High      0.5% (42nd)  0.4    
+js-yaml                        4.1.1                                     4.3.2                          npm            GHSA-2883-xcg3-v3hh  High      0.5% (42nd)  0.4    
+golang.org/x/crypto            v0.50.0                                   0.56.0                         go-module      GO-2026-6355         High      0.5% (40th)  0.4    
+fast-uri                       3.1.2                                     3.1.3                          npm            GHSA-4c8g-83qw-93j6  High      0.5% (39th)  0.4    
+golang.org/x/text              v0.36.0                                   0.39.0                         go-module      GO-2026-5970         High      0.5% (38th)  0.4    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-mwf2-3pr3-8698  Medium    0.6% (47th)  0.3    
+websocket-driver               0.7.4                                     0.7.5                          npm            GHSA-xv26-6w52-cph6  Critical  0.4% (29th)  0.3    
+svgo                           3.3.3                                     3.3.4                          npm            GHSA-2p49-hgcm-8545  High      0.4% (35th)  0.3    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-78mq-xcr3-xm33  Medium    0.7% (49th)  0.3    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-jqh4-m9w3-8hp9  Medium    0.6% (46th)  0.3    
+image-size                     2.0.2                                     2.0.3                          npm            GHSA-5p2g-fcmc-qvqq  High      0.4% (34th)  0.3    
+image-size                     2.0.2                                     2.0.3                          npm            GHSA-w3rx-r6r6-pgpr  High      0.4% (34th)  0.3    
+golang.org/x/crypto            v0.50.0                                   0.55.0                         go-module      GO-2026-6303         High      0.4% (35th)  0.3    
+golang.org/x/crypto            v0.50.0                                   0.56.0                         go-module      GO-2026-6354         High      0.4% (34th)  0.3    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-hcpx-6fm6-wx23  Medium    0.5% (42nd)  0.3    
+serialize-javascript           6.0.2                                     7.0.5                          npm            GHSA-qj8w-gfj5-8c6v  Medium    0.6% (45th)  0.3    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-45gg-vh54-h5m9  Medium    0.5% (43rd)  0.3    
+colord                         2.9.3                                     2.9.4                          npm            GHSA-2wm5-q62r-hmrv  Medium    0.5% (40th)  0.3    
+stdlib                         go1.26.3                                  1.25.13, *1.26.6, 1.27.0-rc.3  go-module      GO-2026-6218         Medium    0.5% (43rd)  0.3    
+fast-uri                       3.1.2                                     3.1.6                          npm            GHSA-jqff-g426-hqxp  High      0.4% (31st)  0.3    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-42h9-826w-cgv3  Medium    0.5% (41st)  0.3    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-pmv8-rq9r-6j72  Medium    0.5% (41st)  0.3    
+baseline-browser-mapping       2.10.24                                   2.11.0                         npm            GHSA-w5vr-8v7q-w6rv  Medium    0.5% (40th)  0.3    
+baseline-browser-mapping       2.10.32                                   2.11.0                         npm            GHSA-w5vr-8v7q-w6rv  Medium    0.5% (40th)  0.3    
+undici                         7.24.7                                    7.28.0                         npm            GHSA-hm92-r4w5-c3mj  High      0.4% (29th)  0.3    
+fast-uri                       3.1.2                                     3.1.6                          npm            GHSA-f65p-4m7j-42xc  High      0.4% (29th)  0.3    
+fast-uri                       3.1.2                                     3.1.6                          npm            GHSA-fph4-wmhf-6fwf  High      0.4% (29th)  0.3    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-f4gw-2p7v-4548  Medium    0.5% (36th)  0.3    
+qs                             6.15.2                                    6.16.0                         npm            GHSA-x5fp-wj9c-mxmx  Medium    0.5% (43rd)  0.3    
+joi                            17.13.3                                   17.13.4                        npm            GHSA-q7cg-457f-vx79  Medium    0.5% (42nd)  0.3    
+webpack-dev-server             5.2.4                                     5.2.6                          npm            GHSA-m28w-2pqf-7qgj  Medium    0.5% (41st)  0.3    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-9m57-25v3-79x9  Medium    0.5% (41st)  0.3    
+golang.org/x/net               v0.53.0                                   0.55.0                         go-module      GHSA-5cv4-jp36-h3mw  Medium    0.5% (37th)  0.3    
+postcss                        8.5.15                                    8.5.23                         npm            GHSA-fxqj-rqcc-2cmp  Medium    0.5% (36th)  0.3    
+brace-expansion                1.1.15                                    1.1.16                         npm            GHSA-3jxr-9vmj-r5cp  High      0.4% (27th)  0.3    
+brace-expansion                5.0.6                                     5.0.7                          npm            GHSA-3jxr-9vmj-r5cp  High      0.4% (27th)  0.3    
+webpack-dev-server             5.2.4                                     5.2.6                          npm            GHSA-f5vj-f2hx-8m93  Medium    0.5% (41st)  0.3    
+websocket-driver               0.7.4                                     0.7.5                          npm            GHSA-mp7j-qc5w-4988  Medium    0.4% (36th)  0.3    
+nanoid                         3.3.12                                    3.3.16                         npm            GHSA-28wg-ghj8-5hjv  High      0.3% (23rd)  0.2    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-mmx7-hfxf-jppx  Medium    0.4% (34th)  0.2    
+svgo                           3.3.3                                     3.3.5                          npm            GHSA-4vpr-x523-8j87  Medium    0.4% (34th)  0.2    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-xj6q-8x83-jv6g  Medium    0.4% (32nd)  0.2    
+undici                         7.24.7                                    7.28.0                         npm            GHSA-pr7r-676h-xcf6  Medium    0.4% (33rd)  0.2    
+qs                             6.15.2                                    6.16.0                         npm            GHSA-4mjr-xmp4-gh2g  Medium    0.4% (33rd)  0.2    
+http-proxy-middleware          2.0.9                                     2.0.10                         npm            GHSA-64mm-vxmg-q3vj  Medium    0.4% (29th)  0.2    
+uuid                           8.3.2                                     11.1.1                         npm            GHSA-w5hq-g745-h8pq  Medium    0.4% (29th)  0.2    
+undici                         7.24.7                                    7.29.0                         npm            GHSA-jr45-8vmc-qm54  Medium    0.4% (31st)  0.2    
+launch-editor                  2.13.2                                    2.14.1                         npm            GHSA-v6wh-96g9-6wx3  Medium    0.4% (32nd)  0.2    
+vite                           7.3.3                                     7.3.5                          npm            GHSA-v6wh-96g9-6wx3  Medium    0.4% (32nd)  0.2    
+js-yaml                        3.14.2                                    3.15.0                         npm            GHSA-h67p-54hq-rp68  Medium    0.4% (33rd)  0.2    
+js-yaml                        4.1.1                                     4.2.0                          npm            GHSA-h67p-54hq-rp68  Medium    0.4% (33rd)  0.2    
+stdlib                         go1.26.3                                  1.25.12, *1.26.5, 1.27.0-rc.2  go-module      GO-2026-5856         Medium    0.4% (32nd)  0.2    
+stdlib                         go1.26.3                                  1.25.11, *1.26.4               go-module      GO-2026-5039         Medium    0.4% (32nd)  0.2    
+fast-uri                       3.1.2                                     3.1.4                          npm            GHSA-v2hh-gcrm-f6hx  High      0.3% (15th)  0.2    
+@swc/html                      1.15.40                                   1.15.47-nightly-20260729.1     npm            GHSA-5qr2-v392-m9g8  Medium    0.3% (24th)  0.2    
+golang.org/x/net               v0.53.0                                   0.55.0                         go-module      GO-2026-5025         Medium    0.3% (23rd)  0.2    
+undici                         7.24.7                                    7.28.0                         npm            GHSA-p88m-4jfj-68fv  Medium    0.3% (23rd)  0.2    
+postcss-selector-parser        6.1.2                                     6.1.3                          npm            GHSA-w9m9-85wc-3x92  Low       0.6% (45th)  0.2    
+postcss-selector-parser        7.1.1                                     7.1.3                          npm            GHSA-w9m9-85wc-3x92  Low       0.6% (45th)  0.2    
+axios                          1.16.1                                    1.18.0                         npm            GHSA-7q8q-rj6j-mhjq  Medium    0.3% (22nd)  0.2    
+google.golang.org/grpc         v1.80.0                                   1.83.1                         go-module      GHSA-qc2q-p7wx-3px3  Medium    0.3% (21st)  0.2    
+stdlib                         go1.26.3                                  1.25.13, *1.26.6, 1.27.0-rc.3  go-module      GO-2026-6091         Medium    0.3% (21st)  0.2    
+fast-uri                       3.1.2                                     3.1.5                          npm            GHSA-7p8r-x3mc-p8w7  High      0.2% (11th)  0.2    
+golang.org/x/crypto            v0.50.0                                   0.52.0                         go-module      GHSA-qpw4-5x99-6vjp  Medium    0.3% (18th)  0.2    
+dompurify                      3.4.7                                     3.4.11                         npm            GHSA-cmwh-pvxp-8882  Medium    0.3% (20th)  0.2    
+stdlib                         go1.26.3                                  1.25.12, *1.26.5, 1.27.0-rc.2  go-module      GO-2026-4970         High      0.2% (7th)   0.1    
+body-parser                    1.20.5                                    1.20.6                         npm            GHSA-v422-hmwv-36x6  Low       0.4% (32nd)  0.1    
+joi                            17.13.3                                   17.13.6                        npm            GHSA-6w3j-5fw6-r9vr  Low       0.4% (30th)  0.1    
+joi                            17.13.3                                   17.13.5                        npm            GHSA-gg4h-3hg2-grpc  Low       0.4% (30th)  0.1    
+golang.org/x/net               v0.53.0                                   0.55.0                         go-module      GO-2026-5027         Medium    0.2% (11th)  0.1    
+golang.org/x/net               v0.53.0                                   0.55.0                         go-module      GO-2026-5030         Medium    0.2% (11th)  0.1    
+golang.org/x/net               v0.53.0                                   0.55.0                         go-module      GO-2026-5029         Medium    0.2% (11th)  0.1    
+webpack-dev-server             5.2.4                                     5.2.5                          npm            GHSA-mx8g-39q3-5c79  Medium    0.2% (12th)  0.1    
+dompurify                      3.4.7                                     3.4.9                          npm            GHSA-vxr8-fq34-vvx9  Low       0.4% (32nd)  0.1    
+undici                         7.24.7                                    7.29.0                         npm            GHSA-v3r7-h72x-cjcm  Medium    0.2% (7th)   < 0.1  
+undici                         7.24.7                                    7.28.0                         npm            GHSA-35p6-xmwp-9g52  Low       0.3% (17th)  < 0.1  
+undici                         7.24.7                                    7.29.0                         npm            GHSA-m8rv-5g2x-5cg5  Medium    0.2% (8th)   < 0.1  
+undici                         7.24.7                                    7.29.0                         npm            GHSA-8xcm-r25x-g524  Medium    0.2% (6th)   < 0.1  
+undici                         7.24.7                                    7.28.0                         npm            GHSA-g8m3-5g58-fq7m  Low       0.2% (13th)  < 0.1  
+dompurify                      3.4.7                                     3.4.8                          npm            GHSA-gvmj-g25r-r7wr  Low       0.3% (21st)  < 0.1  
+golang.org/x/sys               v0.43.0                                   0.44.0                         go-module      GO-2026-5024         Low       0.2% (4th)   < 0.1  
+@babel/core                    7.28.4                                    7.29.6                         npm            GHSA-4x5r-pxfx-6jf8  Low       0.2% (3rd)   < 0.1  
+google.golang.org/grpc         v1.80.0                                   1.82.1                         go-module      GHSA-hrxh-6v49-42gf  High      N/A          N/A    
+js-yaml                        3.14.2                                    3.15.1                         npm            GHSA-5p4m-2wfm-xmqj  High      N/A          N/A    
+js-yaml                        4.1.1                                     4.3.1                          npm            GHSA-5p4m-2wfm-xmqj  High      N/A          N/A    
+serialize-javascript           6.0.2                                     7.0.3                          npm            GHSA-5c6j-r48x-rmvq  High      N/A          N/A    
+dompurify                      3.4.7                                     3.4.13                         npm            GHSA-55q2-fjhq-7xh7  Medium    N/A          N/A    
+dompurify                      3.4.7                                     3.4.12                         npm            GHSA-c2j3-45gr-mqc4  Low       N/A          N/A    
+esbuild                        0.27.7                                    0.28.1                         npm            GHSA-g7r4-m6w7-qqqr  Low       N/A          N/A    
+pypa/gh-action-pypi-publish    cef221092ed1bacb1cc03d23a2d87d1d172e277b  1.13.0                         github-action  GHSA-vxmw-7h4f-hqxh  Low       N/A          N/A    
+github.com/go-chi/chi/v5       v5.2.5                                    5.3.0                          go-module      GO-2026-5774         Unknown   N/A          N/A    
+github.com/go-chi/chi/v5       v5.2.5                                    5.3.0                          go-module      GO-2026-5775         Unknown   N/A          N/A    
+github.com/go-chi/chi/v5       v5.2.5                                    5.3.0                          go-module      GO-2026-5777         Unknown   N/A          N/A    
+github.com/klauspost/compress  v1.18.5                                   1.18.7                         go-module      GO-2026-5841         Unknown   N/A          N/A    
+golang.org/x/crypto            v0.50.0                                                                  go-module      GO-2026-5932         Unknown   N/A          N/A    

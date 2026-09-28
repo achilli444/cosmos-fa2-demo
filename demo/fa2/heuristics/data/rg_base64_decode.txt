@@ -1,0 +1,21 @@
+openc3/lib/openc3/utilities/questdb_client.rb:218:          return Base64.strict_decode64(value)
+openc3/python/openc3/packets/packet_config.py:790:                self.current_packet.template = bytearray(base64.b64decode(params[0]))
+openc3/python/openc3/utilities/questdb_client.py:267:                return base64.b64decode(value)
+openc3-cosmos-cmd-tlm-api/spec/controllers/storage_controller_spec.rb:318:        ctrf_content = JSON.parse(Base64.decode64(result["contents"]))
+openc3-cosmos-cmd-tlm-api/spec/controllers/storage_controller_spec.rb:399:        ctrf_content = JSON.parse(Base64.decode64(result["contents"]))
+openc3/lib/openc3/packets/packet_config.rb:623:        @current_packet.template = Base64.decode64(params[0])
+openc3/lib/openc3/script/packages.rb:113:              file.write(Base64.decode64(parsed['contents']))
+openc3/test/integration/tsdb/ruby/spec_helper.rb:98:        Base64.strict_decode64(v['__base64__'])
+openc3/test/integration/tsdb/helpers/questdb_writer.py:196:        values = [base64.b64decode(v) if isinstance(v, str) else v for v in values]
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplorer/src/tools/BucketExplorer/helper.js:37:  const decodedData = window.atob(base64Contents)
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplorer/src/tools/BucketExplorer/BucketExplorer.vue:612:        this.dialogContent = window.atob(response.data.contents)
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tablemanager/src/tools/TableManager/TableManager.vue:534:        const decodedData = window.atob(response.data.contents)
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/plugins/plugin-store/PluginProps.js:104:          .encode(globalThis.atob(this.imageContents.slice(0, 6))) // only atob as much as we need
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/widgets/FilechecksumWidget.vue:150:        return atob(response.data.contents)
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/widgets/FiledisplayWidget.vue:148:          this.fileContent = atob(response.data.contents)
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/components/dataviewer/DataViewerHistoryComponent.vue:237:          packet.buffer = atob(packet.buffer)
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/tools/scriptrunner/RunningScripts.vue:526:  dialogContent.value = window.atob(response.data.contents)
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/tools/scriptrunner/RunningScripts.vue:550:      const blob = new Blob([window.atob(response.data.contents)], {
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/tools/admin/tabs/TargetsTab.vue:100:        const decodedData = window.atob(response.data.contents)
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/tools/admin/tabs/plugins/PluginListItem.vue:159:          const decodedData = window.atob(response.data.contents)
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/tools/admin/tabs/plugins/PluginListItem.vue:177:        const decodedData = window.atob(response.data.contents)

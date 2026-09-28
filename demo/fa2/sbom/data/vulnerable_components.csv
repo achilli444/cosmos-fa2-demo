@@ -1,0 +1,45 @@
+component,version,ecosystem,direct_or_transitive,worst_severity,vuln_count,vuln_ids,fix_versions,locations
+openc3,7.2.0,gem,direct,Critical,8,GHSA-jjq7-m736-w977;GHSA-jjq7-m736-w977;GHSA-jjq7-m736-w977;GHSA-jjq7-m736-w977;GHSA-vp3w-52v9-q57f;GHSA-vp3w-52v9-q57f;GHSA-vp3w-52v9-q57f;GHSA-vp3w-52v9-q57f,7.3.0,/openc3-cosmos-cmd-tlm-api/Gemfile.lock;/openc3-cosmos-script-runner-api/Gemfile.lock;/openc3/Gemfile.lock;/openc3/openc3.gemspec
+golang.org/x/crypto,v0.50.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),Critical,34,GHSA-f5wc-c3c7-36mc;GHSA-f5wc-c3c7-36mc;GHSA-5cgq-3rg8-m6cv;GHSA-5cgq-3rg8-m6cv;GHSA-rm3j-f69w-wqmq;GHSA-rm3j-f69w-wqmq;GHSA-x527-x647-q7gg;GHSA-x527-x647-q7gg;GHSA-vgwf-h737-ff37;GHSA-vgwf-h737-ff37;GHSA-w879-237q-wc7r;GHSA-w879-237q-wc7r;GHSA-q4h4-gmj2-qvw2;GHSA-q4h4-gmj2-qvw2;GHSA-89gr-r52h-f8rx;GHSA-89gr-r52h-f8rx;GHSA-jppx-rxg9-jmrx;GHSA-jppx-rxg9-jmrx;GO-2026-6355;GO-2026-6355;GHSA-78mq-xcr3-xm33;GHSA-78mq-xcr3-xm33;GO-2026-6303;GO-2026-6303;GO-2026-6354;GO-2026-6354;GHSA-45gg-vh54-h5m9;GHSA-45gg-vh54-h5m9;GHSA-9m57-25v3-79x9;GHSA-9m57-25v3-79x9;GHSA-qpw4-5x99-6vjp;GHSA-qpw4-5x99-6vjp;GO-2026-5932;GO-2026-5932,0.52.0;0.55.0;0.56.0,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
+websocket-driver,0.7.4,npm,transitive,Critical,2,GHSA-xv26-6w52-cph6;GHSA-mp7j-qc5w-4988,0.7.5,/docs.openc3.com/pnpm-lock.yaml
+golang.org/x/net,v0.53.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),High,14,GO-2026-5026;GO-2026-5026;GO-2026-5942;GO-2026-5942;GHSA-5cv4-jp36-h3mw;GHSA-5cv4-jp36-h3mw;GO-2026-5025;GO-2026-5025;GO-2026-5027;GO-2026-5027;GO-2026-5030;GO-2026-5030;GO-2026-5029;GO-2026-5029,0.55.0;0.56.0,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
+golang.org/x/text,v0.36.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),High,2,GO-2026-5970;GO-2026-5970,0.39.0,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
+google.golang.org/grpc,v1.80.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),High,8,GHSA-2v4p-qf9q-27wj;GHSA-2v4p-qf9q-27wj;GHSA-vp52-pcj8-j9qc;GHSA-vp52-pcj8-j9qc;GHSA-qc2q-p7wx-3px3;GHSA-qc2q-p7wx-3px3;GHSA-hrxh-6v49-42gf;GHSA-hrxh-6v49-42gf,1.82.1;1.82.2;1.83.1,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
+stdlib,go1.26.3,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),High,26,GO-2026-5026;GO-2026-5026;GO-2026-5942;GO-2026-5942;GO-2026-5037;GO-2026-5037;GO-2026-6088;GO-2026-6088;GO-2026-6089;GO-2026-6089;GO-2026-6090;GO-2026-6090;GO-2026-5972;GO-2026-5972;GO-2026-5038;GO-2026-5038;GO-2026-6218;GO-2026-6218;GO-2026-5856;GO-2026-5856;GO-2026-5039;GO-2026-5039;GO-2026-6091;GO-2026-6091;GO-2026-4970;GO-2026-4970,1.25.11;1.25.12;1.25.13;1.26.4;1.26.5;1.26.6;1.27.0-rc.2;1.27.0-rc.3,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
+axios,1.16.1,npm,direct,High,10,GHSA-gcfj-64vw-6mp9;GHSA-mwf2-3pr3-8698;GHSA-jqh4-m9w3-8hp9;GHSA-hcpx-6fm6-wx23;GHSA-42h9-826w-cgv3;GHSA-pmv8-rq9r-6j72;GHSA-f4gw-2p7v-4548;GHSA-mmx7-hfxf-jppx;GHSA-xj6q-8x83-jv6g;GHSA-7q8q-rj6j-mhjq,1.18.0,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+brace-expansion,1.1.15,npm,transitive,High,3,GHSA-rgw5-rvv9-x895;GHSA-mh99-v99m-4gvg;GHSA-3jxr-9vmj-r5cp,1.1.16;1.1.17;1.1.18,/docs.openc3.com/pnpm-lock.yaml
+brace-expansion,5.0.6,npm,transitive,High,6,GHSA-rgw5-rvv9-x895;GHSA-rgw5-rvv9-x895;GHSA-mh99-v99m-4gvg;GHSA-mh99-v99m-4gvg;GHSA-3jxr-9vmj-r5cp;GHSA-3jxr-9vmj-r5cp,5.0.7;5.0.8;5.0.9,/openc3-cosmos-init/plugins/pnpm-lock.yaml;/playwright/pnpm-lock.yaml
+browserslist,4.28.2,npm,transitive,High,6,GHSA-73wf-gq98-2v4g;GHSA-73wf-gq98-2v4g;GHSA-73wf-gq98-2v4g;GHSA-c83g-rgw3-j3cx;GHSA-c83g-rgw3-j3cx;GHSA-c83g-rgw3-j3cx,4.28.7,/docs.openc3.com/pnpm-lock.yaml;/openc3-cosmos-init/plugins/pnpm-lock.yaml;/playwright/pnpm-lock.yaml
+fast-uri,3.1.2,npm,transitive,High,6,GHSA-4c8g-83qw-93j6;GHSA-jqff-g426-hqxp;GHSA-f65p-4m7j-42xc;GHSA-fph4-wmhf-6fwf;GHSA-v2hh-gcrm-f6hx;GHSA-7p8r-x3mc-p8w7,3.1.3;3.1.4;3.1.5;3.1.6,/docs.openc3.com/pnpm-lock.yaml
+form-data,4.0.5,npm,transitive,High,1,GHSA-hmw2-7cc7-3qxx,4.0.6,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+image-size,2.0.2,npm,transitive,High,2,GHSA-5p2g-fcmc-qvqq;GHSA-w3rx-r6r6-pgpr,2.0.3,/docs.openc3.com/pnpm-lock.yaml
+immutable,5.1.5,npm,transitive,High,2,GHSA-xvcm-6775-5m9r;GHSA-v56q-mh7h-f735,5.1.8,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+js-yaml,3.14.2,npm,transitive,High,8,GHSA-52cp-r559-cp3m;GHSA-52cp-r559-cp3m;GHSA-2883-xcg3-v3hh;GHSA-2883-xcg3-v3hh;GHSA-h67p-54hq-rp68;GHSA-h67p-54hq-rp68;GHSA-5p4m-2wfm-xmqj;GHSA-5p4m-2wfm-xmqj,3.15.0;3.15.1;3.15.2,/docs.openc3.com/pnpm-lock.yaml;/playwright/pnpm-lock.yaml
+js-yaml,4.1.1,npm,transitive,High,4,GHSA-52cp-r559-cp3m;GHSA-2883-xcg3-v3hh;GHSA-h67p-54hq-rp68;GHSA-5p4m-2wfm-xmqj,4.2.0;4.3.0;4.3.1;4.3.2,/docs.openc3.com/pnpm-lock.yaml
+nanoid,3.3.12,npm,transitive,High,4,GHSA-2v37-7h3g-55p8;GHSA-2v37-7h3g-55p8;GHSA-28wg-ghj8-5hjv;GHSA-28wg-ghj8-5hjv,3.3.16;3.3.18,/docs.openc3.com/pnpm-lock.yaml;/openc3-cosmos-init/plugins/pnpm-lock.yaml
+postcss,8.5.15,npm,transitive,High,4,GHSA-r28c-9q8g-f849;GHSA-r28c-9q8g-f849;GHSA-fxqj-rqcc-2cmp;GHSA-fxqj-rqcc-2cmp,8.5.18;8.5.23,/docs.openc3.com/pnpm-lock.yaml;/openc3-cosmos-init/plugins/pnpm-lock.yaml
+serialize-javascript,6.0.2,npm,transitive,High,2,GHSA-qj8w-gfj5-8c6v;GHSA-5c6j-r48x-rmvq,7.0.3;7.0.5,/docs.openc3.com/pnpm-lock.yaml
+shell-quote,1.8.4,npm,transitive,High,1,GHSA-395f-4hp3-45gv,1.9.0,/docs.openc3.com/pnpm-lock.yaml
+svgo,3.3.3,npm,transitive,High,3,GHSA-w27v-7q3p-w38r;GHSA-2p49-hgcm-8545;GHSA-4vpr-x523-8j87,3.3.4;3.3.5,/docs.openc3.com/pnpm-lock.yaml
+undici,7.24.7,npm,transitive,High,12,GHSA-vxpw-j846-p89q;GHSA-4cwx-7wf7-3272;GHSA-vmh5-mc38-953g;GHSA-hm92-r4w5-c3mj;GHSA-pr7r-676h-xcf6;GHSA-jr45-8vmc-qm54;GHSA-p88m-4jfj-68fv;GHSA-v3r7-h72x-cjcm;GHSA-35p6-xmwp-9g52;GHSA-m8rv-5g2x-5cg5;GHSA-8xcm-r25x-g524;GHSA-g8m3-5g58-fq7m,7.28.0;7.29.0,/docs.openc3.com/pnpm-lock.yaml
+vite,7.3.3,npm,direct,High,2,GHSA-fx2h-pf6j-xcff;GHSA-v6wh-96g9-6wx3,7.3.5,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+@swc/html,1.15.40,npm,transitive,Medium,1,GHSA-5qr2-v392-m9g8,1.15.47-nightly-20260729.1,/docs.openc3.com/pnpm-lock.yaml
+baseline-browser-mapping,2.10.24,npm,transitive,Medium,1,GHSA-w5vr-8v7q-w6rv,2.11.0,/docs.openc3.com/pnpm-lock.yaml
+baseline-browser-mapping,2.10.32,npm,transitive,Medium,2,GHSA-w5vr-8v7q-w6rv;GHSA-w5vr-8v7q-w6rv,2.11.0,/openc3-cosmos-init/plugins/pnpm-lock.yaml;/playwright/pnpm-lock.yaml
+colord,2.9.3,npm,transitive,Medium,1,GHSA-2wm5-q62r-hmrv,2.9.4,/docs.openc3.com/pnpm-lock.yaml
+dompurify,3.4.7,npm,direct,Medium,5,GHSA-cmwh-pvxp-8882;GHSA-vxr8-fq34-vvx9;GHSA-gvmj-g25r-r7wr;GHSA-55q2-fjhq-7xh7;GHSA-c2j3-45gr-mqc4,3.4.11;3.4.12;3.4.13;3.4.8;3.4.9,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+http-proxy-middleware,2.0.9,npm,transitive,Medium,1,GHSA-64mm-vxmg-q3vj,2.0.10,/docs.openc3.com/pnpm-lock.yaml
+joi,17.13.3,npm,transitive,Medium,3,GHSA-q7cg-457f-vx79;GHSA-6w3j-5fw6-r9vr;GHSA-gg4h-3hg2-grpc,17.13.4;17.13.5;17.13.6,/docs.openc3.com/pnpm-lock.yaml
+launch-editor,2.13.2,npm,transitive,Medium,1,GHSA-v6wh-96g9-6wx3,2.14.1,/docs.openc3.com/pnpm-lock.yaml
+qs,6.15.2,npm,transitive,Medium,2,GHSA-x5fp-wj9c-mxmx;GHSA-4mjr-xmp4-gh2g,6.16.0,/docs.openc3.com/pnpm-lock.yaml
+uuid,8.3.2,npm,transitive,Medium,1,GHSA-w5hq-g745-h8pq,11.1.1,/docs.openc3.com/pnpm-lock.yaml
+webpack-dev-server,5.2.4,npm,transitive,Medium,3,GHSA-m28w-2pqf-7qgj;GHSA-f5vj-f2hx-8m93;GHSA-mx8g-39q3-5c79,5.2.5;5.2.6,/docs.openc3.com/pnpm-lock.yaml
+pypa/gh-action-pypi-publish,cef221092ed1bacb1cc03d23a2d87d1d172e277b,github-action,n/a (not a manifest ecosystem),Low,1,GHSA-vxmw-7h4f-hqxh,1.13.0,/.github/workflows/release.yml
+golang.org/x/sys,v0.43.0,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),Low,2,GO-2026-5024;GO-2026-5024,0.44.0,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
+@babel/core,7.28.4,npm,transitive,Low,1,GHSA-4x5r-pxfx-6jf8,7.29.6,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+body-parser,1.20.5,npm,transitive,Low,1,GHSA-v422-hmwv-36x6,1.20.6,/docs.openc3.com/pnpm-lock.yaml
+esbuild,0.27.7,npm,transitive,Low,1,GHSA-g7r4-m6w7-qqqr,0.28.1,/openc3-cosmos-init/plugins/pnpm-lock.yaml
+postcss-selector-parser,6.1.2,npm,transitive,Low,1,GHSA-w9m9-85wc-3x92,6.1.3,/docs.openc3.com/pnpm-lock.yaml
+postcss-selector-parser,7.1.1,npm,transitive,Low,2,GHSA-w9m9-85wc-3x92;GHSA-w9m9-85wc-3x92,7.1.3,/docs.openc3.com/pnpm-lock.yaml;/openc3-cosmos-init/plugins/pnpm-lock.yaml
+github.com/go-chi/chi/v5,v5.2.5,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),Unknown,6,GO-2026-5774;GO-2026-5774;GO-2026-5775;GO-2026-5775;GO-2026-5777;GO-2026-5777,5.3.0,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
+github.com/klauspost/compress,v1.18.5,go-module (from vendored anycable-go binaries),n/a (not a manifest ecosystem),Unknown,2,GO-2026-5841;GO-2026-5841,1.18.7,/openc3-ruby/anycable-go-linux-amd64;/openc3-ruby/anycable-go-linux-arm64
