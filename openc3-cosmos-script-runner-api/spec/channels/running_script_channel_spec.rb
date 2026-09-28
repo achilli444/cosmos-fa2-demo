@@ -27,10 +27,25 @@ RSpec.describe RunningScriptChannel, type: :channel do
     stub_connection uuid: uuid, scope: 'DEFAULT'
     RunningScriptChannel.class_variable_set(:@@broadcasters, {})
     allow(RunningScriptReplayThread).to receive(:new).and_return(broadcaster)
+    script_status('42', 'DEFAULT')
   end
 
   after(:each) do
     RunningScriptChannel.class_variable_set(:@@broadcasters, {})
+  end
+
+  # Register the script in the given scope the way RunningScript.spawn does, so
+  # the subscription's id-to-scope check finds it
+  def script_status(id, scope)
+    OpenC3::ScriptStatusModel.new(
+      name: id,
+      state: 'running',
+      scope: scope,
+      filename: 'INST/procedures/test.rb',
+      start_time: Time.now.utc.iso8601,
+      username: 'test_user',
+      user_full_name: 'Test Tester',
+    ).create
   end
 
   # Seed the replay stream the way running_script.rb does, so subscribed()
@@ -42,6 +57,32 @@ RSpec.describe RunningScriptChannel, type: :channel do
   end
 
   describe '#subscribed' do
+    it 'rejects a script id that belongs to another scope without leaking its backlog' do
+      script_status('43', 'OTHER')
+      OpenC3::Topic.write_topic("running-script-channel:43:replay", { 'data' => { 'type' => 'file', 'text' => 'secret' }.to_json }, '100-0')
+      subscribe id: '43'
+      expect(subscription).to be_rejected
+      expect(transmissions).to be_empty
+      expect(RunningScriptReplayThread).not_to have_received(:new)
+      expect(RunningScriptChannel.class_variable_get(:@@broadcasters)).to be_empty
+    end
+
+    it 'rejects an unknown script id' do
+      subscribe id: '999'
+      expect(subscription).to be_rejected
+      expect(transmissions).to be_empty
+    end
+
+    it 'accepts a completed script in the subscribed scope' do
+      OpenC3::ScriptStatusModel.get_model(name: '42', scope: 'DEFAULT').tap do |status|
+        status.state = 'completed'
+        status.update
+      end
+      backlog({ 'type' => 'complete' })
+      subscribe id: '42'
+      expect(subscription).to be_confirmed
+    end
+
     it 'transmits the backlog and starts streaming live events bounded by the arm timeout' do
       backlog({ 'type' => 'line', 'line_no' => 1 }, { 'type' => 'output', 'line' => 'hi' })
       subscribe id: '42'
