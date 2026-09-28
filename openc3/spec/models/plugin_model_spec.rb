@@ -506,6 +506,120 @@ module OpenC3
         plugin_model = PluginModel.install_phase2({"name" => "name", "variables" => {}, "plugin_txt_lines" => []}, scope: "DEFAULT")
         expect(plugin_model['img_path']).to eql 'gems/test-plugin-1.0.0/public/store_img.png'
       end
+
+      # pypi_url is a user-writable setting so it must be validated and must never reach a shell
+      context "with python dependencies" do
+        before(:each) do
+          s3 = instance_double("Aws::S3::Client").as_null_object
+          allow(Aws::S3::Client).to receive(:new).and_return(s3)
+
+          expect(GemModel).to receive(:get).and_return("my_plugin.gem")
+          gem = double("gem")
+          expect(gem).to receive(:extract_files) do |path|
+            File.open("#{path}/plugin.txt", 'w') { |f| f.puts "" }
+            File.open("#{path}/requirements.txt", 'w') { |f| f.puts "requests" }
+          end
+          expect(Gem::Package).to receive(:new).and_return(gem)
+          spec = double("spec")
+          allow(gem).to receive(:spec).and_return(spec)
+          allow(spec).to receive(:name).and_return("test-plugin")
+          allow(spec).to receive(:version).and_return("1.0.0")
+          allow(spec).to receive(:runtime_dependencies).and_return([])
+          allow(spec).to receive(:metadata).and_return({})
+          allow(spec).to receive(:summary).and_return("Test plugin")
+          allow(spec).to receive(:description).and_return("Test plugin description")
+          allow(spec).to receive(:licenses).and_return([])
+          allow(spec).to receive(:homepage).and_return(nil)
+          expect(GemModel).to receive(:install).and_return(nil)
+
+          # Fail loudly if anything is ever run through a shell
+          expect(PluginModel).not_to receive(:`)
+          expect(PluginModel).not_to receive(:system)
+          allow(PluginModel).to receive(:puts)
+          allow(Logger).to receive(:error)
+          allow(Logger).to receive(:warn)
+          @saved_pypi_url = ENV['PYPI_URL']
+          ENV.delete('PYPI_URL')
+        end
+
+        after(:each) do
+          if @saved_pypi_url
+            ENV['PYPI_URL'] = @saved_pypi_url
+          else
+            ENV.delete('PYPI_URL')
+          end
+        end
+
+        it "passes a valid pypi_url setting to pipinstall as a discrete argument" do
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return('https://mirror.example.com')
+          status = double("status", success?: true)
+          expect(Open3).to receive(:capture2e) do |*argv|
+            expect(argv[0]).to eql '/openc3/bin/pipinstall'
+            expect(argv[1]).to eql '-i'
+            expect(argv[2]).to eql 'https://mirror.example.com/simple'
+            expect(argv[3]).to eql '-r'
+            expect(argv[4]).to end_with '/requirements.txt'
+            expect(argv.length).to eql 5
+            ["Command succeeded", status]
+          end
+          plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+          expect(plugin_model['needs_dependencies']).to eql true
+        end
+
+        it "warns but does not fail the plugin install when pipinstall fails" do
+          allow(PluginModel).to receive(:get_setting).and_return('https://mirror.example.com')
+          status = double("status", success?: false)
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://mirror.example.com/simple', '-r', anything).and_return(["ERROR: uv pip install failed", status])
+          expect(Logger).to receive(:warn).with(/Python package installation failed/)
+          plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+          expect(plugin_model['needs_dependencies']).to eql true
+        end
+
+        [
+          'https://pypi.org; touch /tmp/pwned #',
+          'https://pypi.org$(id)',
+          '$(id)',
+          'https://pypi.org`id`',
+          "https://pypi.org\ntouch /tmp/pwned",
+          'https://user:pass@pypi.org',
+          'file:///etc/passwd',
+        ].each do |payload|
+          it "rejects malicious pypi_url setting #{payload.inspect} and never spawns a subprocess" do
+            allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return(payload)
+            expect(Open3).not_to receive(:capture2e)
+            expect(Open3).not_to receive(:capture3)
+            expect(Open3).not_to receive(:popen3)
+            expect(Process).not_to receive(:spawn)
+            expect(Logger).to receive(:error).with(/Invalid pypi_url/)
+            plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+            # Plugin install is still non-fatal
+            expect(plugin_model['needs_dependencies']).to eql true
+          end
+        end
+
+        it "rejects a malicious PYPI_URL environment fallback" do
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return(nil)
+          ENV['PYPI_URL'] = 'https://pypi.org; touch /tmp/pwned #'
+          expect(Open3).not_to receive(:capture2e)
+          expect(Logger).to receive(:error).with(/Invalid pypi_url/)
+          PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+        end
+
+        it "uses a valid PYPI_URL environment fallback when the setting is missing" do
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return(nil)
+          ENV['PYPI_URL'] = 'http://10.0.0.5:3141/root/pypi'
+          status = double("status", success?: true)
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'http://10.0.0.5:3141/root/pypi/simple', '-r', anything).and_return(["Command succeeded", status])
+          PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+        end
+
+        it "falls back to pypi.org when neither the setting nor PYPI_URL is set" do
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return(nil)
+          status = double("status", success?: true)
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://pypi.org/simple', '-r', anything).and_return(["Command succeeded", status])
+          PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+        end
+      end
     end
 
     describe "self.undeploy" do
