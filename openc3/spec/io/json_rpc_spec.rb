@@ -113,4 +113,120 @@ module OpenC3
       end
     end
   end
+
+  # A class with a json_create hook that must never be reachable from
+  # untrusted JSON via "json_class"
+  class JsonRpcSpecGadget
+    @@created = 0
+    def self.created
+      @@created
+    end
+
+    def self.json_create(_object)
+      @@created += 1
+      new
+    end
+  end
+
+  describe JsonRpcRequest do
+    describe "from_json" do
+      it "parses a request" do
+        json = JSON.generate({ 'jsonrpc' => '2.0', 'method' => 'tlm', 'params' => ['INST HEALTH_STATUS TEMP1'],
+                               'keyword_params' => { 'scope' => 'DEFAULT' }, 'id' => 7 })
+        request = JsonRpcRequest.from_json(json, { 'HTTP_AUTHORIZATION' => 'token' })
+        expect(request.method).to eql('tlm')
+        expect(request.params).to eql(['INST HEALTH_STATUS TEMP1'])
+        expect(request.keyword_params).to eql({ scope: 'DEFAULT', token: 'token' })
+        expect(request.id).to eql(7)
+      end
+
+      it "restores Float and binary String typed values" do
+        binary = "\xDE\xAD\xBE\xEF".force_encoding(Encoding::ASCII_8BIT)
+        json = JSON.generate({ 'jsonrpc' => '2.0', 'method' => 'cmd', 'id' => 1,
+                               'params' => [Float::INFINITY.as_json, (-Float::INFINITY).as_json, Float::NAN.as_json, binary.as_json],
+                               'keyword_params' => { 'nested' => { 'data' => [binary.as_json] } } })
+        request = JsonRpcRequest.from_json(json, {})
+        expect(request.params[0]).to eql(Float::INFINITY)
+        expect(request.params[1]).to eql(-Float::INFINITY)
+        expect(request.params[2]).to be_nan
+        expect(request.params[3]).to eql(binary)
+        expect(request.params[3].encoding).to eql(Encoding::ASCII_8BIT)
+        expect(request.keyword_params[:nested]['data'][0]).to eql(binary)
+      end
+
+      it "leaves unrecognized json_class hashes as plain hashes" do
+        json = JSON.generate({ 'jsonrpc' => '2.0', 'method' => 'cmd', 'id' => 1,
+                               'params' => [{ 'json_class' => 'Float', 'raw' => 'bogus' },
+                                            { 'json_class' => 'String', 'raw' => 'not bytes' },
+                                            { 'json_class' => 'String', 'raw' => [1, 'a'] }] })
+        request = JsonRpcRequest.from_json(json, {})
+        expect(request.params[0]).to eql({ 'json_class' => 'Float', 'raw' => 'bogus' })
+        expect(request.params[1]).to eql({ 'json_class' => 'String', 'raw' => 'not bytes' })
+        expect(request.params[2]).to eql({ 'json_class' => 'String', 'raw' => [1, 'a'] })
+      end
+
+      it "does not instantiate arbitrary classes named by json_class" do
+        json = JSON.generate({ 'jsonrpc' => '2.0', 'method' => 'cmd', 'id' => 1,
+                               'params' => [{ 'json_class' => 'OpenC3::JsonRpcSpecGadget', 'raw' => [] }],
+                               'keyword_params' => { 'json_class' => 'OpenC3::JsonRpcSpecGadget', 'raw' => [] } })
+        request = JsonRpcRequest.from_json(json, {})
+        expect(JsonRpcSpecGadget.created).to eql(0)
+        expect(request.params[0]).to eql({ 'json_class' => 'OpenC3::JsonRpcSpecGadget', 'raw' => [] })
+        expect(request.keyword_params).to eql({ json_class: 'OpenC3::JsonRpcSpecGadget', raw: [] })
+      end
+
+      it "rejects malformed requests" do
+        ['not json', '[]', '"string"',
+         JSON.generate({ 'jsonrpc' => '1.0', 'method' => 'cmd', 'id' => 1 }),
+         JSON.generate({ 'jsonrpc' => '2.0', 'id' => 1 }),
+         JSON.generate({ 'jsonrpc' => '2.0', 'method' => 'cmd' }),
+         JSON.generate({ 'jsonrpc' => '2.0', 'method' => ['cmd'], 'id' => 1 }),
+         JSON.generate({ 'jsonrpc' => '2.0', 'method' => 'cmd', 'params' => 'x', 'id' => 1 }),
+         JSON.generate({ 'jsonrpc' => '2.0', 'method' => 'cmd', 'keyword_params' => [], 'id' => 1 })].each do |json|
+          expect { JsonRpcRequest.from_json(json, {}) }.to raise_error(/Invalid JSON-RPC 2.0 Request/), json
+        end
+      end
+    end
+  end
+
+  describe JsonRpcResponse do
+    describe "from_json" do
+      it "restores typed values without create_additions" do
+        json = JSON.generate({ 'jsonrpc' => '2.0', 'id' => 1,
+                               'result' => [Float::NAN.as_json, { 'json_class' => 'OpenC3::JsonRpcSpecGadget', 'raw' => [] }] })
+        response = JsonRpcResponse.from_json(json)
+        expect(response).to be_a(JsonRpcSuccessResponse)
+        expect(response.result[0]).to be_nan
+        expect(response.result[1]).to eql({ 'json_class' => 'OpenC3::JsonRpcSpecGadget', 'raw' => [] })
+        expect(JsonRpcSpecGadget.created).to eql(0)
+      end
+
+      it "parses an error response" do
+        json = JSON.generate({ 'jsonrpc' => '2.0', 'id' => 1, 'error' => { 'code' => -1, 'message' => 'boom' } })
+        response = JsonRpcResponse.from_json(json)
+        expect(response).to be_a(JsonRpcErrorResponse)
+        expect(response.error.message).to eql('boom')
+      end
+    end
+  end
+
+  describe Exception do
+    describe "from_hash" do
+      it "rebuilds a namespaced exception" do
+        error = Exception.from_hash({ 'class' => 'OpenC3::JsonDRbUnknownError', 'message' => 'msg', 'backtrace' => [],
+                                      'instance_variables' => { '@extra' => 1 } })
+        expect(error).to be_a(JsonDRbUnknownError)
+        expect(error.message).to eql('msg')
+        expect(error.instance_variable_get(:@extra)).to eql(1)
+      end
+
+      it "raises JsonDRbUnknownError for classes that are not exceptions" do
+        ['OpenC3::JsonRpcSpecGadget', 'String', 'Does::Not::Exist'].each do |name|
+          expect do
+            Exception.from_hash({ 'class' => name, 'message' => 'msg', 'backtrace' => [], 'instance_variables' => {} })
+          end.to raise_error(JsonDRbUnknownError, 'msg')
+        end
+      end
+    end
+  end
 end
