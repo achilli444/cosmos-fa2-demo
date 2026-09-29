@@ -165,39 +165,39 @@ Direct/transitive is decided by presence of the (ecosystem, name) pair in `sbom/
 
 Repository license: `LICENSE.md` — AGPL-3.0 with a separate commercial license offered by OpenC3, Inc. First-party gems/npm packages in this tree are therefore reported as `AGPL-3.0-only OR commercial (first-party; LICENSE.md)` and are **not** flagged.
 
-License source for the 2663 components: SBOM-declared 3, public registry lookup 2398, registry lookup failed 21, not applicable (binary/file/action records) 241. Syft attaches license text to only 3 components for this tree (lockfiles carry no license field), so registry metadata is the primary source and is itself a limitation (registry metadata is declared by the publisher, not verified against the shipped files).
+License source for the 2663 components: SBOM-declared 3, public registry lookup 2398, registry lookup failed 0, not applicable (binary/file/action records) 241. Syft attaches license text to only 3 components for this tree (lockfiles carry no license field), so registry metadata is the primary source and is itself a limitation (registry metadata is declared by the publisher, not verified against the shipped files).
 
-Flag rows (deduplicated across repeated lockfile locations): **29** — GPL: 2, LGPL: 4, unknown (registry lookup failed): 21, none-declared: 2.
+Flag rows (deduplicated across repeated lockfile locations): **29** — AGPL: 21, GPL: 2, LGPL: 4, none-declared: 2.
 
 | Flag | Ecosystem | Component | Version | Declared license | Source | D/T | Location(s) |
 |---|---|---|---|---|---|---|---|
+| AGPL | gem | openc3-cosmos-demo | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/openc3-cosmos… |
+| AGPL | gem | openc3-cosmos-erb-test | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /examples/openc3-cosmos-erb-test/openc3-cosmos-erb-test.gemspec |
+| AGPL | gem | openc3-cosmos-http-example | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /examples/openc3-cosmos-http-example/openc3-cosmos-http-example.gemsp… |
+| AGPL | gem | openc3-cosmos-mqtt-test | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /examples/openc3-cosmos-mqtt-test/openc3-cosmos-mqtt-test.gemspec |
+| AGPL | gem | openc3-cosmos-tool-admin | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-admin/openc3-… |
+| AGPL | gem | openc3-cosmos-tool-bucketexplorer | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplore… |
+| AGPL | gem | openc3-cosmos-tool-cmdsender | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdsender/ope… |
+| AGPL | gem | openc3-cosmos-tool-cmdtlmserver | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdtlmserver/… |
+| AGPL | gem | openc3-cosmos-tool-dataextractor | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataextractor… |
+| AGPL | gem | openc3-cosmos-tool-dataviewer | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataviewer/op… |
+| AGPL | gem | openc3-cosmos-tool-docs | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /docs.openc3.com/openc3-cosmos-tool-docs.gemspec |
+| AGPL | gem | openc3-cosmos-tool-handbooks | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-handbooks/ope… |
+| AGPL | gem | openc3-cosmos-tool-iframe | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-iframe/openc3… |
+| AGPL | gem | openc3-cosmos-tool-limitsmonitor | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-limitsmonitor… |
+| AGPL | gem | openc3-cosmos-tool-packetviewer | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-packetviewer/… |
+| AGPL | gem | openc3-cosmos-tool-scriptrunner | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-scriptrunner/… |
+| AGPL | gem | openc3-cosmos-tool-tablemanager | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tablemanager/… |
+| AGPL | gem | openc3-cosmos-tool-tlmgrapher | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmgrapher/op… |
+| AGPL | gem | openc3-cosmos-tool-tlmviewer | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmviewer/ope… |
+| AGPL | gem | openc3-tool-base | 0.0.0' + ".#{time} | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3-cosmos-init/plugins/packages/openc3-tool-base/openc3-tool-bas… |
+| AGPL | pypi | openc3 | 7.1.2b0 | AGPL-3.0-only OR commercial (first-party; LI… | repo LICENSE.md (first-party) | transitive | /openc3/python/uv.lock |
 | GPL | gem | diff-lcs | 1.6.2 | Artistic-1.0-Perl OR GPL-2.0-or-later OR MIT | registry | transitive | /openc3-cosmos-cmd-tlm-api/Gemfile.lock;/openc3-cosmos-script-runner-… |
 | GPL | npm | jszip | 3.10.1 | (MIT OR GPL-3.0-or-later) | registry | direct | /playwright/pnpm-lock.yaml |
 | LGPL | pypi | gprof2dot | 2025.4.14 | LGPL | registry | transitive | /openc3/python/uv.lock |
 | LGPL | pypi | psycopg | 3.3.4 | LGPL-3.0-only | registry | direct | /openc3/python/uv.lock |
 | LGPL | pypi | psycopg-binary | 3.3.4 | LGPL-3.0-only | registry | transitive | /openc3/python/uv.lock |
 | LGPL | pypi | psycopg-pool | 3.3.1 | LGPL-3.0-only | registry | transitive | /openc3/python/uv.lock |
-| unknown (registry lookup failed) | gem | openc3-cosmos-demo | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/openc3-cosmos… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-erb-test | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /examples/openc3-cosmos-erb-test/openc3-cosmos-erb-test.gemspec |
-| unknown (registry lookup failed) | gem | openc3-cosmos-http-example | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /examples/openc3-cosmos-http-example/openc3-cosmos-http-example.gemsp… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-mqtt-test | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /examples/openc3-cosmos-mqtt-test/openc3-cosmos-mqtt-test.gemspec |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-admin | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-admin/openc3-… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-bucketexplorer | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplore… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-cmdsender | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdsender/ope… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-cmdtlmserver | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdtlmserver/… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-dataextractor | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataextractor… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-dataviewer | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataviewer/op… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-docs | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /docs.openc3.com/openc3-cosmos-tool-docs.gemspec |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-handbooks | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-handbooks/ope… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-iframe | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-iframe/openc3… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-limitsmonitor | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-limitsmonitor… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-packetviewer | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-packetviewer/… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-scriptrunner | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-scriptrunner/… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-tablemanager | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tablemanager/… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-tlmgrapher | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmgrapher/op… |
-| unknown (registry lookup failed) | gem | openc3-cosmos-tool-tlmviewer | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmviewer/ope… |
-| unknown (registry lookup failed) | gem | openc3-tool-base | 0.0.0' + ".#{time} | — | registry-lookup-failed | transitive | /openc3-cosmos-init/plugins/packages/openc3-tool-base/openc3-tool-bas… |
-| unknown (registry lookup failed) | pypi | openc3 | 7.1.2b0 | — | registry-lookup-failed | transitive | /openc3/python/uv.lock |
 | none-declared | gem | websocket-native | 1.0.0 | — | none | direct | /openc3-cosmos-cmd-tlm-api/Gemfile.lock;/openc3-cosmos-script-runner-… |
 | none-declared | npm | require-like | 0.1.2 | — | none | transitive | /docs.openc3.com/pnpm-lock.yaml |
 

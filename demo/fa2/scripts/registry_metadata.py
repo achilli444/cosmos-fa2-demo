@@ -10,13 +10,14 @@ REPO = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=Tru
 S = f'{REPO}/demo/fa2/sbom'; P = f'{REPO}/demo/fa2/provenance/data'
 UA = {'User-Agent': 'fa2-sbom-license-lookup (public metadata only)'}
 def get(url, tries=3):
+    last = 'retries exhausted'
     for i in range(tries):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 404: return {'__error__': 'HTTP 404'}
-            if e.code == 429: time.sleep(2 + 2 * i); continue
+            if e.code == 429: last = 'HTTP 429 (retries exhausted)'; time.sleep(2 + 2 * i); continue
             return {'__error__': f'HTTP {e.code}'}
         except Exception as e:
             time.sleep(1 + i); last = str(e)
@@ -82,13 +83,22 @@ def gem_owner(name):
             'downloads': g.get('downloads'), 'source_code_uri': g.get('source_code_uri') or g.get('homepage_uri'),
             'maintainer_history': 'not available (rubygems.org API exposes current owners only)',
             'install_hooks': 'gem extensions -> see gemspec (not exposed by API)'}
+npm_resolved = {}  # npm package name -> purls of the versions actually resolved in the SBOM
+for c in cdx['components']:
+    purl = (c.get('purl') or '').split('?')[0]
+    if purl.startswith('pkg:npm/'): npm_resolved.setdefault(c['name'], set()).add(purl)
 def npm_owner(name):
     d = get(f'https://registry.npmjs.org/{urllib.parse.quote(name, safe="@")}')
     if '__error__' in d: return {'error': d['__error__']}
     m = d.get('maintainers') or []; latest = d.get('dist-tags', {}).get('latest'); lv = d.get('versions', {}).get(latest, {})
-    scripts = {k: v for k, v in (lv.get('scripts') or {}).items() if k in ('preinstall', 'install', 'postinstall')}
+    hooks = {}
+    for purl in sorted(npm_resolved.get(name, ())):
+        e = cache.get(purl) or {}
+        sc = {k: v for k, v in (e.get('scripts') or {}).items() if k in ('preinstall', 'install', 'postinstall')}
+        if sc or e.get('hasInstallScript'): hooks[purl.rsplit('@', 1)[-1]] = sc or {'hasInstallScript': True}
     return {'owner_count': len(m), 'owners': [x.get('name') for x in m], 'latest_version': latest, 'licenses': [lv.get('license')] if lv.get('license') else [],
-            'install_hooks': scripts, 'maintainer_history': 'not available (npm registry document exposes current maintainers only)',
+            'resolved_versions': ';'.join(sorted(p.rsplit('@', 1)[-1] for p in npm_resolved.get(name, ()))),
+            'install_hooks': hooks, 'maintainer_history': 'not available (npm registry document exposes current maintainers only)',
             'repository': (lv.get('repository') or {}).get('url') if isinstance(lv.get('repository'), dict) else lv.get('repository')}
 def pypi_owner(name):
     d = get(f'https://pypi.org/pypi/{urllib.parse.quote(name)}/json')
@@ -106,7 +116,7 @@ rows = []
 with ThreadPoolExecutor(8) as ex:
     for (e, n), r in ex.map(owork, sorted(direct)):
         rows.append({'ecosystem': e, 'name': n, 'manifests': ';'.join(sorted(direct[(e, n)])), **{kk: (json.dumps(vv) if isinstance(vv, (list, dict)) else vv) for kk, vv in r.items()}})
-keys = ['ecosystem', 'name', 'manifests', 'owner_count', 'owners', 'latest_version', 'licenses', 'install_hooks', 'maintainer_history', 'downloads', 'source_code_uri', 'repository', 'author_email_domain', 'project_urls', 'error']
+keys = ['ecosystem', 'name', 'manifests', 'owner_count', 'owners', 'latest_version', 'resolved_versions', 'licenses', 'install_hooks', 'maintainer_history', 'downloads', 'source_code_uri', 'repository', 'author_email_domain', 'project_urls', 'error']
 with open(f'{P}/direct_dep_registry.csv', 'w', newline='') as f:
     w = csv.DictWriter(f, fieldnames=keys, extrasaction='ignore'); w.writeheader(); w.writerows(rows)
 print('direct deps:', len(rows), 'errors:', sum(1 for r in rows if r.get('error')))
