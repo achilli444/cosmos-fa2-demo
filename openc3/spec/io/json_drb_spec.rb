@@ -62,6 +62,11 @@ module OpenC3
         expect(drb.method_whitelist).to eql(Set['tlm', 'cmd'])
       end
 
+      it "accepts a one-pass Enumerable" do
+        drb = JsonDRb.new(method_whitelist: %w[tlm cmd].each)
+        expect(drb.method_whitelist).to eql(Set['tlm', 'cmd'])
+      end
+
       it "can be replaced but still cannot be cleared" do
         drb = JsonDRb.new(method_whitelist: ['tlm'])
         drb.method_whitelist = ['cmd']
