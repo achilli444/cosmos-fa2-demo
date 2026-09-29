@@ -18,6 +18,9 @@
 class RunningScriptChannel < ApplicationCable::Channel
   @@broadcasters = {}
 
+  # Runs after ApplicationCable::Channel#authenticate_subscription!
+  before_subscribe :authorize_script_scope!
+
   def subscribed
     # Defensive: if the auth before_subscribe callback rejected us, skip work.
     return if subscription_rejected?
@@ -78,5 +81,24 @@ class RunningScriptChannel < ApplicationCable::Channel
       @@broadcasters[subscription_key].stop
       @@broadcasters.delete(subscription_key)
     end
+  end
+
+  private
+
+  # Running script ids come from a single counter shared by every scope, so the
+  # id alone says nothing about which scope the script belongs to. Bind it to
+  # the connection's scope the same way RunningScriptController does (404 on a
+  # scope mismatch) before any of the script's output is read or streamed.
+  def authorize_script_scope!
+    scope = connection.scope
+    id = params[:id]
+    script = nil
+    if scope.present? and id.present?
+      script = OpenC3::ScriptStatusModel.get(name: id.to_s, scope: scope)
+    end
+    return if script
+
+    reject
+    throw :abort
   end
 end
