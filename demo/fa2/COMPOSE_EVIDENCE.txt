@@ -1,0 +1,19 @@
+# docker compose (openc3.sh run) evidence — 2026-09-28T03:39:59Z
+commit: 77acb91cc2c3b21af3eb981c829285dea96c984e (v7.2.0)
+cmd: OPENC3_TAG=7.2.0 ./openc3.sh run
+
+NAME                                                IMAGE                                                       STATUS
+cosmos-fa2-demo-openc3-buckets-1                    docker.io/openc3inc/openc3-buckets:7.2.0                    Up About a minute (healthy)
+cosmos-fa2-demo-openc3-cosmos-cmd-tlm-api-1         docker.io/openc3inc/openc3-cosmos-cmd-tlm-api:7.2.0         Up About a minute
+cosmos-fa2-demo-openc3-cosmos-script-runner-api-1   docker.io/openc3inc/openc3-cosmos-script-runner-api:7.2.0   Up About a minute
+cosmos-fa2-demo-openc3-operator-1                   docker.io/openc3inc/openc3-operator:7.2.0                   Up About a minute
+cosmos-fa2-demo-openc3-redis-1                      docker.io/openc3inc/openc3-redis:7.2.0                      Up About a minute (healthy)
+cosmos-fa2-demo-openc3-redis-ephemeral-1            docker.io/openc3inc/openc3-redis:7.2.0                      Up About a minute (healthy)
+cosmos-fa2-demo-openc3-traefik-1                    docker.io/openc3inc/openc3-traefik:7.2.0                    Up About a minute (healthy)
+cosmos-fa2-demo-openc3-tsdb-1                       docker.io/openc3inc/openc3-tsdb:7.2.0                       Up About a minute (healthy)
+
+curl http://localhost:2900/ -> 200
+curl http://localhost:2900/tools/cmdtlmserver -> 200
+init log tail:
++ [03:39:03Z] set +x
+2026-09-28T03:39:03Z all done.

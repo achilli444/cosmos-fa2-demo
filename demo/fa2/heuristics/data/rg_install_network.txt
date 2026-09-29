@@ -1,0 +1,168 @@
+## gemspec/Rakefile/bin/init/scripts/Dockerfile network calls
+./scripts/windows/openc3_setup.bat:18:  @echo   - Downloads cacert.pem from curl.se if not present 1>&2
+./scripts/windows/openc3_setup.bat:34:    echo "Downloading cacert.pem from curl"
+./scripts/windows/openc3_setup.bat:35:    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://curl.se
+./scripts/windows/openc3_setup.bat:37:      echo ERROR: Problem downloading .\cacert.pem file from https://curl.se/ca/cacert.pem
+./scripts/windows/openc3_setup.bat:41:      echo Successfully downloaded .\cacert.pem file from: https://curl.se/ca/cacert.pem
+./scripts/release/build_multi_arch.sh:3:# TODO: Can this script be replaced by https://github.com/docker/build-push-action
+./scripts/release/build_multi_arch.sh:42:echo "Downloading cert from curl"
+./scripts/release/build_multi_arch.sh:43:curl -q -L https://curl.se/ca/cacert.pem --output ./cacert.pem
+./scripts/release/build_multi_arch.sh:45:  echo "ERROR: Problem downloading cacert.pem file from https://curl.se/ca/cacert.pem" 1>&2
+./scripts/release/build_multi_arch.sh:49:  echo "Successfully downloaded ./cacert.pem file from: https://curl.se/ca/cacert.pem"
+./docs.openc3.com/openc3-cosmos-tool-docs.gemspec:23:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./docs.openc3.com/Rakefile:34:  # https://rubydoc.info/gems/rake/FileUtils#sh-instance_method
+./scripts/release/package_audit.rb:30:alpine_version = ENV.fetch('ALPINE_VERSION', '3.23')
+./scripts/release/package_audit.rb:31:alpine_build = ENV.fetch('ALPINE_BUILD', '4')
+./scripts/release/package_audit.rb:50:client = Faraday.new do |f|
+./scripts/windows/openc3_upgrade.bat:39:    set COSMOS_URL=https://github.com/OpenC3/cosmos-enterprise-project.git
+./scripts/windows/openc3_upgrade.bat:64:    set COSMOS_URL=https://github.com/OpenC3/cosmos-project.git
+./scripts/linux/openc3_upgrade.sh:46:  COSMOS_URL="https://github.com/OpenC3/cosmos-enterprise-project.git"
+./scripts/linux/openc3_upgrade.sh:71:  COSMOS_URL="https://github.com/OpenC3/cosmos-project.git"
+./scripts/windows/openc3_migrate_s3.bat:282:docker run --rm --network "%DOCKER_NETWORK%" --entrypoint "" -e "MC_HOST_minio=http://%MINIO_USER%:%MINIO_PASS%@%MINIO_MIGRATION_CONTAINER%:9000" "%MC_IMAGE
+./scripts/windows/openc3_migrate_s3.bat:373:    docker run --rm --network "%DOCKER_NETWORK%" --entrypoint "" -e "MC_HOST_versity=http://%VERSITY_USER%:%VERSITY_PASS%@%VERSITY_DEST%:9000" "%MC_IMAGE%" 
+./scripts/windows/openc3_migrate_s3.bat:376:        docker run --rm --network "%DOCKER_NETWORK%" --entrypoint "" -e "MC_HOST_versity=http://%VERSITY_USER%:%VERSITY_PASS%@%VERSITY_DEST%:9000" "%MC_IMAG
+./scripts/windows/openc3_migrate_s3.bat:381:    docker run --rm --network "%DOCKER_NETWORK%" --entrypoint "" -e "MC_HOST_minio=http://%MINIO_USER%:%MINIO_PASS%@%MINIO_SOURCE%:9000" -e "MC_HOST_versity
+./scripts/windows/openc3_migrate_s3.bat:491:docker run --rm --network "%DOCKER_NETWORK%" --entrypoint "" -e "MC_HOST_minio=http://%MINIO_USER%:%MINIO_PASS%@%MINIO_SOURCE%:9000" -e "MC_HOST_versity=htt
+./scripts/linux/openc3_migrate_s3.sh:312:            -e "MC_HOST_minio=http://${MINIO_USER}:${MINIO_PASS}@${MINIO_MIGRATION_CONTAINER}:9000" \
+./scripts/linux/openc3_migrate_s3.sh:386:        -e "MC_HOST_minio=http://${MINIO_USER}:${MINIO_PASS}@${MINIO_SOURCE}:9000" \
+./scripts/linux/openc3_migrate_s3.sh:387:        -e "MC_HOST_versity=http://${VERSITY_USER}:${VERSITY_PASS}@${VERSITY_DEST}:9000" \
+./scripts/linux/openc3_setup.sh:10:  echo "  - Downloads cacert.pem from curl.se if not present"
+./scripts/linux/openc3_setup.sh:21:# Please download cacert.pem from https://curl.haxx.se/docs/caextract.html and place in this folder before running
+./scripts/linux/openc3_setup.sh:47:    echo "Downloading cert from curl"
+./scripts/linux/openc3_setup.sh:48:    curl -q -L https://curl.se/ca/cacert.pem --output ./cacert.pem
+./scripts/linux/openc3_setup.sh:50:      echo "ERROR: Problem downloading cacert.pem file from https://curl.se/ca/cacert.pem" 1>&2
+./scripts/linux/openc3_setup.sh:54:      echo "Successfully downloaded ./cacert.pem file from: https://curl.se/ca/cacert.pem"
+./openc3-ruby/Dockerfile-ubi:11:ARG RUBYGEMS_URL=https://rubygems.org
+./openc3-ruby/Dockerfile-ubi:13:ARG PYPI_URL=https://pypi.org
+./openc3-ruby/Dockerfile-ubi:49:# ruby - https://www.ruby-lang.org/en/downloads/releases/
+./openc3-ruby/Dockerfile-ubi:50:# tini - https://github.com/krallin/tini
+./openc3-ruby/Dockerfile-ubi:97:# rbspy - https://github.com/rbspy/rbspy
+./openc3-ruby/Dockerfile-ubi:107:# htop - https://github.com/htop-dev/htop
+./openc3-ruby/Dockerfile-ubi:120:# libsocketcan - used by libcsp - https://github.com/linux-can/libsocketcan
+./openc3-ruby/Dockerfile-ubi:133:# libzmq - used by libcsp - https://github.com/zeromq/libzmq
+./openc3-ruby/Dockerfile-ubi:147:# libcsp - https://github.com/libcsp/libcsp
+./openc3-ruby/Dockerfile:15:ARG PYPI_URL=https://pypi.org
+./openc3-ruby/Dockerfile:57:      curl \
+./openc3-ruby/Dockerfile:99:# libsocketcan - used by libcsp - https://github.com/linux-can/libsocketcan
+./openc3-ruby/Dockerfile:112:# libcsp - https://github.com/libcsp/libcsp
+./openc3-node/Dockerfile-ubi:9:ARG NPM_URL=https://registry.npmjs.org
+./openc3-node/Dockerfile-ubi:13:# See https://catalog.redhat.com/software/containers/ubi8/nodejs-18-minimal/627d1c38e35da88581633bf1?architecture=amd64&image=6532ab11ef103fb2bc81ed0e&container-tabs=do
+./openc3/openc3.gemspec:33:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3/openc3.gemspec:133:  s.add_development_dependency 'rexml', '3.4.4' # 3.4.2 throws an error. See https://github.com/ruby/rexml/issues/287
+./openc3/bin/openc3cli:1429:    if ENV.fetch('OPENC3_CLOUD', 'local') == 'local'
+./openc3/bin/openc3cli:1441:    unless ENV.fetch("OPENC3_NO_BUCKET_POLICY", false) || ENV.fetch("OPENC3_TOOLS_BUCKET_PRIVATE", false)
+./scripts/release/package_audit_lib.rb:394:  current_version = ENV.fetch('ALPINE_VERSION')
+./scripts/release/package_audit_lib.rb:395:  current_build = ENV.fetch('ALPINE_BUILD')
+./scripts/release/package_audit_lib.rb:398:  resp = client.get('http://dl-cdn.alpinelinux.org/alpine/').body
+./scripts/release/package_audit_lib.rb:409:    listing = client.get("http://dl-cdn.alpinelinux.org/alpine/v#{ver}/releases/armv7/").body
+./scripts/release/package_audit_lib.rb:417:  puts "NOTE: Alpine has a new major version: #{new_major}. Read release notes at https://wiki.alpinelinux.org/wiki/Release_Notes_for_Alpine_#{new_major}.0" 
+./scripts/release/package_audit_lib.rb:421:  puts "NOTE: Alpine has a new minor version: #{new_minor}. Read release notes at https://alpinelinux.org/posts/Alpine-#{new_minor}.0-released.html" if new_m
+./scripts/release/package_audit_lib.rb:423:  arm_resp = client.get("http://dl-cdn.alpinelinux.org/alpine/v#{current_version}/releases/armv7").body
+./scripts/release/package_audit_lib.rb:476:  resp = client.get('https://api.github.com/repos/versity/versitygw/releases').body
+./scripts/release/package_audit_lib.rb:490:  resp = client.get('https://api.github.com/repos/questdb/questdb/releases').body
+./scripts/release/package_audit_lib.rb:610:  url_root = 'https://quay.io'
+./scripts/release/package_audit_lib.rb:635:  resp = client.get("https://registry.hub.docker.com/v2/repositories/#{repo}/tags?name=#{tag}&page_size=100")
+./scripts/release/package_audit_lib.rb:697:  resp = client.get('https://api.github.com/repos/anycable/anycable/releases?per_page=30').body
+./scripts/release/package_audit_lib.rb:704:  amd_url = "https://github.com/anycable/anycable/releases/download/v#{ver}/anycable-go-linux-amd64"
+./scripts/release/package_audit_lib.rb:705:  arm_url = "https://github.com/anycable/anycable/releases/download/v#{ver}/anycable-go-linux-arm64"
+./scripts/release/package_audit_lib.rb:708:  system("curl -fSL #{amd_url} -o #{amd_path}") || (puts("ERROR: failed to download #{amd_url}"); return nil)
+./scripts/release/package_audit_lib.rb:709:  system("curl -fSL #{arm_url} -o #{arm_path}") || (puts("ERROR: failed to download #{arm_url}"); return nil)
+./scripts/release/package_audit_lib.rb:725:    md = `git ls-remote --tags --sort=-v:refname https://github.com/Templarian/MaterialDesign-Webfont.git | sed -n 2p | awk '{print $2}'`
+./scripts/release/package_audit_lib.rb:732:      `curl https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/#{latest}/css/materialdesignicons.min.css --output public/css/materialdesignicons-#
+./scripts/release/package_audit_lib.rb:733:      `curl https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/#{latest}/css/materialdesignicons.css.map --output public/css/materialdesignicons.c
+./scripts/release/package_audit_lib.rb:734:      `curl https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/#{latest}/fonts/materialdesignicons-webfont.eot --output public/fonts/materialdesig
+./scripts/release/package_audit_lib.rb:735:      `curl https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/#{latest}/fonts/materialdesignicons-webfont.ttf --output public/fonts/materialdesig
+./scripts/release/package_audit_lib.rb:736:      `curl https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/#{latest}/fonts/materialdesignicons-webfont.woff --output public/fonts/materialdesi
+./scripts/release/package_audit_lib.rb:737:      `curl https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/#{latest}/fonts/materialdesignicons-webfont.woff2 --output public/fonts/materialdes
+./scripts/release/package_audit_lib.rb:787:        # Search here to get the URLs: https://cdnjs.com/
+./scripts/release/package_audit_lib.rb:791:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/dist/#{package}.global.js --output #{outfile}`
+./scripts/release/package_audit_lib.rb:796:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/dist/#{package}.global.prod.js --output #{outfile}`
+./scripts/release/package_audit_lib.rb:800:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/lib/es5/system/#{package}.min.js --output #{outfile}`
+./scripts/release/package_audit_lib.rb:803:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/lib/es5/system/#{package}.min.js.map --output #{outfile}`
+./scripts/release/package_audit_lib.rb:808:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/dist/#{package}-labs.min.css --output #{outfile}`
+./scripts/release/package_audit_lib.rb:811:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/dist/#{package}-labs.min.js --output #{outfile}`
+./scripts/release/package_audit_lib.rb:815:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/dist/import-map-overrides.js --output #{outfile}`
+./scripts/release/package_audit_lib.rb:818:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/dist/import-map-overrides.js.map --output #{outfile}`
+./scripts/release/package_audit_lib.rb:822:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/lib/keycloak.min.js --output #{outfile}`
+./scripts/release/package_audit_lib.rb:826:          `curl https://cdn.jsdelivr.net/npm/#{package}@#{latest}/dist/#{package}.min.js --output #{outfile}`
+./scripts/release/package_audit_lib.rb:1002:    resp = client.get("https://pypi.org/pypi/#{name}/json")
+./scripts/release/package_audit_lib.rb:1121:  resp = client.get("https://registry.npmjs.org/#{name}")
+./scripts/linux/benchmark_s3_migration.sh:55:        -e "MC_HOST_openc3minio=http://${MINIO_USER}:${MINIO_PASS}@${MINIO_SERVICE}:9000" \
+./scripts/linux/benchmark_s3_migration.sh:56:        -e "MC_HOST_openc3s3=http://${MINIO_USER}:${MINIO_PASS}@openc3-buckets-migration:9000" \
+./scripts/linux/benchmark_s3_migration.sh:84:            -e "MC_HOST_openc3minio=http://${MINIO_USER}:${MINIO_PASS}@${MINIO_SERVICE}:9000" \
+./scripts/linux/openc3_build_ubi.sh:395:  # https://ironbank.dso.mil/repomap/details;registry1Path=opensource%252Ftraefik%252Ftraefik
+./openc3/templates/widget/Rakefile:16:  # https://rubydoc.info/gems/rake/FileUtils#sh-instance_method
+./openc3/templates/plugin/Rakefile:11:# https://rubydoc.info/gems/rake/FileUtils#sh-instance_method
+./openc3/templates/plugin/plugin.gemspec:13:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3/templates/plugin/plugin.gemspec:27:    # See this help page for more detail: https://store.openc3.com/help/guidelines
+./openc3/templates/plugin/plugin.gemspec:28:    "source_code_uri" => "https://github.com/your-github/plugin-repo",
+./examples/openc3-cosmos-erb-test/openc3-cosmos-erb-test.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./examples/openc3-cosmos-mqtt-test/openc3-cosmos-mqtt-test.gemspec:22:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./examples/openc3-cosmos-http-example/openc3-cosmos-http-example.gemspec:23:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/Dockerfile:37:ARG NPM_URL=https://registry.npmjs.org
+./openc3-cosmos-init/init.sh:25:    OPENC3_BUCKET_URL='http://openc3-buckets:9000'
+./openc3-cosmos-init/init.sh:33:        curl -fs http://localhost:15021/healthz/ready -o /dev/null
+./openc3-cosmos-init/init.sh:47:# Diagnostic: when a dependency wait stalls, a curl/nc timeout doesn't tell us
+./openc3-cosmos-init/init.sh:83:        # Remove -f flag so curl only fails on connection errors, not HTTP errors
+./openc3-cosmos-init/init.sh:87:        curl -s --connect-timeout 5 --max-time 10 ${OPENC3_BUCKET_URL}/ -o /dev/null
+./openc3-cosmos-init/init.sh:233:        curl -fs -X POST http://localhost:15020/quitquitquit -o /dev/null
+./openc3-redis/Dockerfile:22:    # See https://github.com/docker-library/redis/blob/master/7.2/alpine/Dockerfile
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-iframe/openc3-cosmos-tool-iframe.gemspec:23:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/openc3-tool-base.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/img/COSMOS.svg:2:<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2609.65 337.22">
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/img/astro-logo-small-light.svg:2:<svg width="125px" height="50px" viewBox="0 0 125 50" version="1.1" xmlns="http://www.w3.org/2000/svg" xm
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/img/astro-logo-small-light.svg:3:    <!-- Generator: Sketch 53.2 (72643) - https://sketchapp.com -->
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/src/assets/stylesheets/layout/_overrides.scss:4:// See vuetify.js and https://www.astrouxds.com/design-tokens/system/ for the colors
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST/lib/block_conversion.rb:6:  # See https://docs.openc3.com/docs/configuration/conversions
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST2/lib/block_conversion.py:5:# See https://docs.openc3.com/docs/configuration/conversions
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST/screens/web.txt:6:  BUTTON 'App Store' "api.open_tab('https://store.openc3.com')"
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST/screens/web.txt:7:  BUTTON 'Github' "api.open_tab('https://github.com/OpenC3/cosmos', true)"
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST/screens/web.txt:9:IFRAME https://openc3.com 900 450
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST2/screens/web.txt:6:  BUTTON 'App Store' "api.open_tab('https://store.openc3.com')"
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST2/screens/web.txt:7:  BUTTON 'Github' "api.open_tab('https://github.com/OpenC3/cosmos', true)"
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/targets/INST2/screens/web.txt:9:IFRAME https://openc3.com 900 450
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/openc3-cosmos-demo.gemspec:28:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/Rakefile:38:  # https://rubydoc.info/gems/rake/FileUtils#sh-instance_method
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/img/astro-logo-small-dark.svg:2:<svg width="125px" height="50px" viewBox="0 0 125 50" version="1.1" xmlns="http://www.w3.org/2000/svg" xml
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/img/astro-logo-small-dark.svg:3:    <!-- Generator: Sketch 53.2 (72643) - https://sketchapp.com -->
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/icons/customIcons.svg:1:<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/amd.min.js.map:1:{"version":3,"file":"amd.min.js","sources":["../../src/err-msg.js","../../src/extras/amd.js"],"sourcesContent":["expor
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-handbooks/openc3-cosmos-tool-handbooks.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/import-map-overrides-6.1.0.min.js.map:1:{"version":3,"file":"import-map-overrides.js","sources":["../src/util/string-regex.js","../src/
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdsender/openc3-cosmos-tool-cmdsender.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-scriptrunner/openc3-cosmos-tool-scriptrunner.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/single-spa-6.0.3.min.js.map:1:{"version":3,"file":"single-spa.min.js","sources":["../../../node_modules/.pnpm/custom-event@1.0.1/node_m
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmviewer/openc3-cosmos-tool-tlmviewer.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataviewer/openc3-cosmos-tool-dataviewer.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplorer/openc3-cosmos-tool-bucketexplorer.gemspec:23:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataextractor/openc3-cosmos-tool-dataextractor.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-packetviewer/openc3-cosmos-tool-packetviewer.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-admin/openc3-cosmos-tool-admin.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-limitsmonitor/openc3-cosmos-tool-limitsmonitor.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tablemanager/openc3-cosmos-tool-tablemanager.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-redis/Dockerfile-ubi:31:# ruby - https://www.ruby-lang.org/en/downloads/releases/
+./openc3-redis/Dockerfile-ubi:32:# tini - https://github.com/krallin/tini
+./openc3-redis/Dockerfile-ubi:73:LABEL org.opencontainers.image.source="https://github.com/valkey-io/valkey"
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmgrapher/openc3-cosmos-tool-tlmgrapher.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+./openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdtlmserver/openc3-cosmos-tool-cmdtlmserver.gemspec:27:  s.homepage = 'https://github.com/OpenC3/cosmos'
+
+## package.json lifecycle scripts
+openc3/templates/tool_svelte/package.json: prepare=pnpm run smui-theme
+
+## gemspec extensions
+./openc3/openc3.gemspec:53:    s.extensions << 'ext/openc3/ext/array/extconf.rb'
+./openc3/openc3.gemspec:54:    s.extensions << 'ext/openc3/ext/buffered_file/extconf.rb'
+./openc3/openc3.gemspec:55:    s.extensions << 'ext/openc3/ext/burst_protocol/extconf.rb'
+./openc3/openc3.gemspec:56:    s.extensions << 'ext/openc3/ext/config_parser/extconf.rb'
+./openc3/openc3.gemspec:57:    s.extensions << 'ext/openc3/ext/openc3_io/extconf.rb'
+./openc3/openc3.gemspec:58:    s.extensions << 'ext/openc3/ext/crc/extconf.rb'
+./openc3/openc3.gemspec:59:    s.extensions << 'ext/openc3/ext/packet/extconf.rb'
+./openc3/openc3.gemspec:60:    s.extensions << 'ext/openc3/ext/platform/extconf.rb'
+./openc3/openc3.gemspec:61:    s.extensions << 'ext/openc3/ext/polynomial_conversion/extconf.rb'
+./openc3/openc3.gemspec:62:    s.extensions << 'ext/openc3/ext/string/extconf.rb'
+./openc3/openc3.gemspec:63:    s.extensions << 'ext/openc3/ext/tabbed_plots_config/extconf.rb'
+./openc3/openc3.gemspec:64:    s.extensions << 'ext/openc3/ext/telemetry/extconf.rb'
+
+## pyproject build/scripts
+57:[project.scripts]
+71:build-backend = "setuptools.build_meta"

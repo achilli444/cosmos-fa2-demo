@@ -1,0 +1,95 @@
+openc3-cosmos-cmd-tlm-api/app/controllers/scopes_controller.rb:59:    result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "destroyscope", params[:id]], "scope_uninstall", params[:id], Time.now + 2.hours, scope: 'DEFAULT')
+openc3-cosmos-cmd-tlm-api/app/controllers/redis_controller.rb:37:      result = OpenC3::EphemeralStore.instance(db_shard: db_shard).public_send(command, args[1..-1])
+openc3-cosmos-cmd-tlm-api/app/controllers/redis_controller.rb:39:      result = OpenC3::Store.instance(db_shard: db_shard).public_send(command, args[1..-1])
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:204:      result = OpenC3::ProcessManager.instance.spawn(
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:220:      result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "unload", id, scope], "plugin_uninstall", id, Time.now + 1.hour, scope: scope)
+openc3-cosmos-cmd-tlm-api/app/controllers/microservices_controller.rb:85:        routers[router_name]['rule'] = "PathPrefix(`#{prefix}`)"
+openc3/lib/openc3/microservices/microservice.rb:197:              syntax_check, _ = Open3.capture2e("ruby -c #{ruby_filename}")
+openc3/lib/openc3/conversions/generic_conversion.rb:54:        return eval(@code_to_eval)
+openc3/lib/openc3/config/meta_config_parser.rb:51:        output = ERB.new(File.read(path), trim_mode: "-").result(binding)
+openc3/lib/openc3/io/udp_sockets.rb:128:      @socket.__send__(method, *args, &block)
+openc3/lib/openc3/io/io_multiplexer.rb:50:          result = stream.public_send(method_name, *args)
+openc3/lib/openc3/io/io_multiplexer.rb:56:          stream.public_send(method_name, *args)
+openc3/lib/openc3/config/config_parser.rb:166:      return ERB.new(read_file(template_name).comment_erb(), trim_mode: "-").result(b)
+openc3/lib/openc3/config/config_parser.rb:402:            output = ERB.new(File.read(filename).force_encoding("UTF-8").comment_erb(), trim_mode: "-").result(binding.set_variables(variables))
+openc3/lib/openc3/io/json_drb.rb:261:              result = @object.public_send(request.method.downcase().intern, *request.params, **request.keyword_params)
+openc3/lib/openc3/io/json_drb.rb:263:              result = @object.public_send(request.method.downcase().intern, *request.params)
+openc3/lib/openc3/interfaces/tcpip_server_interface.rb:310:          interface_info.interface.stream_log_pair.public_send(method) if interface_info.interface.stream_log_pair
+openc3/lib/openc3/interfaces/tcpip_server_interface.rb:313:          interface_info.interface.stream_log_pair.public_send(method) if interface_info.interface.stream_log_pair
+openc3/lib/openc3/interfaces/tcpip_server_interface.rb:594:            interface_info.interface.public_send(method, packet_or_data)
+openc3/lib/openc3/topics/topic.rb:24:      EphemeralStore.public_send(message, *args, **kwargs, &block)
+openc3/lib/openc3/operators/operator.rb:104:      # e.g. OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "load", ...])
+openc3/lib/openc3/models/widget_model.rb:135:          data = ERB.new(data.comment_erb(), trim_mode: "-").result(binding.set_variables(variables)) if data.is_printable?
+openc3/lib/openc3/models/gem_model.rb:61:          result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "geminstall", gem_filename, scope], "package_install", gem_filename, Time.now + 3600.0, scope: scope)
+openc3/lib/openc3/models/target_model.rb:588:                  data = ERB.new(data.force_encoding("UTF-8").comment_erb(), trim_mode: "-").result(binding.set_variables(variables))
+openc3/lib/openc3/models/target_model.rb:714:            return ERB.new(data.force_encoding("UTF-8").comment_erb(), trim_mode: "-").result(b)
+openc3/lib/openc3/models/microservice_model.rb:271:            data = ERB.new(data.comment_erb(), trim_mode: "-").result(binding.set_variables(variables)) if data.is_printable? and File.basename(filename)[0] != '_'
+openc3/lib/openc3/models/tool_model.rb:277:          data = ERB.new(data.comment_erb(), trim_mode: "-").result(binding.set_variables(variables)) if data.is_printable?
+openc3/lib/openc3/models/python_package_model.rb:95:      result = OpenC3::ProcessManager.instance.spawn(["/openc3/bin/pipinstall"] + pip_args, "package_install", package_filename, Time.now + 3600.0, scope: scope)
+openc3/lib/openc3/models/python_package_model.rb:103:      result = OpenC3::ProcessManager.instance.spawn(["/openc3/bin/pipuninstall"] + pip_args, "package_uninstall", name, Time.now + 3600.0, scope: scope)
+openc3/lib/openc3/core_ext/class.rb:50:      self.class_eval("def #{arg};@#{arg};end")
+openc3/lib/openc3/core_ext/class.rb:51:      self.instance_eval("def #{arg};self.instance.#{arg};end")
+openc3/lib/openc3/core_ext/class.rb:64:      self.class_eval("def #{arg};@#{arg};end")
+openc3/lib/openc3/core_ext/class.rb:65:      self.instance_eval("def #{arg};self.instance.#{arg};end")
+openc3/lib/openc3/core_ext/class.rb:66:      self.class_eval("def #{arg}=(arg);@#{arg} = arg;end")
+openc3/lib/openc3/core_ext/class.rb:67:      self.instance_eval("def #{arg}=(arg);self.instance.#{arg} = arg;end")
+openc3-cosmos-cmd-tlm-api/app/controllers/storage_controller.rb:530:    OpenC3::ProcessManager.instance.spawn(
+openc3/lib/openc3/utilities/script.rb:206:    RunningScript.spawn(scope, name, suite_runner, disconnect, environment, user_full_name, username, line_no, end_line_no)
+openc3/lib/openc3/utilities/script.rb:315:        results, status = Open3.capture2e("#{process_name} \"#{runner_path}\" mnemonic_check \"#{tf.path}\"")
+openc3/lib/openc3/utilities/script.rb:348:      check_process = IO.popen('ruby -c -rubygems 2>&1', 'r+')
+openc3/lib/openc3/utilities/script.rb:386:        results, status = Open3.capture2e("#{process_name} -m py_compile #{tf.path}")
+openc3/lib/openc3/utilities/script.rb:427:          results, status = Open3.capture2e("#{process_name} \"#{runner_path}\" syntax_check \"#{tf.path}\"")
+openc3/lib/openc3/utilities/store_autoload.rb:110:      self.instance.public_send(message, *args, **kwargs, &block)
+openc3/lib/openc3/utilities/store_autoload.rb:115:      @redis_pool.with { |redis| redis.public_send(message, *args, **kwargs, &block) }
+openc3/lib/openc3/utilities/running_script.rb:258:            eval(instrumented_script, RunningScript.instance.script_binding, path, line_no)
+openc3/lib/openc3/utilities/running_script.rb:260:            Object.class_eval(instrumented_script, path, line_no)
+openc3/lib/openc3/utilities/running_script.rb:435:  def self.spawn(scope, name, suite_runner = nil, disconnect = false, environment = nil, user_full_name = nil, username = nil, line_no = nil, end_line_no = nil)
+openc3/lib/openc3/utilities/running_script.rb:1023:        eval(debug_text, @script_binding, 'debug', 1)
+openc3/lib/openc3/utilities/running_script.rb:1025:        Object.class_eval(debug_text, 'debug', 1)
+openc3/lib/openc3/utilities/running_script.rb:1346:            Object.class_eval(instrumented_script, instrument_filename, 1)
+openc3/lib/openc3/utilities/process_manager.rb:73:    def spawn(cmd_array, process_type, detail, expires_at, **kw_args)
+openc3/lib/openc3/utilities/simulated_target.rb:49:            packet.public_send((id.name + '=').to_sym, id.id_value)
+openc3/lib/openc3/utilities/bucket_utilities.rb:44:      Object.class_eval(text, path, 1)
+openc3/lib/openc3/utilities/store_queued.rb:43:      self.instance.public_send(message, *args, **kwargs, &)
+openc3/lib/openc3/utilities/store_queued.rb:77:            @store.public_send(action.message, *action.args, **action.kwargs, &action.block)
+openc3/lib/openc3/io/json_rpc.rb:230:    DANGEROUS_METHODS = Set['__send__', 'send', 'instance_eval', 'instance_exec']
+openc3/lib/openc3/packets/packet.rb:663:                  value = Marshal.load(Marshal.dump(value))
+openc3/lib/openc3/packets/packet.rb:689:                  value = Marshal.load(Marshal.dump(value))
+openc3/lib/openc3/packets/packet_config.rb:600:              @current_packet.public_send(keyword_equals, klass.new(@current_packet, *params[1..-1]))
+openc3/lib/openc3/packets/packet_config.rb:602:              @current_packet.public_send(keyword_equals, klass.new(@current_packet))
+openc3/lib/openc3/packets/packet_config.rb:606:              @current_packet.public_send(keyword_equals, PythonProxy.new(keyword.capitalize, params[0], @current_packet, *params[1..-1]))
+openc3/lib/openc3/packets/packet_config.rb:608:              @current_packet.public_send(keyword_equals, PythonProxy.new(keyword.capitalize, params[0], @current_packet))
+openc3/lib/openc3/packets/packet_config.rb:693:            @current_item.public_send("#{keyword.downcase}=".to_sym, conversion)
+openc3/lib/openc3/packets/packet_config.rb:696:            @current_item.public_send("#{keyword.downcase}=".to_sym, conversion)
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:452:            xml['xtce'].public_send("Array#{temp_type}RefEntry".intern, reference_symbol => prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)) do
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:467:              xml['xtce'].public_send("#{temp_type}RefEntry".intern, "#{temp_type.downcase}Ref".intern => prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR))
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:469:              xml['xtce'].public_send("#{temp_type}RefEntry".intern, "#{temp_type.downcase}Ref".intern => prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)) do
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:513:        xml['xtce'].public_send('Array' + param_or_arg + 'Type', attrs) do
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:572:        xml['xtce'].public_send('Enumerated' + param_or_arg + 'Type', attrs) do
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:595:        xml['xtce'].public_send(type_string, attrs) do
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:632:      xml['xtce'].public_send('Float' + param_or_arg + 'Type', attrs) do
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:679:      xml['xtce'].public_send(string_or_binary + param_or_arg + 'Type', attrs) do
+openc3/lib/openc3/packets/parsers/xtce_converter.rb:761:        xml['xtce'].public_send(param_or_arg, attrs) do
+openc3/lib/openc3/script/telemetry.rb:30:        id, packets = $api_server.public_send(:get_packets, id, count: count, scope: scope, token: token)
+openc3/lib/openc3/script/suite.rb:364:          object.public_send(method_name)
+openc3/lib/openc3/script/api_shared.rb:750:            if eval(exp_to_eval)
+openc3/lib/openc3/script/api_shared.rb:753:          # NoMethodError is raised when the tlm() returns nil and we try to eval the expression
+openc3/lib/openc3/script/api_shared.rb:777:              if eval(exp_to_eval)
+openc3/lib/openc3/script/api_shared.rb:782:            # NoMethodError is raised when the tlm() returns nil and we try to eval the expression
+openc3/lib/openc3/script/api_shared.rb:830:        if eval(exp_to_eval, context)
+openc3/lib/openc3/script/api_shared.rb:843:          if eval(exp_to_eval, context)
+openc3/lib/openc3/script/api_shared.rb:866:      # Note: We have to preserve the original 'value' variable because we're going to eval against it
+openc3/lib/openc3/script/api_shared.rb:881:      if eval_is_valid && eval(string)
+openc3/lib/openc3/script/api_shared.rb:908:          # If we can't parse the operand, let the eval happen anyway
+openc3/lib/openc3/script/limits.rb:29:          $api_server.public_send(method_name, *args, **kw_args, &block)
+openc3/lib/openc3/top_level.rb:154:      return Marshal.load(data)
+openc3/lib/openc3/top_level.rb:182:      system(command)
+openc3/lib/openc3/top_level.rb:197:      output, _ = Open3.capture2e(command)
+openc3/lib/openc3/top_level.rb:233:    digest = Digest.const_get(hashing_algorithm).public_send('new')
+openc3/lib/openc3/models/plugin_model.rb:288:            output = `/openc3/bin/pipinstall #{pip_args}`
+openc3/lib/openc3/utilities/reingest_job.rb:155:      attrs.each { |k, v| job.send("#{k}=", v) }
+openc3/lib/openc3/utilities/cli_generator.rb:346:        output = ERB.new(File.read(file), trim_mode: "-").result(the_binding)
+openc3/lib/openc3/utilities/cli_generator.rb:702:    self.singleton_class.send(:alias_method, :generate_tool_vue, :generate_tool)
+openc3/lib/openc3/utilities/cli_generator.rb:703:    self.singleton_class.send(:alias_method, :generate_tool_react, :generate_tool)
+openc3/lib/openc3/utilities/cli_generator.rb:704:    self.singleton_class.send(:alias_method, :generate_tool_angular, :generate_tool)
+openc3/lib/openc3/utilities/cli_generator.rb:705:    self.singleton_class.send(:alias_method, :generate_tool_svelte, :generate_tool)

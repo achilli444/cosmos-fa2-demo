@@ -1,0 +1,30 @@
+component,version,ecosystem,flag,license_text,license_source,direct_or_transitive,locations
+diff-lcs,1.6.2,gem,GPL,Artistic-1.0-Perl OR GPL-2.0-or-later OR MIT,registry,transitive,/openc3-cosmos-cmd-tlm-api/Gemfile.lock;/openc3-cosmos-script-runner-api/Gemfile.lock;/openc3/Gemfile.lock
+jszip,3.10.1,npm,GPL,(MIT OR GPL-3.0-or-later),registry,direct,/playwright/pnpm-lock.yaml
+gprof2dot,2025.4.14,pypi,LGPL,LGPL,registry,transitive,/openc3/python/uv.lock
+psycopg,3.3.4,pypi,LGPL,LGPL-3.0-only,registry,direct,/openc3/python/uv.lock
+psycopg-binary,3.3.4,pypi,LGPL,LGPL-3.0-only,registry,transitive,/openc3/python/uv.lock
+psycopg-pool,3.3.1,pypi,LGPL,LGPL-3.0-only,registry,transitive,/openc3/python/uv.lock
+openc3-cosmos-demo,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-demo/openc3-cosmos-demo.gemspec
+openc3-cosmos-erb-test,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/examples/openc3-cosmos-erb-test/openc3-cosmos-erb-test.gemspec
+openc3-cosmos-http-example,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/examples/openc3-cosmos-http-example/openc3-cosmos-http-example.gemspec
+openc3-cosmos-mqtt-test,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/examples/openc3-cosmos-mqtt-test/openc3-cosmos-mqtt-test.gemspec
+openc3-cosmos-tool-admin,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-admin/openc3-cosmos-tool-admin.gemspec
+openc3-cosmos-tool-bucketexplorer,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplorer/openc3-cosmos-tool-bucketexplorer.gemspec
+openc3-cosmos-tool-cmdsender,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdsender/openc3-cosmos-tool-cmdsender.gemspec
+openc3-cosmos-tool-cmdtlmserver,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdtlmserver/openc3-cosmos-tool-cmdtlmserver.gemspec
+openc3-cosmos-tool-dataextractor,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataextractor/openc3-cosmos-tool-dataextractor.gemspec
+openc3-cosmos-tool-dataviewer,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataviewer/openc3-cosmos-tool-dataviewer.gemspec
+openc3-cosmos-tool-docs,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/docs.openc3.com/openc3-cosmos-tool-docs.gemspec
+openc3-cosmos-tool-handbooks,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-handbooks/openc3-cosmos-tool-handbooks.gemspec
+openc3-cosmos-tool-iframe,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-iframe/openc3-cosmos-tool-iframe.gemspec
+openc3-cosmos-tool-limitsmonitor,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-limitsmonitor/openc3-cosmos-tool-limitsmonitor.gemspec
+openc3-cosmos-tool-packetviewer,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-packetviewer/openc3-cosmos-tool-packetviewer.gemspec
+openc3-cosmos-tool-scriptrunner,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-scriptrunner/openc3-cosmos-tool-scriptrunner.gemspec
+openc3-cosmos-tool-tablemanager,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tablemanager/openc3-cosmos-tool-tablemanager.gemspec
+openc3-cosmos-tool-tlmgrapher,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmgrapher/openc3-cosmos-tool-tlmgrapher.gemspec
+openc3-cosmos-tool-tlmviewer,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmviewer/openc3-cosmos-tool-tlmviewer.gemspec
+openc3-tool-base,"0.0.0' + "".#{time}",gem,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3-cosmos-init/plugins/packages/openc3-tool-base/openc3-tool-base.gemspec
+openc3,7.1.2b0,pypi,unknown (registry lookup failed),,registry-lookup-failed,transitive,/openc3/python/uv.lock
+websocket-native,1.0.0,gem,none-declared,,none,direct,/openc3-cosmos-cmd-tlm-api/Gemfile.lock;/openc3-cosmos-script-runner-api/Gemfile.lock;/openc3/Gemfile.lock
+require-like,0.1.2,npm,none-declared,,none,transitive,/docs.openc3.com/pnpm-lock.yaml

@@ -1,0 +1,135 @@
+# rg extra patterns (scoped dirs + python lib, excluding spec/test/node_modules). Generated at 77acb91cc2c3b21af3eb981c829285dea96c984e
+
+## pattern: YAML\.(unsafe_)?load
+
+## pattern: constantize
+
+## pattern: ERB\.new
+openc3/lib/openc3/config/meta_config_parser.rb:51:        output = ERB.new(File.read(path), trim_mode: "-").result(binding)
+openc3/lib/openc3/config/config_parser.rb:166:      return ERB.new(read_file(template_name).comment_erb(), trim_mode: "-").result(b)
+openc3/lib/openc3/config/config_parser.rb:402:            output = ERB.new(File.read(filename).force_encoding("UTF-8").comment_erb(), trim_mode: "-").result(binding.set_variables(variables))
+openc3/lib/openc3/models/tool_model.rb:277:          data = ERB.new(data.comment_erb(), trim_mode: "-").result(binding.set_variables(variables)) if data.is_printable?
+openc3/lib/openc3/models/microservice_model.rb:271:            data = ERB.new(data.comment_erb(), trim_mode: "-").result(binding.set_variables(variables)) if data.is_printable? and File.basename(filename)[0] != '_'
+openc3/lib/openc3/models/target_model.rb:588:                  data = ERB.new(data.force_encoding("UTF-8").comment_erb(), trim_mode: "-").result(binding.set_variables(variables))
+openc3/lib/openc3/models/target_model.rb:714:            return ERB.new(data.force_encoding("UTF-8").comment_erb(), trim_mode: "-").result(b)
+openc3/lib/openc3/models/widget_model.rb:135:          data = ERB.new(data.comment_erb(), trim_mode: "-").result(binding.set_variables(variables)) if data.is_printable?
+openc3/lib/openc3/utilities/cli_generator.rb:346:        output = ERB.new(File.read(file), trim_mode: "-").result(the_binding)
+
+## pattern: spawn\(
+openc3-cosmos-cmd-tlm-api/app/controllers/scopes_controller.rb:59:    result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "destroyscope", params[:id]], "scope_uninstall", params[:id], Time.now + 2.hours, scope: 'DEFAULT')
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:204:      result = OpenC3::ProcessManager.instance.spawn(
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:220:      result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "unload", id, scope], "plugin_uninstall", id, Time.now + 1.hour, scope: scope)
+openc3-cosmos-cmd-tlm-api/app/controllers/storage_controller.rb:530:    OpenC3::ProcessManager.instance.spawn(
+openc3-cosmos-init/plugins/packages/openc3-js-common/viteDevServerPlugin.mjs:36:    const v = spawn('vite')
+openc3/lib/openc3/operators/operator.rb:104:      # e.g. OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "load", ...])
+openc3/lib/openc3/models/gem_model.rb:61:          result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "geminstall", gem_filename, scope], "package_install", gem_filename, Time.now + 3600.0, scope: scope)
+openc3/lib/openc3/models/python_package_model.rb:95:      result = OpenC3::ProcessManager.instance.spawn(["/openc3/bin/pipinstall"] + pip_args, "package_install", package_filename, Time.now + 3600.0, scope: scope)
+openc3/lib/openc3/models/python_package_model.rb:103:      result = OpenC3::ProcessManager.instance.spawn(["/openc3/bin/pipuninstall"] + pip_args, "package_uninstall", name, Time.now + 3600.0, scope: scope)
+openc3/lib/openc3/utilities/process_manager.rb:73:    def spawn(cmd_array, process_type, detail, expires_at, **kw_args)
+openc3/lib/openc3/utilities/script.rb:206:    RunningScript.spawn(scope, name, suite_runner, disconnect, environment, user_full_name, username, line_no, end_line_no)
+openc3/lib/openc3/utilities/running_script.rb:435:  def self.spawn(scope, name, suite_runner = nil, disconnect = false, environment = nil, user_full_name = nil, username = nil, line_no = nil, end_line_no = nil)
+
+## pattern: Kernel\.open\(|open\("\|
+openc3/lib/openc3/io/posix_serial_driver.rb:53:      @handle = Kernel.open(port_name, File::RDWR | File::NONBLOCK)
+
+## pattern: system\(
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-scriptrunner/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmviewer/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3/python/openc3/microservices/decom_microservice.py:118:        LimitsEventTopic.sync_system(scope=self.scope)
+openc3/python/openc3/topics/limits_event_topic.py:199:    def sync_system(cls, scope):
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdsender/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataextractor/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-iframe/Rakefile:33:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-packetviewer/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-admin/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-dataviewer/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-bucketexplorer/Rakefile:33:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tlmgrapher/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-handbooks/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-tool-base/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-limitsmonitor/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-cmdtlmserver/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3-cosmos-init/plugins/packages/openc3-cosmos-tool-tablemanager/Rakefile:37:  system("gem build #{PLUGIN_NAME}")
+openc3/lib/openc3/utilities/reingest_job.rb:262:        load_system(target, version)
+openc3/lib/openc3/utilities/reingest_job.rb:275:        load_system(target, 'current')
+openc3/lib/openc3/utilities/reingest_job.rb:284:    def load_system(target, version)
+openc3/lib/openc3/topics/limits_event_topic.rb:177:    def self.sync_system(scope:)
+openc3/lib/openc3/microservices/decom_microservice.rb:102:      LimitsEventTopic.sync_system(scope: @scope)
+openc3/lib/openc3/top_level.rb:182:      system(command)
+
+## pattern: Marshal\.load
+openc3/lib/openc3/packets/packet.rb:663:                  value = Marshal.load(Marshal.dump(value))
+openc3/lib/openc3/packets/packet.rb:689:                  value = Marshal.load(Marshal.dump(value))
+openc3/lib/openc3/top_level.rb:154:      return Marshal.load(data)
+
+## pattern: pickle\.load
+
+## pattern: shell\s*=\s*True
+
+## pattern: subprocess\.(call|run|Popen|check_output)
+
+## pattern: new Function\(
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:16060:      new Function(
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:18471:    const render = new Function(code)() ;
+
+## pattern: \.innerHTML\s*=
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:8027:      if (oldProps.innerHTML && newProps.innerHTML == null || oldProps.textContent && newProps.textContent == null) {
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:10928:        templateContainer.innerHTML = unsafeToTrustedHTML(
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:17820:      decoder.innerHTML = `<div foo="${raw.replace(/"/g, "&quot;")}">`;
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:17823:      decoder.innerHTML = raw;
+
+## pattern: v-html
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:17909:    [54]: `v-html is missing expression.`,
+openc3-cosmos-init/plugins/packages/openc3-tool-base/public/js/vue.global-3.5.35.js:17910:    [55]: `v-html will override element children.`,
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/tools/base/UserMenu.vue:103:                <!-- eslint-disable-next-line vue/no-v-html -->
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/tools/base/UserMenu.vue:104:                <div v-html="sanitizeNews(newsItem.body)"></div>
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/plugins/dialog/ConfirmDialog.vue:29:          <!-- eslint-disable-next-line vue/no-v-html -->
+openc3-cosmos-init/plugins/packages/openc3-vue-common/src/plugins/dialog/ConfirmDialog.vue:30:          <span v-if="params.html" v-html="sanitizedText"></span>
+
+## pattern: URI\.open|open-uri
+openc3/lib/openc3/models/gem_model.rb:19:require 'open-uri'
+
+## pattern: Net::HTTP\.|Net::HTTP::
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:44:      req = Net::HTTP::Get.new(uri_obj)
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:47:      response = Net::HTTP.start(uri_obj.hostname, uri_obj.port) do |http|
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:59:      req = Net::HTTP::Get.new(uri_obj)
+openc3-cosmos-cmd-tlm-api/app/controllers/plugins_controller.rb:62:      response = Net::HTTP.start(uri_obj.hostname, uri_obj.port) do |http|
+openc3/lib/openc3/script/storage.rb:68:        Net::HTTP.start(uri.host, uri.port) do
+openc3/lib/openc3/script/storage.rb:69:          request = Net::HTTP::Put.new(uri, {'Content-Length' => io_or_string.length.to_s})
+openc3/lib/openc3/script/storage.rb:75:          Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/storage.rb:155:      Net::HTTP.start(uri.host, uri.port) do
+openc3/lib/openc3/script/storage.rb:156:        request = Net::HTTP::Get.new uri
+openc3/lib/openc3/script/storage.rb:157:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/packages.rb:27:        request = Net::HTTP::Get.new(uri)
+openc3/lib/openc3/script/packages.rb:31:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/packages.rb:52:          request = Net::HTTP::Post.new(uri)
+openc3/lib/openc3/script/packages.rb:57:          Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/packages.rb:77:        request = Net::HTTP::Delete.new(uri)
+openc3/lib/openc3/script/packages.rb:80:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/packages.rb:104:        request = Net::HTTP::Post.new(uri)
+openc3/lib/openc3/script/packages.rb:107:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/plugins.rb:25:        request = Net::HTTP::Get.new(uri)
+openc3/lib/openc3/script/plugins.rb:29:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/plugins.rb:56:        request = Net::HTTP::Get.new(uri)
+openc3/lib/openc3/script/plugins.rb:60:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/plugins.rb:85:            request = Net::HTTP::Put.new(uri)
+openc3/lib/openc3/script/plugins.rb:87:            request = Net::HTTP::Post.new(uri)
+openc3/lib/openc3/script/plugins.rb:93:          Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/plugins.rb:119:          request = Net::HTTP::Put.new(uri)
+openc3/lib/openc3/script/plugins.rb:121:          request = Net::HTTP::Post.new(uri)
+openc3/lib/openc3/script/plugins.rb:128:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/plugins.rb:150:        request = Net::HTTP::Delete.new(uri)
+openc3/lib/openc3/script/plugins.rb:153:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+openc3/lib/openc3/script/plugins.rb:172:        request = Net::HTTP::Get.new(uri)
+openc3/lib/openc3/script/plugins.rb:176:        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+
+## pattern: Open3\.|popen
+openc3/python/openc3/microservices/microservice.py:203:            #       syntax_check, _ = Open3.capture2e("ruby -c {ruby_filename}")
+openc3/lib/openc3/win32/win32.rb:328:      class Win32popenIO
+openc3/lib/openc3/win32/win32.rb:392:        io = Win32popenIO.new(child_out_r, child_in_w, child_error_r)
+openc3/lib/openc3/utilities/script.rb:315:        results, status = Open3.capture2e("#{process_name} \"#{runner_path}\" mnemonic_check \"#{tf.path}\"")
+openc3/lib/openc3/utilities/script.rb:348:      check_process = IO.popen('ruby -c -rubygems 2>&1', 'r+')
+openc3/lib/openc3/utilities/script.rb:386:        results, status = Open3.capture2e("#{process_name} -m py_compile #{tf.path}")
+openc3/lib/openc3/utilities/script.rb:427:          results, status = Open3.capture2e("#{process_name} \"#{runner_path}\" syntax_check \"#{tf.path}\"")
+openc3/lib/openc3/top_level.rb:197:      output, _ = Open3.capture2e(command)
+openc3/lib/openc3/microservices/microservice.rb:197:              syntax_check, _ = Open3.capture2e("ruby -c #{ruby_filename}")

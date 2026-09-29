@@ -1,0 +1,26 @@
+./openc3-buckets/Dockerfile:7:FROM ${OPENC3_DEPENDENCY_REGISTRY}/alpine:${ALPINE_VERSION}.${ALPINE_BUILD}
+./openc3-buckets/Dockerfile-ubi:6:FROM ${OPENC3_UBI_REGISTRY}/${OPENC3_UBI_IMAGE}:${OPENC3_UBI_TAG}
+./openc3-tsdb/Dockerfile:6:FROM ${OPENC3_DEPENDENCY_REGISTRY}/${OPENC3_TSDB_IMAGE}:${OPENC3_TSDB_VERSION}
+./openc3-tsdb/Dockerfile-ubi:6:FROM ${OPENC3_DEPENDENCY_REGISTRY}/${OPENC3_TSDB_IMAGE}:${OPENC3_TSDB_VERSION}-rhel
+./openc3-cosmos-script-runner-api/Dockerfile:6:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_IMAGE}:${OPENC3_TAG}
+./openc3-redis/Dockerfile:5:FROM ${OPENC3_DEPENDENCY_REGISTRY}/${OPENC3_REDIS_IMAGE}:${OPENC3_REDIS_VERSION}
+./openc3-redis/Dockerfile-ubi:5:FROM ${OPENC3_UBI_REGISTRY}/${OPENC3_UBI_IMAGE}:${OPENC3_UBI_TAG} AS base
+./openc3-redis/Dockerfile-ubi:6:FROM base AS build
+./openc3-redis/Dockerfile-ubi:69:FROM base
+./openc3-cosmos-init/Dockerfile:9:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_NODE_IMAGE}:${OPENC3_TAG} AS openc3-frontend-tmp
+./openc3-cosmos-init/Dockerfile:49:FROM openc3-frontend-tmp AS openc3-tmp1
+./openc3-cosmos-init/Dockerfile:66:FROM openc3-frontend-tmp AS openc3-tmp2
+./openc3-cosmos-init/Dockerfile:83:FROM openc3-frontend-tmp AS openc3-tmp3
+./openc3-cosmos-init/Dockerfile:100:FROM openc3-frontend-tmp AS openc3-tmp4
+./openc3-cosmos-init/Dockerfile:116:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_BASE_IMAGE}:${OPENC3_TAG} AS base
+./openc3-cosmos-init/Dockerfile:117:FROM openc3-frontend-tmp AS openc3-tmp5
+./openc3-cosmos-init/Dockerfile:128:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_BASE_IMAGE}:${OPENC3_TAG}
+./openc3-cosmos-cmd-tlm-api/Dockerfile:6:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_IMAGE}:${OPENC3_TAG}
+./openc3-traefik/Dockerfile:5:FROM ${OPENC3_DEPENDENCY_REGISTRY}/traefik:${OPENC3_TRAEFIK_RELEASE}
+./openc3-node/Dockerfile:5:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/openc3-ruby:${OPENC3_TAG}
+./openc3-node/Dockerfile-ubi:5:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/openc3-ruby-ubi:${OPENC3_TAG}
+./openc3/Dockerfile:6:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_IMAGE}:${OPENC3_TAG}
+./openc3-ruby/Dockerfile:7:FROM ${OPENC3_DEPENDENCY_REGISTRY}/alpine:${ALPINE_VERSION}.${ALPINE_BUILD}
+./openc3-ruby/Dockerfile:57:      curl \
+./openc3-ruby/Dockerfile-ubi:5:FROM ${OPENC3_UBI_REGISTRY}/${OPENC3_UBI_IMAGE}:${OPENC3_UBI_TAG}
+./openc3-operator/Dockerfile:6:FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_IMAGE}:${OPENC3_TAG}

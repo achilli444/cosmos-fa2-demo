@@ -1,0 +1,14 @@
+path	bytes	sha256_local	upstream_url_compared	result
+cacert.pem	189462	86a1f3366afac7c6f8ae9f3c779ac221129328c43f0ab2b8817eb2f362a5025c	https://curl.se/ca/cacert.pem (rolling; not version-pinned, see scripts/release/build_multi_arch.sh)	not comparable (rolling bundle)
+openc3-buckets/versitygw_v1.4.1_Linux_arm64.tar.gz	20718431	489071c11a7efd09b25a847e03d48174bd7ee05eea05fa53b673904cf1aa8ea3	https://github.com/versity/versitygw/releases/download/v1.4.1/versitygw_v1.4.1_Linux_arm64.tar.gz	MATCH
+openc3-buckets/versitygw_v1.4.1_Linux_x86_64.tar.gz	22527100	7328b1d3efa0955e777b4e1bea6dfb5cf7d4e16949fa79b20d223aff82f333f0	https://github.com/versity/versitygw/releases/download/v1.4.1/versitygw_v1.4.1_Linux_x86_64.tar.gz	MATCH
+openc3-redis/valkey-9.0.4.tar.gz	4127664	8d65e12cc9edb14d117b56fd33300e7b8cde2c087356de3f055d44689667670b	https://github.com/valkey-io/valkey/archive/refs/tags/9.0.4.tar.gz	MATCH
+openc3-ruby/anycable-go-linux-amd64	38441122	efd3107c955a67e519cd67a96ca8413ed0633da025b771b8e510be380ff7dd76	https://github.com/anycable/anycable/releases/download/v1.6.14/anycable-go-linux-amd64	MATCH
+openc3-ruby/anycable-go-linux-arm64	36110498	e518dec0096b9426f678621c803aef3da64dbe703f63b8a384e6a6a76ae26fce	https://github.com/anycable/anycable/releases/download/v1.6.14/anycable-go-linux-arm64	MATCH
+openc3-ruby/htop-3.4.1.tar.gz	427538	af9ec878f831b7c27d33e775c668ec79d569aa781861c995a0fbadc1bdb666cf	https://github.com/htop-dev/htop/archive/refs/tags/3.4.1.tar.gz	MATCH
+openc3-ruby/libcsp-6b6e2dd2870bd1f8ab4516123f1fa255d6c1b632.zip	897674	e6a496825c5f7365fbdfe91165ec899e5881698f29748ea0e9f903544506eaeb	https://github.com/libcsp/libcsp/archive/6b6e2dd2870bd1f8ab4516123f1fa255d6c1b632.zip	MATCH
+openc3-ruby/libsocketcan-0.0.12.tar.gz	42061	e4432d32afa6f34d34521ae8c65d237cd175ae4510372792cb7952b62a4ea44c	https://github.com/linux-can/libsocketcan/archive/refs/tags/v0.0.12.tar.gz	MATCH
+openc3-ruby/libzmq-34f7fa22022bed9e0e390ed3580a1c83ac4a2834.zip	1376048	9208b95f9355e821f4c930b53b7e15d2a84b1e27586591af47b7d48d998b617c	https://github.com/zeromq/libzmq/archive/34f7fa22022bed9e0e390ed3580a1c83ac4a2834.zip	MATCH
+openc3-ruby/rbspy-x86_64-unknown-linux-gnu-0.39.0.tar.gz	2116720	d109d10fff73e7e724699d159e10e6d8b53f4eec7009722e23d81d49ac69f5c8	https://github.com/rbspy/rbspy/releases/download/v0.39.0/rbspy-x86_64-unknown-linux-gnu.tar.gz	MATCH
+openc3-ruby/ruby-3.4.7.tar.gz	23271433	23815a6d095696f7919090fdc3e2f9459b2c83d57224b2e446ce1f5f7333ef36	https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.7.tar.gz	MATCH
+openc3-ruby/tini-0.19.0.tar.gz	32369	0fd35a7030052acd9f58948d1d900fe1e432ee37103c5561554408bdac6bbf0d	https://github.com/krallin/tini/archive/refs/tags/v0.19.0.tar.gz	MATCH
