@@ -298,6 +298,45 @@ module OpenC3
         expect(pkt2.defined?).to be true
       end
 
+      it "reads extra as plain data without instantiating json_class objects" do
+        klass = Class.new do
+          def self.json_create(_object)
+            raise "json_create must not be called"
+          end
+        end
+        stub_const("SpecJsonCreateTarget", klass)
+        @interface.instance_variable_set(:@stream, PreStream.new)
+        @interface.add_protocol(PreidentifiedProtocol, [], :READ_WRITE)
+        pkt = System.telemetry.packet("SYSTEM", "META")
+        pkt.write("OPENC3_VERSION", "TEST")
+        pkt.received_time = Time.new(2020, 1, 31, 12, 15, 30.5)
+        pkt.extra = { "vcid" => 2, "nan" => Float::NAN, "bin" => "\xDE\xAD".b }
+        @interface.write(pkt)
+        # Rewrite the on-wire extra with a hostile json_class payload
+        json_extra = pkt.extra.as_json().to_json(allow_nan: true)
+        hostile = '{"vcid":2,"evil":{"json_class":"SpecJsonCreateTarget","raw":1},"time":{"json_class":"Time","s":0,"n":0}}'
+        offset = $buffer.index(json_extra)
+        $buffer[(offset - 4)..(offset + json_extra.length - 1)] = [hostile.length].pack('N') + hostile
+
+        packet = @interface.read
+        expect(packet.target_name).to eql 'SYSTEM'
+        expect(packet.extra).to eql({ "vcid" => 2, "evil" => { "json_class" => "SpecJsonCreateTarget", "raw" => 1 }, "time" => { "json_class" => "Time", "s" => 0, "n" => 0 } })
+      end
+
+      it "reads extra with COSMOS typed values" do
+        @interface.instance_variable_set(:@stream, PreStream.new)
+        @interface.add_protocol(PreidentifiedProtocol, [], :READ_WRITE)
+        pkt = System.telemetry.packet("SYSTEM", "META")
+        pkt.write("OPENC3_VERSION", "TEST")
+        pkt.received_time = Time.new(2020, 1, 31, 12, 15, 30.5)
+        pkt.extra = { "vcid" => 2, "nan" => Float::NAN, "bin" => "\xDE\xAD".b }
+        @interface.write(pkt)
+        packet = @interface.read
+        expect(packet.extra["vcid"]).to eql 2
+        expect(packet.extra["nan"]).to be_nan
+        expect(packet.extra["bin"]).to eql "\xDE\xAD".b
+      end
+
       it "reads a COSMOS 4 file" do
         @interface.instance_variable_set(:@stream, PreStream.new)
         @interface.add_protocol(PreidentifiedProtocol, [], :READ_WRITE)

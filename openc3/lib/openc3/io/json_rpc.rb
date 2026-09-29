@@ -178,6 +178,7 @@ class Exception
       split_error_class_name.each do |name|
         error_class = error_class.const_get(name)
       end
+      raise "#{hash['class']} is not an Exception" unless error_class.is_a?(Class) and error_class <= Exception
     rescue
       error = OpenC3::JsonDRbUnknownError.new(hash['message'])
       error.set_backtrace(hash['backtrace'].concat(caller()))
@@ -222,6 +223,43 @@ module OpenC3
     # @return [String] The JSON encoded String
     def to_json(*a)
       as_json(*a).to_json(*a)
+    end
+
+    # Parses JSON from an untrusted source (API request bodies, interface and
+    # router bytes, etc). The JSON gem's create_additions option is never used
+    # because it instantiates whatever class the "json_class" member names.
+    # Instead only the typed values COSMOS itself encodes via as_json
+    # (Float NaN/Infinity and binary Strings) are restored.
+    #
+    # @param data [String] JSON encoded string
+    # @return [Object] The parsed JSON with typed values restored
+    def self.parse(data)
+      restore_typed_values(JSON.parse(data, allow_nan: true, create_additions: false))
+    end
+
+    # @param object [Object] Parsed JSON object
+    # @return [Object] The object with allowlisted "json_class" hashes replaced
+    def self.restore_typed_values(object)
+      case object
+      when Hash
+        if object.key?('json_class'.freeze) and object.key?('raw'.freeze)
+          case object['json_class'.freeze]
+          when 'Float'.freeze
+            value = Float.json_create(object)
+            return value unless value.nil?
+          when 'String'.freeze
+            raw = object['raw'.freeze]
+            if Array === raw and raw.all? { |byte| Integer === byte and byte.between?(0, 255) }
+              return raw.pack('C*')
+            end
+          end
+        end
+        object.transform_values { |value| restore_typed_values(value) }
+      when Array
+        object.map { |value| restore_typed_values(value) }
+      else
+        object
+      end
     end
   end
 
@@ -280,11 +318,15 @@ module OpenC3
     # @param request_headers [Hash] Request Header to include the auth token
     # @return [JsonRpcRequest]
     def self.from_json(request_data, request_headers)
-      hash = JSON.parse(request_data, allow_nan: true, create_additions: true)
-      hash['keyword_params']['token'] = request_headers['HTTP_AUTHORIZATION'] if request_headers['HTTP_AUTHORIZATION']
-      hash['keyword_params']['manual'] = request_headers['HTTP_MANUAL'] if request_headers['HTTP_MANUAL']
+      hash = JsonRpc.parse(request_data)
+      raise unless Hash === hash
       # Verify the jsonrpc version is correct and there is a method and id
-      raise unless hash['jsonrpc'.freeze] == "2.0".freeze && hash['method'.freeze] && hash['id'.freeze]
+      raise unless hash['jsonrpc'.freeze] == "2.0".freeze && String === hash['method'.freeze] && hash['id'.freeze]
+      raise unless hash['params'.freeze].nil? or Array === hash['params'.freeze]
+      raise unless hash['keyword_params'.freeze].nil? or Hash === hash['keyword_params'.freeze]
+
+      hash['keyword_params'.freeze]['token'] = request_headers['HTTP_AUTHORIZATION'] if request_headers['HTTP_AUTHORIZATION']
+      hash['keyword_params'.freeze]['manual'] = request_headers['HTTP_MANUAL'] if request_headers['HTTP_MANUAL']
 
       self.from_hash(hash)
     rescue
@@ -319,13 +361,13 @@ module OpenC3
     def self.from_json(response_data)
       msg = "Invalid JSON-RPC 2.0 Response#{response_data.inspect}\n"
       begin
-        hash = JSON.parse(response_data, allow_nan: true, create_additions: true)
+        hash = JsonRpc.parse(response_data)
       rescue
         raise $!, msg, $!.backtrace
       end
 
       # Verify the jsonrpc version is correct and there is an ID
-      raise msg unless hash['jsonrpc'.freeze] == "2.0".freeze and hash.key?('id'.freeze)
+      raise msg unless Hash === hash and hash['jsonrpc'.freeze] == "2.0".freeze and hash.key?('id'.freeze)
 
       # If there is a result this is probably a good response
       if hash.key?('result'.freeze)

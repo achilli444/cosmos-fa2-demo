@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/interfaces/protocols/burst_protocol'
+require 'openc3/io/json_rpc'
 
 module OpenC3
   # Delineates packets using the OpenC3 preidentification system
@@ -156,7 +157,7 @@ module OpenC3
         @read_extra = read_length_field_followed_by_string(4)
         return :STOP if @read_extra == :STOP
 
-        @read_extra = JSON.parse(@read_extra, allow_nan: true, create_additions: true)
+        @read_extra = JsonRpc.parse(@read_extra)
         @reduction_state = :FLAGS_REMOVED
       end
 
