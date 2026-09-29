@@ -365,6 +365,19 @@ module OpenC3
         expect(BinaryAccessor.read(8, 800, :STRING, @data, :BIG_ENDIAN)).to be_nil
       end
 
+      it "returns nil when bit_offset plus bit_size would overflow a 32-bit int" do
+        bit_offset = (2**31) - 8 # 2147483640
+        [8, 16, 32, 64].each do |bit_size|
+          expect(BinaryAccessor.read(bit_offset, bit_size, :UINT, @data, :BIG_ENDIAN)).to be_nil
+          expect(BinaryAccessor.read(bit_offset, bit_size, :INT, @data, :LITTLE_ENDIAN)).to be_nil
+        end
+        expect(BinaryAccessor.read(bit_offset, 32, :FLOAT, @data, :BIG_ENDIAN)).to be_nil
+        expect(BinaryAccessor.read(bit_offset, 12, :UINT, @data, :BIG_ENDIAN)).to be_nil
+        expect(BinaryAccessor.read(bit_offset + 1, 12, :UINT, @data, :BIG_ENDIAN)).to be_nil
+        expect(BinaryAccessor.read(bit_offset, 64, :BLOCK, @data, :BIG_ENDIAN)).to be_nil
+        expect(BinaryAccessor.read((2**31) - 1, (2**31) - 1, :UINT, @data, :BIG_ENDIAN)).to be_nil
+      end
+
       it "reads aligned 8-bit unsigned integers" do
         0.step((@data.length - 1) * 8, 8) do |bit_offset|
           expect(BinaryAccessor.read(bit_offset, 8, :UINT, @data, :BIG_ENDIAN)).to eql(@data.getbyte(bit_offset / 8))
@@ -1059,6 +1072,15 @@ module OpenC3
           end
           buffer = ""
           expect { BinaryAccessor.write(data, 1024, 0, :BLOCK, buffer, :BIG_ENDIAN, :ERROR) }.to raise_error(ArgumentError, "0 byte buffer insufficient to write BLOCK at bit_offset 1024 with bit_size 0")
+        end
+
+        it "complains when bit_offset plus bit_size would overflow a 32-bit int" do
+          buffer = "\x00" * 24
+          bit_offset = (2**31) - 8
+          expect { BinaryAccessor.write(1, bit_offset, 32, :UINT, buffer, :BIG_ENDIAN, :ERROR) }.to raise_error(ArgumentError, "24 byte buffer insufficient to write UINT at bit_offset #{bit_offset} with bit_size 32")
+          expect { BinaryAccessor.write(1, bit_offset, 12, :UINT, buffer, :BIG_ENDIAN, :ERROR) }.to raise_error(ArgumentError, "24 byte buffer insufficient to write UINT at bit_offset #{bit_offset} with bit_size 12")
+          expect { BinaryAccessor.write("\x00" * 8, bit_offset, 64, :BLOCK, buffer, :BIG_ENDIAN, :ERROR) }.to raise_error(ArgumentError, "24 byte buffer insufficient to write BLOCK at bit_offset #{bit_offset} with bit_size 64")
+          expect(buffer).to eql "\x00" * 24
         end
 
         it "handles an edge case bit offset" do

@@ -106,10 +106,13 @@ module OpenC3
     # Valid endianness
     ENDIANNESS = [:BIG_ENDIAN, :LITTLE_ENDIAN]
 
-    def handle_read_variable_bit_size(item, _buffer)
+    def handle_read_variable_bit_size(item, buffer)
       length_value = @packet.read(item.variable_bit_size['length_item_name'], :CONVERTED)
+      length_value = 0 if length_value.nil? # Length field is outside the buffer
+      # Clamp to the buffer since the length field is untrusted data from the buffer itself
+      max_bit_size = buffer.length * 8
       if item.array_size
-        item.array_size = (length_value * item.variable_bit_size['length_bits_per_count']) + item.variable_bit_size['length_value_bit_offset']
+        item.array_size = ((length_value * item.variable_bit_size['length_bits_per_count']) + item.variable_bit_size['length_value_bit_offset']).clamp(0, max_bit_size)
       else
         if item.data_type == :INT or item.data_type == :UINT
           # QUIC encoding is currently assumed for individual variable sized integers
@@ -125,7 +128,7 @@ module OpenC3
             item.bit_size = 62
           end
         else
-          item.bit_size = (length_value * item.variable_bit_size['length_bits_per_count']) + item.variable_bit_size['length_value_bit_offset']
+          item.bit_size = ((length_value * item.variable_bit_size['length_bits_per_count']) + item.variable_bit_size['length_value_bit_offset']).clamp(0, max_bit_size)
         end
       end
     end
