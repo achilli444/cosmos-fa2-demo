@@ -20,6 +20,7 @@ require 'rubygems/package'
 require 'openc3'
 require 'openc3/utilities/bucket'
 require 'openc3/utilities/store'
+require 'openc3/utilities/pypi_url'
 require 'openc3/config/config_parser'
 require 'openc3/models/model'
 require 'openc3/models/gem_model'
@@ -34,6 +35,7 @@ require 'openc3/api/api'
 require 'tmpdir'
 require 'tempfile'
 require 'fileutils'
+require 'open3'
 
 module OpenC3
   class EmptyGemFileError < StandardError; end
@@ -248,47 +250,46 @@ module OpenC3
         requirements_path = File.join(gem_path, 'requirements.txt')
 
         if File.exist?(pyproject_path) || File.exist?(requirements_path)
+          pypi_url = nil
           begin
             pypi_url = get_setting('pypi_url', scope: scope)
-            if pypi_url
-              pypi_url += '/simple'
-            end
           rescue => e
             Logger.error("Failed to retrieve pypi_url: #{e.formatted}")
-          ensure
-            if pypi_url.nil?
-              # If Redis isn't running try the ENV, then simply pypi.org/simple
-              pypi_url = ENV['PYPI_URL']
-              if pypi_url
-                pypi_url += '/simple'
-              end
-              pypi_url ||= 'https://pypi.org/simple'
-            end
           end
+          # If Redis isn't running try the ENV, then simply pypi.org
+          pypi_url ||= ENV['PYPI_URL'] || PypiUrl::DEFAULT_URL
+          # pypi_url is user-writable (Admin Settings) so it must be validated
+          # and passed to the subprocess as a discrete argument, never a shell string
+          index_url = PypiUrl.index_url(pypi_url)
           unless validate_only
-            if File.exist?(pyproject_path)
-              Logger.info "Installing python packages from pyproject.toml with pypi_url=#{pypi_url}"
-              if ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
-                pip_args = "-i #{pypi_url} #{gem_path}"
-              else
-                pip_args = "-i #{pypi_url} --trusted-host #{URI.parse(pypi_url).host} #{gem_path}"
-              end
+            if index_url.nil?
+              Logger.error "Invalid pypi_url #{pypi_url.inspect}: must be an http(s) URL with no userinfo or shell metacharacters. " \
+                           "Skipping Python package installation. Plugin Python microservices may not function correctly."
             else
-              Logger.info "Installing python packages from requirements.txt with pypi_url=#{pypi_url}"
-              if ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
-                pip_args = "-i #{pypi_url} -r #{requirements_path}"
+              pip_args = ['-i', index_url]
+              pip_args += ['--trusted-host', URI.parse(index_url).host] unless ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
+              if File.exist?(pyproject_path)
+                Logger.info "Installing python packages from pyproject.toml with pypi_url=#{index_url}"
+                pip_args << gem_path
               else
-                pip_args = "-i #{pypi_url} --trusted-host #{URI.parse(pypi_url).host} -r #{requirements_path}"
+                Logger.info "Installing python packages from requirements.txt with pypi_url=#{index_url}"
+                pip_args += ['-r', requirements_path]
               end
-            end
-            # Capture output and check exit code so failures surface as a warning
-            # rather than silently succeeding. pipinstall is non-fatal: the plugin
-            # continues to install even if Python packages fail so that non-Python
-            # functionality still works.
-            output = `/openc3/bin/pipinstall #{pip_args}`
-            puts output
-            unless $?.success?
-              Logger.warn "Python package installation failed. Plugin Python microservices may not function correctly."
+              # Capture output and check exit code so failures surface as a warning
+              # rather than silently succeeding. pipinstall is non-fatal: the plugin
+              # continues to install even if Python packages fail so that non-Python
+              # functionality still works.
+              begin
+                output, status = Open3.capture2e('/openc3/bin/pipinstall', *pip_args)
+                puts output
+                success = status.success?
+              rescue SystemCallError => e
+                Logger.error("Failed to run pipinstall: #{e.message}")
+                success = false
+              end
+              unless success
+                Logger.warn "Python package installation failed. Plugin Python microservices may not function correctly."
+              end
             end
           end
           needs_dependencies = true
