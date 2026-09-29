@@ -91,6 +91,32 @@ module OpenC3
         sleep(0.1)
         expect(@api.get_router("ROUTE_INT")['state']).to eql "ATTEMPTING"
       end
+
+      it "requires system_set and cmd authority on mapped targets without params" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system_set', router_name: "ROUTE_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_call_original
+        expect(@api).not_to receive(:authorize).with(hash_including(permission: 'admin'))
+        @api.connect_router("ROUTE_INT")
+      end
+
+      it "requires admin to connect with router params" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'admin', router_name: "ROUTE_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_call_original
+        expect(@api).not_to receive(:authorize).with(hash_including(permission: 'system_set'))
+        expect(RouterTopic).to receive(:connect_router).with("ROUTE_INT", "0.0.0.0", 7777, scope: "DEFAULT")
+        @api.connect_router("ROUTE_INT", "0.0.0.0", 7777)
+      end
+
+      it "does not write to the topic when authorization fails" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'admin')).and_raise(AuthError.new("Unauthorized"))
+        expect(RouterTopic).not_to receive(:connect_router)
+        expect { @api.connect_router("ROUTE_INT", "0.0.0.0", 7777) }.to raise_error(AuthError)
+      end
+
+      it "raises when the router does not exist" do
+        expect(RouterTopic).not_to receive(:connect_router)
+        expect { @api.connect_router("NOPE") }.to raise_error(/Router 'NOPE' does not exist/)
+      end
     end
 
     describe "start_raw_logging_router" do
@@ -133,6 +159,13 @@ module OpenC3
         expect_any_instance_of(OpenC3::Interface).to receive(:interface_cmd).with("cmd1", "param1")
         @api.router_cmd("ROUTE_INT", "cmd1", "param1")
       end
+
+      it "requires cmd authority on mapped targets" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system_set', router_name: "ROUTE_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_raise(AuthError.new("Unauthorized"))
+        expect(RouterTopic).not_to receive(:router_cmd)
+        expect { @api.router_cmd("ROUTE_INT", "cmd1") }.to raise_error(AuthError)
+      end
     end
 
     describe "router_protocol_cmd" do
@@ -142,6 +175,13 @@ module OpenC3
 
         expect_any_instance_of(OpenC3::Interface).to receive(:protocol_cmd).with("cmd1", "param1", {index: -1, read_write: "READ_WRITE"})
         @api.router_protocol_cmd("ROUTE_INT", "cmd1", "param1")
+      end
+
+      it "requires cmd authority on mapped targets" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system_set', router_name: "ROUTE_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_raise(AuthError.new("Unauthorized"))
+        expect(RouterTopic).not_to receive(:protocol_cmd)
+        expect { @api.router_protocol_cmd("ROUTE_INT", "cmd1") }.to raise_error(AuthError)
       end
     end
 

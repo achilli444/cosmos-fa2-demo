@@ -62,8 +62,14 @@ module OpenC3
     # @param router_name [String] Name of router
     # @param router_params [Array] Optional parameters to pass to the router
     def connect_router(router_name, *router_params, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
-      authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      if router_params.empty?
+        authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      else
+        # Params rebuild the router with new constructor arguments and are persisted
+        # into the RouterModel so this is a configuration change, not an operation
+        authorize(permission: 'admin', router_name: router_name, manual: manual, scope: scope, token: token)
+      end
+      _authorize_router_targets(router_name, manual: manual, scope: scope, token: token)
       RouterTopic.connect_router(router_name, *router_params, scope: scope)
     end
 
@@ -124,14 +130,14 @@ module OpenC3
     end
 
     def router_cmd(router_name, cmd_name, *cmd_params, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      _authorize_router_targets(router_name, manual: manual, scope: scope, token: token)
       RouterTopic.router_cmd(router_name, cmd_name, *cmd_params, scope: scope)
     end
 
     def router_protocol_cmd(router_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      _authorize_router_targets(router_name, manual: manual, scope: scope, token: token)
       RouterTopic.protocol_cmd(router_name, cmd_name, *cmd_params, read_write: read_write, index: index, scope: scope)
     end
 
@@ -218,6 +224,17 @@ module OpenC3
     def router_details(router_name, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'system', router_name: router_name, manual: manual, scope: scope, token: token)
       RouterTopic.router_details(router_name, scope: scope)
+    end
+
+    # Routers relay commands from external clients into every target mapped to
+    # them, so operating a router requires command authority on those targets
+    def _authorize_router_targets(router_name, manual:, scope:, token:)
+      router = RouterModel.get(name: router_name, scope: scope)
+      raise "Router '#{router_name}' does not exist" unless router
+
+      router['target_names'].each do |target_name|
+        authorize(permission: 'cmd', target_name: target_name, manual: manual, scope: scope, token: token)
+      end
     end
   end
 end
