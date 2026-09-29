@@ -163,9 +163,9 @@ Direct/transitive is decided by presence of the (ecosystem, name) pair in `sbom/
 
 ## License flags
 
-Repository license: `LICENSE.md` — AGPL-3.0 with a separate commercial license offered by OpenC3, Inc. First-party gems/npm packages in this tree are therefore reported as `AGPL-3.0-only OR commercial (first-party; LICENSE.md)` and are **not** flagged.
+Repository license: `LICENSE.md` — AGPL-3.0 with a separate commercial license offered by OpenC3, Inc. First-party gems and the in-tree `openc3` Python package are not published to a registry (HTTP 404), so they are assigned `AGPL-3.0-only OR commercial (first-party; LICENSE.md)` from the repository license; because the flag set includes AGPL they appear in the table below as `AGPL` rows (first-party, same terms as the product itself — not a third-party copyleft dependency).
 
-License source for the 2663 components: SBOM-declared 3, public registry lookup 2398, registry lookup failed 0, not applicable (binary/file/action records) 241. Syft attaches license text to only 3 components for this tree (lockfiles carry no license field), so registry metadata is the primary source and is itself a limitation (registry metadata is declared by the publisher, not verified against the shipped files).
+License source for the 2663 components: SBOM-declared 3, public registry lookup 2398, repository `LICENSE.md` (first-party, registry 404) 21, registry lookup failed 0, not applicable (binary/file/action records) 241. Syft attaches license text to only 3 components for this tree (lockfiles carry no license field), so registry metadata is the primary source and is itself a limitation (registry metadata is declared by the publisher, not verified against the shipped files).
 
 Flag rows (deduplicated across repeated lockfile locations): **29** — AGPL: 21, GPL: 2, LGPL: 4, none-declared: 2.
 
@@ -201,7 +201,7 @@ Flag rows (deduplicated across repeated lockfile locations): **29** — AGPL: 21
 | none-declared | gem | websocket-native | 1.0.0 | — | none | direct | /openc3-cosmos-cmd-tlm-api/Gemfile.lock;/openc3-cosmos-script-runner-… |
 | none-declared | npm | require-like | 0.1.2 | — | none | transitive | /docs.openc3.com/pnpm-lock.yaml |
 
-Reading: the two GPL rows are dual/tri-licensed (`diff-lcs` Artistic/GPL/MIT; `jszip` MIT OR GPL-3.0) — MIT terms are available, so no copyleft obligation is triggered by choice of MIT. The four LGPL rows are the PostgreSQL client stack (`psycopg*`, LGPL-3.0) and the dev-only `gprof2dot`; LGPL permits dynamic linking without relicensing. `websocket-native` and `require-like` declare no license in registry metadata (check the package repository before redistribution). The "unknown" rows are first-party OpenC3 gems (registry 404 because they are built from the tree, not published) plus the pre-release `openc3` 7.1.2b0 Python package listed in `uv.lock`; they are covered by `LICENSE.md`.
+Reading: the two GPL rows are dual/tri-licensed (`diff-lcs` Artistic/GPL/MIT; `jszip` MIT OR GPL-3.0) — MIT terms are available, so no copyleft obligation is triggered by choice of MIT. The four LGPL rows are the PostgreSQL client stack (`psycopg*`, LGPL-3.0) and the dev-only `gprof2dot`; LGPL permits dynamic linking without relicensing. `websocket-native` and `require-like` declare no license in registry metadata (check the package repository before redistribution). The 21 AGPL rows are first-party: 20 OpenC3 gems built from the tree (registry 404, not published) plus the pre-release `openc3` 7.1.2b0 Python package listed in `uv.lock`; they carry the repository's own AGPL-3.0/commercial terms, so they add no third-party copyleft obligation.
 
 ## Limitations
 
