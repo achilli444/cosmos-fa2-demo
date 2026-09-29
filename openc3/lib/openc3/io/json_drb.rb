@@ -92,11 +92,12 @@ module OpenC3
     #
     # @param whitelist [Enumerable<String>] Every method name which may be called
     def method_whitelist=(whitelist)
-      if whitelist.nil? or whitelist.to_a.empty?
+      names = whitelist.nil? ? Set.new : whitelist.map { |name| name.to_s.downcase }.to_set
+      if names.empty?
         raise ArgumentError, "method_whitelist is required and must not be empty"
       end
 
-      @method_whitelist = whitelist.map { |name| name.to_s.downcase }.to_set
+      @method_whitelist = names
     end
 
     # Returns the number of connected clients
