@@ -61,21 +61,21 @@
   "none": 241,
   "sbom": 3,
   "registry": 2398,
-  "registry-lookup-failed": 21
+  "repo LICENSE.md (first-party)": 21
  },
  "license_flag_counts_all_components": {
   "not-applicable (non-registry component)": 237,
   "ok": 2393,
   "GPL": 4,
   "LGPL": 4,
-  "unknown (registry lookup failed)": 21,
+  "AGPL": 21,
   "none-declared": 4
  },
  "license_flag_rows_deduplicated": 29,
  "license_flag_rows_by_kind": {
+  "AGPL": 21,
   "GPL": 2,
   "LGPL": 4,
-  "unknown (registry lookup failed)": 21,
   "none-declared": 2
  },
  "registry_license_lookups": 1853

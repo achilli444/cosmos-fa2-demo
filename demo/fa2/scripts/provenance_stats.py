@@ -1,6 +1,6 @@
-import csv, re, sys, collections, fnmatch, json
+import csv, re, sys, collections, fnmatch, json, subprocess
 from datetime import datetime
-REPO='/home/ubuntu/repos/cosmos-fa2-demo'
+REPO=subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip()
 OUT=REPO+'/demo/fa2/provenance/data'
 rows=[l.rstrip('\n').split('|') for l in open(REPO+'/demo/fa2/provenance/data/commits_all.psv')]
 # sha|author_email|author_date|committer_date|committer_email

@@ -103,7 +103,7 @@ for c in comps:
     key = purl.split('?')[0]
     r = reg.get(key)
     reg_l = (r or {}).get('licenses') or []
-    first_party = e in ('gem', 'pypi') and (c.get('name') or '').startswith('openc3') and not r
+    first_party = e in ('gem', 'pypi') and (c.get('name') or '').startswith('openc3') and (not r or bool(r.get('error')))
     if first_party:
         reg_l = ['AGPL-3.0-only OR commercial (first-party; LICENSE.md)']; r = {'licenses': reg_l}
     src = 'repo LICENSE.md (first-party)' if first_party else 'sbom' if sbom_l else ('registry' if reg_l else ('registry-lookup-failed' if r and r.get('error') else 'none'))
