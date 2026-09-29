@@ -279,9 +279,15 @@ module OpenC3
               # rather than silently succeeding. pipinstall is non-fatal: the plugin
               # continues to install even if Python packages fail so that non-Python
               # functionality still works.
-              output, status = Open3.capture2e('/openc3/bin/pipinstall', *pip_args)
-              puts output
-              unless status.success?
+              begin
+                output, status = Open3.capture2e('/openc3/bin/pipinstall', *pip_args)
+                puts output
+                success = status.success?
+              rescue SystemCallError => e
+                Logger.error("Failed to run pipinstall: #{e.message}")
+                success = false
+              end
+              unless success
                 Logger.warn "Python package installation failed. Plugin Python microservices may not function correctly."
               end
             end

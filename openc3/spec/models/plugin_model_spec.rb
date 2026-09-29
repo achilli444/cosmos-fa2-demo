@@ -575,6 +575,15 @@ module OpenC3
           expect(plugin_model['needs_dependencies']).to eql true
         end
 
+        it "warns but does not fail the plugin install when pipinstall cannot be started" do
+          allow(PluginModel).to receive(:get_setting).and_return('https://mirror.example.com')
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://mirror.example.com/simple', '-r', anything).and_raise(Errno::ENOENT, '/openc3/bin/pipinstall')
+          expect(Logger).to receive(:error).with(/Failed to run pipinstall/)
+          expect(Logger).to receive(:warn).with(/Python package installation failed/)
+          plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+          expect(plugin_model['needs_dependencies']).to eql true
+        end
+
         [
           'https://pypi.org; touch /tmp/pwned #',
           'https://pypi.org$(id)',
