@@ -25,6 +25,7 @@ module OpenC3
   autoload(:Crc32, 'openc3/utilities/crc.rb')
   autoload(:Crc64, 'openc3/utilities/crc.rb')
   autoload(:Csv, 'openc3/utilities/csv.rb')
+  autoload(:DefaultSecrets, 'openc3/utilities/default_secrets.rb')
   autoload(:Metric, 'openc3/utilities/metric.rb')
   autoload(:MessageLog, 'openc3/utilities/message_log.rb')
   autoload(:Quaternion, 'openc3/utilities/quaternion.rb')
