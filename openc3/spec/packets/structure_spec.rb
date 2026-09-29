@@ -926,6 +926,35 @@ module OpenC3
       end
     end
 
+    describe "buffer=" do
+      it "clamps variable bit size items to the buffer length" do
+        s = Structure.new(:BIG_ENDIAN)
+        s.append_item("ARRAY1_LENGTH", 32, :UINT)
+        item = s.append_item("ARRAY1", 8, :UINT, 0)
+        item.variable_bit_size = { 'length_item_name' => 'ARRAY1_LENGTH', 'length_bits_per_count' => 8, 'length_value_bit_offset' => 0 }
+        s.set_item(item)
+        s.append_item("ARRAY2_LENGTH", 32, :UINT)
+        item = s.append_item("ARRAY2", 8, :UINT, 0)
+        item.variable_bit_size = { 'length_item_name' => 'ARRAY2_LENGTH', 'length_bits_per_count' => 8, 'length_value_bit_offset' => 0 }
+        s.set_item(item)
+
+        # Valid packet
+        s.buffer = [3, 1, 2, 3, 2, 9, 8].pack("NCCCNCC")
+        expect(s.read("ARRAY1")).to eql [1, 2, 3]
+        expect(s.get_item("ARRAY2_LENGTH").bit_offset).to eql 56
+        expect(s.read("ARRAY2")).to eql [9, 8]
+
+        # A length that would push ARRAY2_LENGTH near INT_MAX (2147483640 bits)
+        # must not push following items past the buffer
+        s.buffer = [0x0FFFFFEB].pack("N") + ("\x00" * 20)
+        expect(s.get_item("ARRAY2_LENGTH").bit_offset).to eql 32 + (24 * 8)
+        expect(s.read("ARRAY1")).to be_nil
+        expect(s.get_item("ARRAY1").array_size).to eql 24 * 8
+        expect(s.read("ARRAY2_LENGTH")).to be_nil
+        expect { s.read("ARRAY2") }.to raise_error(ArgumentError, "24 byte buffer insufficient to read UINT at bit_offset 256 with bit_size 8")
+      end
+    end
+
     describe "short_buffer_allowed" do
       it "returns nil for items outside buffer bounds when short_buffer_allowed is true" do
         s = Structure.new(:BIG_ENDIAN)

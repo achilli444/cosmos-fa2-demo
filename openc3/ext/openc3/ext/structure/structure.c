@@ -287,7 +287,7 @@ static void read_bitfield(int lower_bound, int upper_bound, int bit_offset, int 
     upper_bound = bit_offset / 8;
     lower_bound = upper_bound - num_bytes + 1;
 
-    if (lower_bound < 0)
+    if ((lower_bound < 0) || (num_bytes <= 0) || ((lower_bound + num_bytes) > buffer_length))
     {
       rb_raise(rb_eArgError, "LITTLE_ENDIAN bitfield with bit_offset %d and bit_size %d is invalid", given_bit_offset, given_bit_size);
     }
@@ -298,6 +298,12 @@ static void read_bitfield(int lower_bound, int upper_bound, int bit_offset, int 
   else
   {
     num_bytes = upper_bound - lower_bound + 1;
+
+    if ((lower_bound < 0) || (num_bytes <= 0) || ((lower_bound + num_bytes) > buffer_length))
+    {
+      rb_raise(rb_eArgError, "BIG_ENDIAN bitfield with bit_offset %d and bit_size %d is invalid", given_bit_offset, given_bit_size);
+    }
+
     memcpy(read_value, &buffer[lower_bound], num_bytes);
   }
 
@@ -343,6 +349,11 @@ static void write_bitfield(int lower_bound, int upper_bound, int bit_offset, int
   else
   {
     num_bytes = upper_bound - lower_bound + 1;
+  }
+
+  if ((lower_bound < 0) || (num_bytes <= 0) || ((lower_bound + num_bytes) > buffer_length))
+  {
+    rb_raise(rb_eArgError, "bitfield with bit_offset %d and bit_size %d is invalid", given_bit_offset, given_bit_size);
   }
 
   /* Determine temp upper bound */
@@ -422,23 +433,33 @@ static int check_bounds_and_buffer_size(int bit_offset, int bit_size, int buffer
 {
   int result = 1; /* Assume ok */
 
-  /* Define bounds of string to access this item */
-  *lower_bound = bit_offset / 8;
-  *upper_bound = (bit_offset + bit_size - 1) / 8;
+  /* Computed in 64-bit so that large offsets and sizes cannot overflow */
+  long long_lower_bound = (long)bit_offset / 8;
+  long long_upper_bound = ((long)bit_offset + (long)bit_size - 1) / 8;
+
+  /* Both bounds are divided by 8 so they always fit back into an int */
+  *lower_bound = (int)long_lower_bound;
+  *upper_bound = (int)long_upper_bound;
+
+  if ((long_lower_bound < 0) || (long_upper_bound < 0) || (long_lower_bound > long_upper_bound))
+  {
+    return 0;
+  }
 
   /* Sanity check buffer size */
-  if (*upper_bound >= buffer_length)
+  if (long_upper_bound >= (long)buffer_length)
   {
     /* If it's not the special case of little endian bit field then we fail and return 0 */
     if (!((endianness == symbol_LITTLE_ENDIAN) &&
           ((data_type == symbol_INT) || (data_type == symbol_UINT)) &&
           /* Not byte aligned with an even bit size */
           (!((BYTE_ALIGNED(bit_offset)) && (even_bit_size(bit_size)))) &&
-          (*lower_bound < buffer_length)))
+          (long_lower_bound < (long)buffer_length)))
     {
       result = 0;
     }
   }
+
   return result;
 }
 
