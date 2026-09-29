@@ -179,6 +179,16 @@ services:
       GEM_HOME: "/gems"
       PYTHONUSERBASE: "/gems/python_packages"
       ANYCABLE_REDIS_URL: "redis://${OPENC3_REDIS_USERNAME}:${OPENC3_REDIS_PASSWORD}@${OPENC3_REDIS_HOSTNAME}:${OPENC3_REDIS_PORT}"
+      # Secrets are interpolated from the host environment (openc3.sh exports
+      # .env then .env.local) so .env.local overrides win over env_file below.
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:-}"
+      OPENC3_ALLOW_DEFAULT_PASSWORDS: "${OPENC3_ALLOW_DEFAULT_PASSWORDS:-}"
+      OPENC3_REDIS_PASSWORD: "${OPENC3_REDIS_PASSWORD}"
+      OPENC3_SR_REDIS_PASSWORD: "${OPENC3_SR_REDIS_PASSWORD}"
+      OPENC3_BUCKET_PASSWORD: "${OPENC3_BUCKET_PASSWORD}"
+      OPENC3_SR_BUCKET_PASSWORD: "${OPENC3_SR_BUCKET_PASSWORD}"
+      OPENC3_TSDB_PASSWORD: "${OPENC3_TSDB_PASSWORD}"
+      OPENC3_SERVICE_PASSWORD: "${OPENC3_SERVICE_PASSWORD}"
     env_file:
       - .env
     extra_hosts:
@@ -208,6 +218,16 @@ services:
       GEM_HOME: "/gems"
       PYTHONUSERBASE: "/gems/python_packages"
       ANYCABLE_REDIS_URL: "redis://${OPENC3_REDIS_USERNAME}:${OPENC3_REDIS_PASSWORD}@${OPENC3_REDIS_HOSTNAME}:${OPENC3_REDIS_PORT}"
+      # Secrets are interpolated from the host environment (openc3.sh exports
+      # .env then .env.local) so .env.local overrides win over env_file below.
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:-}"
+      OPENC3_ALLOW_DEFAULT_PASSWORDS: "${OPENC3_ALLOW_DEFAULT_PASSWORDS:-}"
+      OPENC3_REDIS_PASSWORD: "${OPENC3_REDIS_PASSWORD}"
+      OPENC3_SR_REDIS_PASSWORD: "${OPENC3_SR_REDIS_PASSWORD}"
+      OPENC3_BUCKET_PASSWORD: "${OPENC3_BUCKET_PASSWORD}"
+      OPENC3_SR_BUCKET_PASSWORD: "${OPENC3_SR_BUCKET_PASSWORD}"
+      OPENC3_TSDB_PASSWORD: "${OPENC3_TSDB_PASSWORD}"
+      OPENC3_SERVICE_PASSWORD: "${OPENC3_SERVICE_PASSWORD}"
     env_file:
       - .env
 
@@ -244,6 +264,13 @@ services:
       - CI
       - GEM_HOME=/gems
       - PYTHONUSERBASE=/gems/python_packages
+      # Secrets from the host environment (.env.local via openc3.sh) win over env_file
+      - OPENC3_REDIS_PASSWORD=${OPENC3_REDIS_PASSWORD}
+      - OPENC3_SR_REDIS_PASSWORD=${OPENC3_SR_REDIS_PASSWORD}
+      - OPENC3_BUCKET_PASSWORD=${OPENC3_BUCKET_PASSWORD}
+      - OPENC3_SR_BUCKET_PASSWORD=${OPENC3_SR_BUCKET_PASSWORD}
+      - OPENC3_TSDB_PASSWORD=${OPENC3_TSDB_PASSWORD}
+      - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
     env_file:
       - .env
     extra_hosts:
@@ -318,6 +345,13 @@ services:
       - CI
       - GEM_HOME=/gems
       - PYTHONUSERBASE=/gems/python_packages
+      # Secrets from the host environment (.env.local via openc3.sh) win over env_file
+      - OPENC3_REDIS_PASSWORD=${OPENC3_REDIS_PASSWORD}
+      - OPENC3_SR_REDIS_PASSWORD=${OPENC3_SR_REDIS_PASSWORD}
+      - OPENC3_BUCKET_PASSWORD=${OPENC3_BUCKET_PASSWORD}
+      - OPENC3_SR_BUCKET_PASSWORD=${OPENC3_SR_BUCKET_PASSWORD}
+      - OPENC3_TSDB_PASSWORD=${OPENC3_TSDB_PASSWORD}
+      - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
     env_file:
       - .env
 

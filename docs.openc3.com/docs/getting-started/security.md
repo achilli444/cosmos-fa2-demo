@@ -63,6 +63,12 @@ Most standard containers for databases like VersityGW are set up to receive secr
 
 The `.env` file contains environment variables that configure COSMOS. The password-related variables fall into several categories.
 
+:::warning Shipped defaults are refused at startup
+The password values in `.env` are public placeholders: the file is published with COSMOS, so anyone can read them. `openc3.sh run` / `openc3.bat run` (and the cmd-tlm-api / script-runner-api containers themselves) refuse to start while any `OPENC3_*_PASSWORD` still equals its placeholder, or while `SECRET_KEY_BASE` is blank or equal to a previously published value.
+
+Put your real values in a `.env.local` file next to `.env`. It is gitignored and loaded after `.env`, so its values win. Values already present in the shell environment win over both files. For a throwaway local demo that nothing else can reach you may instead opt in to the placeholders with `OPENC3_ALLOW_DEFAULT_PASSWORDS=1` (in `.env.local` or the environment); COSMOS then starts with a warning. Never set it on a shared deployment.
+:::
+
 ### Redis Credentials
 
 Redis is the primary data store and pub/sub messaging system for COSMOS.
@@ -119,9 +125,9 @@ Note: In COSMOS Enterprise with Keycloak, user offline access tokens can be used
 | ----------------- | --------------------------------------------------------------- |
 | `SECRET_KEY_BASE` | A 128-character hexadecimal string used by Rails for encryption |
 
-The `SECRET_KEY_BASE` is used by the Rails applications (cmd-tlm-api and script-runner-api) for encrypting session data and other security-sensitive operations. This should be a unique, randomly-generated value for each COSMOS installation. The default value in the `.env` file should be changed for production deployments.
+The `SECRET_KEY_BASE` is used by the Rails applications (cmd-tlm-api and script-runner-api) for encrypting session data and other security-sensitive operations. It must be a unique, randomly-generated value for each COSMOS installation, which is why `.env` ships with it blank. The first time `openc3.sh run` (or `openc3.bat run`) finds it blank it generates a random key and saves it to `.env.local`; the Rails services refuse to boot without one.
 
-You can generate a new secret key with:
+You can generate your own secret key with:
 
 ```bash
 openssl rand -hex 64
@@ -204,7 +210,7 @@ The VersityGW credentials (`OPENC3_BUCKET_*`, `OPENC3_SR_BUCKET_*`) and `OPENC3_
    user openc3 on #newhashvalue allkeys allchannels ...
    ```
 
-3. Update `.env` with the new cleartext password:
+3. Add the new cleartext password to `.env.local`:
 
    ```
    OPENC3_REDIS_PASSWORD=yournewpassword
@@ -214,7 +220,7 @@ The VersityGW credentials (`OPENC3_BUCKET_*`, `OPENC3_SR_BUCKET_*`) and `OPENC3_
 
 ### Changing VersityGW Passwords
 
-Update the values in `.env`:
+Set the values in `.env.local`:
 
 ```
 OPENC3_BUCKET_PASSWORD=yournewpassword
@@ -223,7 +229,7 @@ OPENC3_SR_BUCKET_PASSWORD=yournewsrpassword
 
 ### Changing the Service Password
 
-Update the value in `.env`:
+Set the value in `.env.local`:
 
 ```
 OPENC3_SERVICE_PASSWORD=yournewservicepassword
@@ -235,11 +241,11 @@ OPENC3_SERVICE_PASSWORD=yournewservicepassword
 openssl rand -hex 64
 ```
 
-Then update `.env` with the new value.
+Then set `SECRET_KEY_BASE` to the new value in `.env.local`. If you leave it blank `openc3.sh run` generates and saves one for you.
 
-### Removing Cleartext Passwords from .env
+### Removing Cleartext Passwords from Disk
 
-For enhanced security, you can remove passwords from the `.env` file entirely and pass them as environment variables at runtime:
+For enhanced security, you can keep passwords out of `.env.local` entirely and pass them as environment variables at runtime. Shell environment values take precedence over both `.env` and `.env.local`:
 
 ```bash
 OPENC3_REDIS_PASSWORD=mypassword OPENC3_BUCKET_PASSWORD=mypassword ./openc3.sh run
@@ -251,14 +257,14 @@ This prevents cleartext passwords from being stored on disk, though you must pro
 
 For production deployments:
 
-1. **Change all default passwords** before deploying COSMOS.
+1. **Change all default passwords** before deploying COSMOS. Startup enforces this: never use `OPENC3_ALLOW_DEFAULT_PASSWORDS` outside of an isolated local demo.
 
 2. **Use hashed passwords** in `users.acl` to avoid storing cleartext passwords on disk.
 
-3. **Restrict file permissions** on `.env` and `users.acl`:
+3. **Restrict file permissions** on `.env.local` and `users.acl`:
 
    ```bash
-   chmod 600 .env
+   chmod 600 .env.local
    chmod 600 openc3-redis/users.acl
    ```
 
@@ -270,7 +276,7 @@ For production deployments:
    user admin off #hashvalue +@admin
    ```
 
-6. **Generate a unique SECRET_KEY_BASE** for each installation.
+6. **Keep the generated SECRET_KEY_BASE** in `.env.local` private and unique to each installation.
 
 7. **Limit host computer access** to only trusted administrators.
 

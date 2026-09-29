@@ -58,7 +58,7 @@ jobs:
         run: |
           set -e
           ! docker ps | grep openc3
-          ./openc3.sh run
+          OPENC3_ALLOW_DEFAULT_PASSWORDS=1 ./openc3.sh run
           sleep 10s
           docker ps | grep openc3
 

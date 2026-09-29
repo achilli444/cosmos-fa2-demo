@@ -51,7 +51,7 @@ jobs:
         run: |
           set -e
           ! docker ps | grep openc3
-          ./openc3.sh run
+          OPENC3_ALLOW_DEFAULT_PASSWORDS=1 ./openc3.sh run
           sleep 10s
           docker ps | grep openc3
       - name: openc3.sh stop
@@ -65,7 +65,7 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: |
           set -e
-          ./openc3.sh start
+          OPENC3_ALLOW_DEFAULT_PASSWORDS=1 ./openc3.sh start
           sleep 30s
           docker ps | grep openc3
       # Not testing openc3.sh dev, openc3.sh test

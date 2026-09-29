@@ -63,7 +63,7 @@ jobs:
       - name: openc3.sh run
         # This `shell` line is required to get around a known issue: https://github.com/actions/runner/issues/241#issuecomment-745902718
         shell: 'script -q -e -c "bash {0}"'
-        run: ./openc3.sh run
+        run: OPENC3_ALLOW_DEFAULT_PASSWORDS=1 ./openc3.sh run
         # Allow the containers to spin up
       - name: Sleep for 2min
         run: sleep 120s
