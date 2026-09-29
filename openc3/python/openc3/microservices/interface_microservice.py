@@ -270,7 +270,6 @@ class InterfaceCmdHandlerThread:
         if target_name and not self.interface.cmd_target_enabled.get(target_name, False):
             return None  # Return and don't ack given target_name if disabled
         cmd_name = msg_hash[b"cmd_name"].decode()
-        manual = ConfigParser.handle_true_false(msg_hash.get(b"manual", b"FALSE").decode())
         cmd_params = None
         range_check = True
         raw = False
@@ -330,7 +329,8 @@ class InterfaceCmdHandlerThread:
 
             if self.critical_commanding is not None and self.critical_commanding != "OFF" and not release_critical:
                 restricted = command.restricted
-                if hazardous or restricted or (self.critical_commanding == "ALL" and manual):
+                # "manual" in msg_hash is caller supplied and must not gate approval
+                if hazardous or restricted or self.critical_commanding == "ALL":
                     cmd_type = "NORMAL"
                     if hazardous:
                         cmd_type = "HAZARDOUS"

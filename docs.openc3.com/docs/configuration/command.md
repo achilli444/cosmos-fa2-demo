@@ -47,7 +47,7 @@ Command Authority can be enabled in the Admin Console under the Scopes tab and i
 
 ## Critical Commanding (Enterprise)
 
-Critical Commanding can be enabled in the Admin Console under the Scopes tab and is enabled scope wide. Critical commanding requires a different user to approve critical commands. When Critical Commanding mode is set to NORMAL, HAZARDOUS and RESTRICTED commands need approval. When Critical Commanding mode is set to ALL, all manual commands will require approval. OFF is the default, and disables Critical Commanding.
+Critical Commanding can be enabled in the Admin Console under the Scopes tab and is enabled scope wide. Critical commanding requires a different user to approve critical commands. When Critical Commanding mode is set to NORMAL, HAZARDOUS and RESTRICTED commands need approval. When Critical Commanding mode is set to ALL, all commands (whether sent from a tool, a script, or directly through the API) will require approval. OFF is the default, and disables Critical Commanding.
 
 Here is an example of sending a HAZARDOUS command in Command Sender when Critical Command Mode is set to NORMAL.
 

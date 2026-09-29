@@ -280,6 +280,28 @@ module OpenC3
         sleep 0.01
         im.shutdown
       end
+
+      it "requires approval for every command when critical_commanding is ALL regardless of manual" do
+        model = ScopeModel.new(name: "DEFAULT", critical_commanding: "ALL")
+        model.create
+        critical_model = double("CriticalCmdModel", name: "critical-uuid", create: nil)
+        stub_const("OpenC3::CriticalCmdModel", double("CriticalCmdModelClass", new: critical_model))
+
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        expect(CommandDecomTopic).to_not receive(:write_packet)
+        expect(@interface).to_not receive(:write)
+        Thread.new { im.run }
+        sleep 0.01
+        all = InterfaceStatusModel.all(scope: "DEFAULT")
+        expect(all["INST_INT"]["state"]).to eql "CONNECTED"
+
+        # A caller can not opt out of approval by omitting or forcing manual: false
+        expect { @api.cmd("INST", "ABORT") }.to raise_error(CriticalCmdError) { |e| expect(e.uuid).to eql "critical-uuid" }
+        expect { @api.cmd("INST", "ABORT", manual: false) }.to raise_error(CriticalCmdError)
+        expect { @api.cmd("INST", "ABORT", manual: true) }.to raise_error(CriticalCmdError)
+        expect(OpenC3::CriticalCmdModel).to have_received(:new).exactly(3).times
+        im.shutdown
+      end
     end
 
     describe "connect" do

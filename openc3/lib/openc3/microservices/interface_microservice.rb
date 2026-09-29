@@ -231,7 +231,6 @@ module OpenC3
           end
 
           cmd_name = msg_hash['cmd_name']
-          manual = ConfigParser.handle_true_false(msg_hash['manual'])
           cmd_params = nil
           range_check = true
           raw = false
@@ -295,7 +294,8 @@ module OpenC3
             # Check for Critical Command
             if @critical_commanding and @critical_commanding != 'OFF' and not release_critical
               restricted = command.restricted
-              if hazardous or restricted or (@critical_commanding == 'ALL' and manual)
+              # 'manual' in msg_hash is caller supplied and must not gate approval
+              if hazardous or restricted or @critical_commanding == 'ALL'
                 cmd_type = 'NORMAL'
                 if hazardous
                   cmd_type = 'HAZARDOUS'
