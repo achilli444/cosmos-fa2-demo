@@ -52,7 +52,9 @@ cache = json.load(open(cache_path)) if os.path.exists(cache_path) else {}
 todo = []
 for c in cdx['components']:
     purl = (c.get('purl') or '').split('?')[0]
-    if not purl or purl in cache: continue
+    if not purl: continue
+    hit = cache.get(purl)
+    if hit is not None and hit.get('error') in (None, 'HTTP 404'): continue  # re-query transient failures (429, timeouts) on the next run
     t = purl.split(':', 1)[1].split('/', 1)[0]
     if t not in ('gem', 'npm', 'pypi'): continue
     todo.append((purl, t, c['name'], c['version']))
