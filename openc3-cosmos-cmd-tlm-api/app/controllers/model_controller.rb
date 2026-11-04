@@ -31,10 +31,10 @@ class ModelController < ApplicationController
     model = @model_class.from_json(params[:json], scope: params[:scope])
     if update_model
       model.update
-      OpenC3::Logger.info("#{@model_class.name} updated: #{params[:json]}", scope: params[:scope], user: username())
+      audit("#{@model_class.name} updated: #{params[:json]}", scope: params[:scope])
     else
       model.create
-      OpenC3::Logger.info("#{@model_class.name} created: #{params[:json]}", scope: params[:scope], user: username())
+      audit("#{@model_class.name} created: #{params[:json]}", scope: params[:scope])
     end
     head :ok
   rescue StandardError => error
@@ -61,7 +61,7 @@ class ModelController < ApplicationController
   def destroy
     return unless authorization('admin')
     @model_class.new(name: params[:id], scope: params[:scope]).destroy
-    OpenC3::Logger.info("#{@model_class.name} destroyed: #{params[:id]}", scope: params[:scope], user: username())
+    audit("#{@model_class.name} destroyed: #{params[:id]}", scope: params[:scope])
     head :ok
   rescue StandardError => error
     render json: { status: 'error', message: error.message }, status: :internal_server_error

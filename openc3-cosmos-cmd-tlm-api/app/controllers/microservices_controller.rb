@@ -47,7 +47,7 @@ class MicroservicesController < ModelController
     return unless authorization('admin')
     microservice = @model_class.get_model(name: params[:id], scope: params[:scope])
     if microservice
-      OpenC3::Logger.info("#{params[:id]} started", scope: params[:scope], user: username())
+      audit("#{params[:id]} started", scope: params[:scope])
       microservice.enabled = true
       microservice.update
     end
@@ -58,7 +58,7 @@ class MicroservicesController < ModelController
     return unless authorization('admin')
     microservice = @model_class.get_model(name: params[:id], scope: params[:scope])
     if microservice
-      OpenC3::Logger.info("#{params[:id]} stopped", scope: params[:scope], user: username())
+      audit("#{params[:id]} stopped", scope: params[:scope])
       microservice.enabled = false
       microservice.update
     end

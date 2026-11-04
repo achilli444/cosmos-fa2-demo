@@ -31,6 +31,24 @@ module OpenC3
       end
     end
 
+    describe "directives" do
+      it "carry the acting username so the microservice can attribute the action" do
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'connect' => 'true', 'username' => 'alice' }, '*', 100, db_shard: 0)
+        InterfaceTopic.connect_interface("INST_INT", username: 'alice', scope: "DEFAULT")
+
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'disconnect' => 'true', 'username' => 'alice' }, '*', 100, db_shard: 0)
+        InterfaceTopic.disconnect_interface("INST_INT", username: 'alice', scope: "DEFAULT")
+
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", hash_including('target_control', 'username' => 'alice'), '*', 100, db_shard: 0)
+        InterfaceTopic.interface_target_disable("INST_INT", "INST", username: 'alice', scope: "DEFAULT")
+      end
+
+      it "omit the username when none is given" do
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'log_stream' => 'true' }, '*', 100, db_shard: 0)
+        InterfaceTopic.start_raw_logging("INST_INT", scope: "DEFAULT")
+      end
+    end
+
     describe "interface_details" do
       it "parses the JSON result from the microservice" do
         stub_ack({ 'name' => 'INST_INT', 'state' => 'CONNECTED' }.to_json)

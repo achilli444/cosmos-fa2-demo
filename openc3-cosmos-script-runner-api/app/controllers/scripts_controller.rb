@@ -176,7 +176,7 @@ class ScriptsController < ApplicationController
       render json: { status: 'error', message: 'Failed to change lifecycle' }, status: :internal_server_error
       return
     end
-    OpenC3::Logger.info("Script lifecycle changed from #{current} to #{state}: #{name} (#{comment})", scope: scope, user: username())
+    audit("Script lifecycle changed from #{current} to #{state}: #{name} (#{comment})", scope: scope)
     render json: result
   rescue => e
     log_error(e)
@@ -211,7 +211,7 @@ class ScriptsController < ApplicationController
       results['error'] = results_error
       results['success'] = success
     end
-    OpenC3::Logger.info("Script created: #{name}", scope: scope, user: username()) if success
+    audit("Script created: #{name}", scope: scope)
     render json: results
   rescue => e
     log_error(e)
@@ -249,7 +249,7 @@ class ScriptsController < ApplicationController
     python_venv = params[:pythonVenv]
     running_script_id = Script.run(scope, name, suite_runner, disconnect, environment, user_full_name(), username(), line_no, end_line_no, python_venv)
     if running_script_id
-      OpenC3::Logger.info("Script started: #{name}", scope: scope, user: username())
+      audit("Script started: #{name}", scope: scope)
       render plain: running_script_id.to_s
     else
       render plain: "Script not found: #{name}", status: :not_found
@@ -290,7 +290,7 @@ class ScriptsController < ApplicationController
     if defined?(::VersionStore)
       ::VersionStore.delete(scope: scope, name: name, username: username())
     end
-    OpenC3::Logger.info("Script destroyed: #{name}", scope: scope, user: username())
+    audit("Script destroyed: #{name}", scope: scope)
     head :ok
   rescue => e
     log_error(e)

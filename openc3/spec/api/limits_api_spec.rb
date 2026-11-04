@@ -489,6 +489,14 @@ module OpenC3
         expect { @api.enable_limits("INST", "HEALTH_STATUS", "BLAH") }.to raise_error(RuntimeError, "Item 'INST HEALTH_STATUS BLAH' does not exist (TargetModel)")
       end
 
+      it "writes a user-attributed audit record" do
+        allow(Logger).to receive(:info)
+        expect(Logger).to receive(:info).with("Disabling Limits for 'INST HEALTH_STATUS TEMP1'", scope: "DEFAULT", user: "anonymous")
+        @api.disable_limits("INST", "HEALTH_STATUS", "TEMP1")
+        expect(Logger).to receive(:info).with("Enabling Limits For 'INST HEALTH_STATUS TEMP1'", scope: "DEFAULT", user: "anonymous")
+        @api.enable_limits("INST", "HEALTH_STATUS", "TEMP1")
+      end
+
       it "enables limits for an item" do
         expect(@api.limits_enabled?("INST", "HEALTH_STATUS", "TEMP1")).to be true
         @api.disable_limits("INST", "HEALTH_STATUS", "TEMP1")

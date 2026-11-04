@@ -103,6 +103,13 @@ RSpec.describe ScopesController, type: :controller do
   end
 
   describe "DELETE destroy" do
+    it "writes a user-attributed audit record" do
+      allow(OpenC3::ProcessManager.instance).to receive(:spawn).and_return(double(name: "scope_uninstall"))
+      expect(OpenC3::Logger).to receive(:info).with("Scope destroy requested: SCOPE1", scope: "DEFAULT", user: "anonymous")
+      delete :destroy, params: {id: "SCOPE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+    end
+
     it "destroys a scope using ProcessManager" do
       process_manager = instance_double(OpenC3::ProcessManager)
       allow(OpenC3::ProcessManager).to receive(:instance).and_return(process_manager)

@@ -74,7 +74,7 @@ class BridgesController < ModelController
     microservice = OpenC3::BridgeModel.build_microservice(bridge_name: name, scope: params[:scope], shard: shard)
     microservice.create
     microservice.deploy
-    OpenC3::Logger.info("Bridge created: #{name}", scope: params[:scope], user: username())
+    audit("Bridge created: #{name}", scope: params[:scope])
     head :ok
   rescue StandardError => error
     render json: { status: 'error', message: error.message }, status: :internal_server_error
@@ -110,7 +110,7 @@ class BridgesController < ModelController
       # ignore: nothing to delete
       OpenC3::Logger.warn("Bridge secret: #{"BRIDGE_#{name}_PRIVATE_KEY"} not found for delete with error #{e.formatted}", scope: scope, user: username())
     end
-    OpenC3::Logger.info("Bridge destroyed: #{name}", scope: scope, user: username())
+    audit("Bridge destroyed: #{name}", scope: scope)
     head :ok
   rescue StandardError => error
     render json: { status: 'error', message: error.message }, status: :internal_server_error
@@ -129,7 +129,7 @@ class BridgesController < ModelController
     end
     begin
       token = model.generate_enrollment_token
-      OpenC3::Logger.info("Generated enrollment token for bridge #{params[:id]}", scope: params[:scope], user: username())
+      audit("Generated enrollment token for bridge #{params[:id]}", scope: params[:scope])
       render json: { token: token }
     rescue => error
       render json: { status: 'error', message: error.message }, status: :bad_request

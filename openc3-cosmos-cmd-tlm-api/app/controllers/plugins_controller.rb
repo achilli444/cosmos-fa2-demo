@@ -168,6 +168,7 @@ class PluginsController < ModelController
         else
           result = OpenC3::PluginModel.install_phase1(gem_file_path, store_plugin_id: params[:store_plugin_id], store_version_id: params[:store_version_id], scope: scope)
         end
+        audit("Plugin #{update ? 'upgrade' : 'install'} staged: #{original_filename}", scope: scope)
         render json: result
       rescue OpenC3::EmptyGemFileError => error
         render json: { status: 'error', message: error.message }, status: :bad_request
@@ -245,6 +246,7 @@ class PluginsController < ModelController
         ["ruby", "/openc3/bin/openc3cli", "load", gem_name, scope, plugin_hash_file_path, "force"], # force install
         "plugin_install", params[:id], Time.now + 1.hour, temp_dir: temp_dir, scope: scope
       )
+      audit("Plugin install requested: #{params[:id]}", scope: scope)
       render json: result.name
     rescue Exception => error
       logger.error(error.formatted)
@@ -258,6 +260,7 @@ class PluginsController < ModelController
       id, scope = sanitize_params([:id, :scope])
       return unless id and scope
       result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "unload", id, scope], "plugin_uninstall", id, Time.now + 1.hour, scope: scope)
+      audit("Plugin uninstall requested: #{id}", scope: scope)
       render json: result.name
     rescue Exception => error
       logger.error(error.formatted)
@@ -276,6 +279,7 @@ class PluginsController < ModelController
         ["ruby", "/openc3/bin/openc3cli", "migratetouv", id, scope],
         "plugin_migrate_to_uv", id, Time.now + 1.hour, scope: scope
       )
+      audit("Plugin UV migration requested: #{id}", scope: scope)
       render json: result.name
     rescue Exception => error
       logger.error(error.formatted)

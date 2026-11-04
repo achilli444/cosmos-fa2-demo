@@ -69,7 +69,7 @@ class EnvironmentController < ApplicationController
 
       model = @model_class.new(name: name, key: params['key'], value: params['value'], scope: params[:scope])
       model.create()
-      OpenC3::Logger.info("Environment variable created: #{name} #{params['key']} #{params['value']}", scope: params[:scope], user: username())
+      audit("Environment variable created: #{name} #{params['key']} #{params['value']}", scope: params[:scope])
       render json: model.as_json(), status: :created
     rescue RuntimeError, JSON::ParserError => e
       log_error(e)
@@ -100,7 +100,7 @@ class EnvironmentController < ApplicationController
     end
     begin
       ret = @model_class.destroy(name: params[:name], scope: params[:scope])
-      OpenC3::Logger.info("Environment variable destroyed: #{params[:name]}", scope: params[:scope], user: username())
+      audit("Environment variable destroyed: #{params[:name]}", scope: params[:scope])
       render json: { name: params[:name] }
     rescue OpenC3::EnvironmentError => e
       log_error(e)

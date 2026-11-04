@@ -30,7 +30,7 @@ class SecretsController < ApplicationController
     end
 
     OpenC3::Secrets.getClient.set(params[:key], value, scope: params[:scope])
-    OpenC3::Logger.info("Secret set: #{params[:key]}", scope: params[:scope], user: username())
+    audit("Secret set: #{params[:key]}", scope: params[:scope])
     head :ok
   rescue => e
     log_error(e)
@@ -40,7 +40,7 @@ class SecretsController < ApplicationController
   def destroy
     return unless authorization('admin')
     OpenC3::Secrets.getClient.delete(params['key'], scope: params[:scope])
-    OpenC3::Logger.info("Secret deleted: #{params[:key]}", scope: params[:scope], user: username())
+    audit("Secret deleted: #{params[:key]}", scope: params[:scope])
     head :ok
   rescue => e
     log_error(e)

@@ -30,7 +30,7 @@ class TsdbController < ApplicationController
       result = conn.exec(sql)
       columns = result.fields
       rows = result.values
-      OpenC3::Logger.info("TSDB query executed (db_shard #{db_shard}): #{sql}", user: username())
+      audit("TSDB query executed (db_shard #{db_shard}): #{sql}")
       render json: { columns: columns, rows: rows }, status: :ok
     rescue => e
       OpenC3::QuestDBClient.disconnect(db_shard: db_shard)

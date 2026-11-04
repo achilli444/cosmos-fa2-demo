@@ -112,6 +112,7 @@ class TriggerController < ApplicationController
       model = @model_class.from_json(hash.symbolize_keys, name: name, scope: params[:scope])
       model.validate_trigger_items()
       model.create() # Create sends a notification
+      audit("Trigger created: #{hash['group']}:#{name}")
       render json: model.as_json(), status: :created
     rescue OpenC3::TriggerInputError => e
       log_error(e)
@@ -155,6 +156,7 @@ class TriggerController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user updating the trigger
       model.notify(kind: 'updated')
+      audit("Trigger updated: #{params[:group]}:#{params[:name]}")
       render json: model.as_json()
     rescue OpenC3::TriggerInputError => e
       log_error(e)
@@ -197,6 +199,7 @@ class TriggerController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user enabling the trigger
       model.notify_enable()
+      audit("Trigger enabled: #{params[:group]}:#{params[:name]}")
       render json: model.as_json()
     rescue StandardError => e
       log_error(e)
@@ -233,6 +236,7 @@ class TriggerController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user disabling the trigger
       model.notify_disable()
+      audit("Trigger disabled: #{params[:group]}:#{params[:name]}")
       render json: model.as_json()
     rescue StandardError => e
       log_error(e)
@@ -267,6 +271,7 @@ class TriggerController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user deleting the trigger
       model.notify(kind: 'deleted')
+      audit("Trigger deleted: #{params[:group]}:#{params[:name]}")
       render json: model.as_json()
     rescue StandardError => e
       log_error(e)

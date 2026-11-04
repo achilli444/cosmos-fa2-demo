@@ -151,6 +151,13 @@ module OpenC3
       end
     end
 
+    describe "connect_interface" do
+      it "propagates the authorized user into the interface directive" do
+        expect(InterfaceTopic).to receive(:connect_interface).with("INST_INT", username: "anonymous", scope: "DEFAULT")
+        @api.connect_interface("INST_INT")
+      end
+    end
+
     describe "map_target_to_interface" do
       it "successfully maps a target to an interface" do
         TargetModel.new(name: "INST", scope: "DEFAULT").create
@@ -165,6 +172,8 @@ module OpenC3
         model2 = InterfaceModel.new(name: "INST2_INT", scope: "DEFAULT", target_names: ["INST2"], cmd_target_names: ["INST2"], tlm_target_names: ["INST2"], config_params: ["interface.rb"])
         model2.create
 
+        allow(Logger).to receive(:info)
+        expect(Logger).to receive(:info).with("Target INST2 mapped to Interface INST_INT", scope: "DEFAULT", user: "anonymous")
         @api.map_target_to_interface("INST2", "INST_INT")
 
         model1 = InterfaceModel.get_model(name: "INST_INT", scope: "DEFAULT")
@@ -264,26 +273,26 @@ module OpenC3
 
     describe "interface_target_enable" do
       it "enables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", tlm_only: true)
       end
     end
 
     describe "interface_target_disable" do
       it "disables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", tlm_only: true)
       end
     end

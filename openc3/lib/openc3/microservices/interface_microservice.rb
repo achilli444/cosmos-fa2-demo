@@ -110,7 +110,7 @@ module OpenC3
               return
             end
             if msg_hash['connect']
-              @logger.info "#{@interface.name}: Connect requested"
+              @logger.info("#{@interface.name}: Connect requested", user: msg_hash['username'], scope: @scope)
               params = []
               if msg_hash['params']
                 params = JSON.parse(msg_hash['params'], allow_nan: true, create_additions: true)
@@ -119,22 +119,26 @@ module OpenC3
               next 'SUCCESS'
             end
             if msg_hash['disconnect']
-              @logger.info "#{@interface.name}: Disconnect requested"
+              @logger.info("#{@interface.name}: Disconnect requested", user: msg_hash['username'], scope: @scope)
               @tlm.disconnect(false)
               next 'SUCCESS'
             end
             if msg_hash['raw']
               if @interface.connected?
                 begin
-                  @logger.info "#{@interface.name}: Write raw"
+                  @logger.info("#{@interface.name}: Write raw", user: msg_hash['username'], scope: @scope)
                   # A raw interface write results in an UNKNOWN packet
                   command = System.commands.packet('UNKNOWN', 'UNKNOWN')
                   command.received_count = TargetModel.increment_command_count('UNKNOWN', 'UNKNOWN', 1, scope: @scope)
                   command = command.clone
                   command.buffer = msg_hash['raw']
                   command.received_time = Time.now
+                  if msg_hash['username']
+                    command.extra ||= {}
+                    command.extra['username'] = msg_hash['username']
+                  end
                   CommandTopic.write_packet(command, scope: @scope)
-                  @logger.info("write_raw sent #{msg_hash['raw'].length} bytes to #{@interface.name}", scope: @scope)
+                  @logger.info("write_raw sent #{msg_hash['raw'].length} bytes to #{@interface.name}", user: msg_hash['username'], scope: @scope)
                   @interface.write_raw(msg_hash['raw'])
                 rescue => e
                   @logger.error "#{@interface.name}: write_raw: #{e.formatted}"
@@ -147,10 +151,10 @@ module OpenC3
             end
             if msg_hash.key?('log_stream')
               if msg_hash['log_stream'] == 'true'
-                @logger.info "#{@interface.name}: Enable stream logging"
+                @logger.info("#{@interface.name}: Enable stream logging", user: msg_hash['username'], scope: @scope)
                 @interface.start_raw_logging
               else
-                @logger.info "#{@interface.name}: Disable stream logging"
+                @logger.info("#{@interface.name}: Disable stream logging", user: msg_hash['username'], scope: @scope)
                 @interface.stop_raw_logging
               end
               next 'SUCCESS'
@@ -158,7 +162,7 @@ module OpenC3
             if msg_hash.key?('interface_cmd')
               params = JSON.parse(msg_hash['interface_cmd'], allow_nan: true, create_additions: true)
               begin
-                @logger.info "#{@interface.name}: interface_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')}"
+                @logger.info("#{@interface.name}: interface_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')}", user: msg_hash['username'], scope: @scope)
                 @interface.interface_cmd(params['cmd_name'], *params['cmd_params'])
                 InterfaceStatusModel.set(@interface.as_json(), queued: true, scope: @scope)
               rescue => e
@@ -170,7 +174,7 @@ module OpenC3
             if msg_hash.key?('protocol_cmd')
               params = JSON.parse(msg_hash['protocol_cmd'], allow_nan: true, create_additions: true)
               begin
-                @logger.info "#{@interface.name}: protocol_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')} read_write: #{params['read_write']} index: #{params['index']}"
+                @logger.info("#{@interface.name}: protocol_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')} read_write: #{params['read_write']} index: #{params['index']}", user: msg_hash['username'], scope: @scope)
                 @interface.protocol_cmd(params['cmd_name'], *params['cmd_params'], read_write: params['read_write'], index: params['index'])
                 InterfaceStatusModel.set(@interface.as_json(), queued: true, scope: @scope)
               rescue => e
@@ -208,11 +212,11 @@ module OpenC3
                 if action == 'disable'
                   @interface.cmd_target_enabled[target_name] = false unless tlm_only
                   @interface.tlm_target_enabled[target_name] = false unless cmd_only
-                  @logger.info "#{@interface.name}: target_disable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}"
+                  @logger.info("#{@interface.name}: target_disable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}", user: msg_hash['username'], scope: @scope)
                 else # enable
                   @interface.cmd_target_enabled[target_name] = true unless tlm_only
                   @interface.tlm_target_enabled[target_name] = true unless cmd_only
-                  @logger.info "#{@interface.name}: target_enable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}"
+                  @logger.info("#{@interface.name}: target_enable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}", user: msg_hash['username'], scope: @scope)
                 end
               rescue => e
                 @logger.error "#{@interface.name}: target_control: #{e.formatted}"

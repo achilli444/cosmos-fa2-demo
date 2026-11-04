@@ -38,7 +38,7 @@ class PackagesController < ApplicationController
         else
           process_name = OpenC3::PythonPackageModel.put(package_file_path, package_install: true, scope: params[:scope], plugin: params[:plugin])
         end
-        OpenC3::Logger.info("Package created: #{params[:package]}", scope: params[:scope], user: username())
+        audit("Package created: #{params[:package]}", scope: params[:scope])
         render json: process_name
       rescue => e
         OpenC3::Logger.error("Error installing package: #{file.original_filename}:#{e.formatted}", scope: params[:scope], user: username())
@@ -62,7 +62,7 @@ class PackagesController < ApplicationController
         else
           OpenC3::PythonPackageModel.destroy(params[:id], scope: params[:scope], plugin: params[:plugin])
         end
-        OpenC3::Logger.info("Package destroyed: #{params[:id]}", scope: params[:scope], user: username())
+        audit("Package destroyed: #{params[:id]}", scope: params[:scope])
         head :ok
       rescue => e
         OpenC3::Logger.error("Error destroying package: #{params[:id]}:#{e.formatted}", scope: params[:scope], user: username())
@@ -94,7 +94,7 @@ class PackagesController < ApplicationController
       file = File.read(package_file_path, mode: 'rb')
       render json: { filename: package_name, contents: Base64.encode64(file) }
     rescue Exception => e
-      OpenC3::Logger.info("Package '#{params[:id]}' download failed: #{e.message}", user: username())
+      audit("Package '#{params[:id]}' download failed: #{e.message}")
       render json: { status: 'error', message: e.message }, status: :internal_server_error
     end
   end

@@ -200,10 +200,9 @@ class ActivityController < ApplicationController
         render json: { status: 'error', message: NOT_FOUND }, status: :not_found
         return
       end
-      OpenC3::Logger.info(
+      audit(
         "Event created for activity: #{params[:name]} #{hash}",
-        scope: params[:scope],
-        user: username()
+        scope: params[:scope]
       )
       render json: result
     rescue OpenC3::ActivityError => e
@@ -309,10 +308,9 @@ class ActivityController < ApplicationController
       if ret == 0
         render json: { status: 'error', message: NOT_FOUND }, status: :not_found
       else
-        OpenC3::Logger.info(
+        audit(
           "Activity destroyed name: #{params[:name]} id:#{params[:id]} recurring:#{params[:recurring]}",
-          scope: params[:scope],
-          user: username()
+          scope: params[:scope]
         )
         render json: { status: ret }
       end

@@ -37,15 +37,15 @@ class ScopesController < ModelController
       # Scopes are global so the scope is always 'DEFAULT'
       changes = existing ? model.diff(existing) : nil
       if changes.nil? || changes.any?
-        OpenC3::Logger.info("User #{username()} updated scope '#{model.name}': #{(changes || [params[:json]]).join(', ')}", scope: 'DEFAULT', user: username())
+        audit("User #{username()} updated scope '#{model.name}': #{(changes || [params[:json]]).join(', ')}", scope: 'DEFAULT')
       else
-        OpenC3::Logger.info("User #{username()} updated scope '#{model.name}' (no changes)", scope: 'DEFAULT', user: username())
+        audit("User #{username()} updated scope '#{model.name}' (no changes)", scope: 'DEFAULT')
       end
     else
       model.create
       model.deploy(".", {})
       # Scopes are global so the scope is always 'DEFAULT'
-      OpenC3::Logger.info("User #{username()} created scope '#{model.name}'", scope: 'DEFAULT', user: username())
+      audit("User #{username()} created scope '#{model.name}'", scope: 'DEFAULT')
     end
     head :ok
   rescue Exception => e
@@ -57,6 +57,7 @@ class ScopesController < ModelController
     return unless authorization('superadmin')
     # Scopes are global so the scope is always 'DEFAULT'
     result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "destroyscope", params[:id]], "scope_uninstall", params[:id], Time.now + 2.hours, scope: 'DEFAULT')
+    audit("Scope destroy requested: #{params[:id]}", scope: 'DEFAULT')
     render json: result
   rescue Exception => e
     log_error(e)

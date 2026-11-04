@@ -52,7 +52,7 @@ class TimelineController < ApplicationController
     return unless authorization('script_run')
     begin
       result = create_timeline(params['name'], color: params['color'], scope: params[:scope])
-      OpenC3::Logger.info("Timeline created: #{params['name']}", scope: params[:scope], user: username())
+      audit("Timeline created: #{params['name']}", scope: params[:scope])
       render json: result, status: :created
     rescue RuntimeError, JSON::ParserError => e
       log_error(e)
@@ -112,6 +112,7 @@ class TimelineController < ApplicationController
       if result.nil?
         render json: { status: 'error', message: "failed to find timeline: #{params[:name]}" }, status: :not_found
       else
+        audit("Timeline color changed: #{params[:name]} color: #{params['color']}")
         render json: result
       end
     rescue RuntimeError, JSON::ParserError => e
@@ -152,6 +153,7 @@ class TimelineController < ApplicationController
       if result.nil?
         render json: { status: 'error', message: "failed to find timeline: #{params[:name]}" }, status: :not_found
       else
+        audit("Timeline execute changed: #{params[:name]} enable: #{params['enable']}")
         render json: result
       end
     rescue RuntimeError, JSON::ParserError => e
@@ -179,7 +181,7 @@ class TimelineController < ApplicationController
       if result.nil?
         render json: { status: 'error', message: "failed to find timeline: #{params[:name]}" }, status: :not_found
       else
-        OpenC3::Logger.info("Timeline destroyed: #{params[:name]}", scope: params[:scope], user: username())
+        audit("Timeline destroyed: #{params[:name]}", scope: params[:scope])
         render json: result
       end
     rescue OpenC3::TimelineError => e
