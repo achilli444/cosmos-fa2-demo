@@ -15,6 +15,7 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+require 'openc3/models/auth_model'
 require 'openc3/utilities/authorization'
 
 class ApplicationController < ActionController::API
@@ -61,6 +62,17 @@ class ApplicationController < ActionController::API
       render json: { status: 'error', message: e.message }, status: :forbidden if perform_render
       return false
     end
+  end
+
+  # Authorize a machine-to-machine request that must carry the service
+  # credential (OPENC3_SERVICE_PASSWORD). User passwords and session tokens
+  # are rejected and the request fails closed when no credential is configured.
+  # @return [Boolean] true if the request carries the service credential
+  def service_authorization()
+    token = request.headers['HTTP_AUTHORIZATION']
+    return true if token and OpenC3::AuthModel.verify(token, service_only: true)
+    render json: { status: 'error', message: 'Service token is required' }, status: :unauthorized
+    return false
   end
 
   def sanitize_params(param_list, require_params: true, allow_forward_slash: false, allow_parent_dir: false)

@@ -218,6 +218,12 @@ providers:
   http:
     endpoint: "http://openc3-cosmos-cmd-tlm-api:2901/openc3-api/traefik"
     pollInterval: "5s"
+    # /openc3-api/traefik only answers to the service credential. The
+    # placeholder is replaced with OPENC3_SERVICE_PASSWORD by entrypoint.sh at
+    # container start (Traefik does not template or merge env vars into the
+    # install configuration when it is loaded from a file).
+    headers:
+      Authorization: '${OPENC3_SERVICE_PASSWORD}'
 accessLog: {}
 # api:
 #   dashboard: true
