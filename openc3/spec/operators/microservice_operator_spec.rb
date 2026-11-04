@@ -164,6 +164,33 @@ module OpenC3
           end
         end
 
+        it "creates the secret file and its directory with owner-only permissions" do
+          path = "/tmp/openc3_operator_spec_#{Process.pid}/sub/cert"
+          saved_umask = File.umask(0o000)
+          begin
+            convert(path)
+            expect(File.stat(path).mode & 0o777).to eql 0o600
+            expect(File.stat(File.dirname(path)).mode & 0o777).to eql 0o700
+          ensure
+            File.umask(saved_umask)
+            FileUtils.rm_rf("/tmp/openc3_operator_spec_#{Process.pid}")
+          end
+        end
+
+        it "tightens the permissions of a pre-existing secret file" do
+          path = "/tmp/openc3_operator_spec_#{Process.pid}/cert"
+          begin
+            FileUtils.mkdir_p(File.dirname(path))
+            File.write(path, 'old value')
+            File.chmod(0o644, path)
+            convert(path)
+            expect(File.read(path)).to eql 'secret value'
+            expect(File.stat(path).mode & 0o777).to eql 0o600
+          ensure
+            FileUtils.rm_rf(File.dirname(path))
+          end
+        end
+
         it "does not write a secret outside the secret file dir" do
           expect(Logger).to receive(:error).with(/invalid file path/)
           expect(File).to_not receive(:open)
