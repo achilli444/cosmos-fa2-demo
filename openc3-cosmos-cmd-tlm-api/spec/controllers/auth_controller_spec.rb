@@ -202,15 +202,16 @@ RSpec.describe AuthController, :type => :controller do
 
     it "does not read the entire session hash" do
       # Unauthenticated endpoint, so a caller must not be able to make us pull
-      # every session ever created on every request. Store goes through
-      # method_missing, so the expectation has to go on the redis mock itself.
+      # every session on every request. Store goes through method_missing, so
+      # the expectation has to go on the redis mock itself. Issuing a session
+      # (set/verify, after authenticating) may scan the hash to prune it.
       redis = mock_redis()
-      expect(redis).not_to receive(:hgetall)
 
       post :set, params: { password: 'PASSWORD' }
       expect(response).to have_http_status(:ok)
       token = response.body
 
+      expect(redis).not_to receive(:hgetall)
       post :verify_token, params: { token: token }
       expect(response).to have_http_status(:ok)
 

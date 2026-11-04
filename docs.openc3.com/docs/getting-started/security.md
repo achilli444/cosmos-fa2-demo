@@ -353,3 +353,15 @@ It's important to understand the distinction:
   - **COSMOS Enterprise**: Uses Keycloak for authentication with individual user accounts, roles, and permissions.
 
 The frontend password you set when first accessing COSMOS at `http://localhost:2900` is stored in Redis and is completely separate from the backend service credentials documented here.
+
+### COSMOS Core Session Lifetime
+
+Logging in to COSMOS Core issues a random session token that the browser presents on every API call. Only a SHA-256 digest of the token is stored in Redis (`OPENC3__SESSIONS`), alongside its creation and last-used times, so reading Redis does not yield usable sessions. Sessions are terminated automatically:
+
+| Variable                         | Default | Description                                                                                                                      |
+| -------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENC3_SESSION_IDLE_TIMEOUT`    | `900`   | Seconds a session may go without any API call before it is terminated (15 minutes)                                               |
+| `OPENC3_SESSION_MAX_AGE`         | `43200` | Seconds after login at which a session is terminated regardless of activity (12 hours)                                           |
+| `OPENC3_SESSION_MAX_CONCURRENT`  | `10`    | Maximum concurrent sessions for the shared Core account; logging in past the cap terminates the least recently used session      |
+
+An expired or evicted session gets a 401 on its next request and the browser returns to the login page. Each value must be a positive integer. Every container that verifies tokens (cmd-tlm-api, script-runner-api, operator and init) reads these variables, so set them in `.env` (or `.env.local`) rather than on a single service; `compose.yaml` forwards them. Logging out terminates only the caller's session, and changing the password terminates every session. These settings do not apply to COSMOS Enterprise, where Keycloak controls session lifetimes.

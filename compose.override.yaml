@@ -70,6 +70,19 @@
 #       # Enterprise, use Keycloak to configure this instead.
 #       - OPENC3_AUTH_RATE_LIMIT_TO=10
 #       - OPENC3_AUTH_RATE_LIMIT_WITHIN=120
+#       # Session lifetime for the COSMOS Core password login (defaults shown,
+#       # all in seconds except the count). A session ends after
+#       # OPENC3_SESSION_IDLE_TIMEOUT without any API call, or at
+#       # OPENC3_SESSION_MAX_AGE after login, whichever comes first. Core has
+#       # one shared account, so OPENC3_SESSION_MAX_CONCURRENT caps sessions
+#       # system-wide; logging in past the cap evicts the least recently used.
+#       # Every service that verifies tokens reads these (cmd-tlm-api,
+#       # script-runner-api, operator and init), so set them in .env rather
+#       # than on one service. In COSMOS Enterprise, configure session
+#       # lifetimes in Keycloak instead.
+#       - OPENC3_SESSION_IDLE_TIMEOUT=900
+#       - OPENC3_SESSION_MAX_AGE=43200
+#       - OPENC3_SESSION_MAX_CONCURRENT=10
 #       # Default language used by the generators (`openc3.sh cli generate`).
 #       - OPENC3_LANGUAGE=python
 #

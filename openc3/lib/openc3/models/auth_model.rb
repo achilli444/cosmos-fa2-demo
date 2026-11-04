@@ -16,7 +16,10 @@
 # if purchased from OpenC3, Inc.
 
 require 'argon2'
+require 'json'
+require 'openssl'
 require 'securerandom'
+require 'time'
 require 'openc3/utilities/store'
 
 module OpenC3
@@ -25,7 +28,20 @@ module OpenC3
 
     # Redis keys
     PRIMARY_KEY = 'OPENC3__TOKEN' # for argon2 password hash
-    SESSIONS_KEY = 'OPENC3__SESSIONS' # for hash containing session tokens
+    # Hash of active sessions. Fields are the SHA-256 digest of the session
+    # token (never the token itself, so a Redis dump does not hand out live
+    # sessions) and values are JSON session records (see session_record).
+    SESSIONS_KEY = 'OPENC3__SESSIONS'
+
+    # Session lifetime defaults in seconds, overridable via the environment.
+    # A session ends when it has not been used for the idle timeout or when it
+    # reaches the absolute maximum age, whichever comes first. Every service
+    # that verifies tokens must see the same values (see compose.yaml).
+    DEFAULT_SESSION_IDLE_TIMEOUT = 900 # 15 minutes
+    DEFAULT_SESSION_MAX_AGE = 43200 # 12 hours
+    # Core has a single shared account, so this caps the sessions for the
+    # whole system. Creating one past the cap evicts the least recently used.
+    DEFAULT_SESSION_MAX_CONCURRENT = 10
 
     # The length of time in seconds to keep redis values in memory
     PW_HASH_CACHE_TIMEOUT = 5
@@ -57,6 +73,37 @@ module OpenC3
     # @return [Boolean] whether the value is shaped like a session token
     def self.session_token?(token)
       SESSION_TOKEN_REGEX.match?(token.to_s)
+    end
+
+    # Seconds a session may go unused before it is terminated.
+    def self.session_idle_timeout
+      positive_integer_env('OPENC3_SESSION_IDLE_TIMEOUT', DEFAULT_SESSION_IDLE_TIMEOUT)
+    end
+
+    # Seconds after creation at which a session is terminated regardless of use.
+    def self.session_max_age
+      positive_integer_env('OPENC3_SESSION_MAX_AGE', DEFAULT_SESSION_MAX_AGE)
+    end
+
+    # Maximum number of concurrent (non one-time) sessions.
+    def self.session_max_concurrent
+      positive_integer_env('OPENC3_SESSION_MAX_CONCURRENT', DEFAULT_SESSION_MAX_CONCURRENT)
+    end
+
+    def self.positive_integer_env(name, default)
+      raw = ENV.fetch(name, nil)
+      return default if raw.nil? or raw.strip.empty?
+
+      value = Integer(raw, exception: false)
+      raise ArgumentError, "#{name} must be a positive integer, got #{raw.inspect}" unless value and value > 0
+
+      value
+    end
+
+    # The Redis field under which a token is stored. SHA-256 is one-way, so
+    # reading the sessions hash yields nothing a client could present.
+    def self.session_digest(token)
+      OpenSSL::Digest::SHA256.hexdigest(token)
     end
 
     def self.set?(key = PRIMARY_KEY)
@@ -101,22 +148,33 @@ module OpenC3
           @@session_cache_time = time
         end
 
-        if @@session_cache[token]
+        digest = session_digest(token)
+        if @@session_cache[digest]
           terminate_otp(token)
           return true
         end
 
         # Check the stored session tokens for just this token. Deliberately not
         # HGETALL: verify_token is unauthenticated, so reading the entire
-        # session hash here lets any caller make us pull every session ever
-        # created on every request, and that hash only grows. HGET is O(1) and
-        # can't be amplified. The cache then fills with the tokens actually in
-        # use instead of all of them.
-        stored = Store.hget(SESSIONS_KEY, token)
+        # session hash here lets any caller make us pull every session on every
+        # request. HGET is O(1) and can't be amplified. The cache then fills
+        # with the tokens actually in use instead of all of them.
+        stored = Store.hget(SESSIONS_KEY, digest)
         if stored
-          @@session_cache[token] = stored
-          terminate_otp(token)
-          return true
+          session = parse_session(stored)
+          if session and session_active?(session, time)
+            # Refresh the idle clock. The cache means this write happens at
+            # most once per SESSION_CACHE_TIMEOUT per process, not per request.
+            unless session['otp']
+              session['last_used'] = time.iso8601
+              Store.hset(SESSIONS_KEY, digest, JSON.generate(session))
+            end
+            @@session_cache[digest] = true
+            terminate_otp(token)
+            return true
+          end
+          # Expired, or a pre-digest plaintext entry left over from an upgrade
+          Store.hdel(SESSIONS_KEY, digest)
         end
       end
 
@@ -153,13 +211,17 @@ module OpenC3
     # @param otp [Boolean] whether to create a one-time use token (default: false)
     # @return [String] the new session token
     def self.generate_session(otp: false)
+      time = Time.now
       token = SecureRandom.urlsafe_base64(nil, false)
       if otp
         token = OTP_PREFIX + token
       else
         token = SESSION_PREFIX + token
       end
-      Store.hset(SESSIONS_KEY, token, Time.now.iso8601)
+      # OTPs are consumed on first use and don't hold a seat; a regular
+      # session must fit under the cap, evicting the least recently used.
+      prune_sessions(time, reserve: otp ? 0 : 1)
+      Store.hset(SESSIONS_KEY, session_digest(token), JSON.generate(session_record(time, otp)))
       return token
     end
 
@@ -172,8 +234,59 @@ module OpenC3
 
     # Terminates the given session token.
     def self.terminate(token)
-      Store.hdel(SESSIONS_KEY, token)
-      @@session_cache.delete(token) if @@session_cache
+      digest = session_digest(token)
+      Store.hdel(SESSIONS_KEY, digest)
+      @@session_cache.delete(digest) if @@session_cache
+    end
+
+    # Drops expired and unreadable sessions and, when the regular sessions plus
+    # the reserved seats exceed the cap, the least recently used ones. Only
+    # called from generate_session, after the caller has authenticated, so the
+    # HGETALL here is bounded by the cap and can't be driven by a stranger.
+    def self.prune_sessions(time = Time.now, reserve: 0)
+      active = []
+      (Store.hgetall(SESSIONS_KEY) || {}).each do |digest, raw|
+        session = parse_session(raw)
+        if session.nil? or !session_active?(session, time)
+          remove_session(digest)
+        elsif !session['otp']
+          active << [digest, Time.iso8601(session['last_used'])]
+        end
+      end
+      excess = active.size + reserve - session_max_concurrent
+      if excess > 0
+        active.sort_by { |_, last_used| last_used }.first(excess).each do |digest, _|
+          remove_session(digest)
+        end
+      end
+    end
+
+    def self.remove_session(digest)
+      Store.hdel(SESSIONS_KEY, digest)
+      @@session_cache.delete(digest) if @@session_cache
+    end
+
+    def self.session_record(time, otp)
+      { 'created' => time.iso8601, 'last_used' => time.iso8601, 'otp' => otp }
+    end
+
+    # @return [Hash, nil] the stored session record, or nil if it isn't one
+    def self.parse_session(raw)
+      session = JSON.parse(raw)
+      return nil unless session.is_a?(Hash) and session['created'] and session['last_used']
+
+      session
+    rescue JSON::ParserError
+      nil
+    end
+
+    # Whether the session is within both its idle timeout and maximum age.
+    def self.session_active?(session, time = Time.now)
+      created = Time.iso8601(session['created'])
+      last_used = Time.iso8601(session['last_used'])
+      (time - created) < session_max_age and (time - last_used) < session_idle_timeout
+    rescue ArgumentError, TypeError
+      false
     end
 
     # Terminates the session if the token is an OTP.
