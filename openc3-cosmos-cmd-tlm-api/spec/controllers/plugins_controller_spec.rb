@@ -408,7 +408,7 @@ RSpec.describe PluginsController, type: :controller do
       port = server.addr[1]
       requests = []
       thread = Thread.new do
-        client = server.accept
+        client = server.accept rescue next
         request = +""
         while (line = client.gets) && line != "\r\n"
           request << line
@@ -442,7 +442,7 @@ RSpec.describe PluginsController, type: :controller do
 
     it "treats an unauthenticated 401 as reachable" do
       with_local_http_server("401 Unauthorized") do |port, requests|
-        url = "http://localhost:#{port}/gems/test-1.0.0.gem"
+        url = "http://127.0.0.1:#{port}/gems/test-1.0.0.gem"
         expect(controller.check_localhost_reachability(url, 7)).to eq(url)
         expect(requests.first).not_to match(/authorization/i)
       end
