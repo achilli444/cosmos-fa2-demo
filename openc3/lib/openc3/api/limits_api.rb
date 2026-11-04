@@ -121,7 +121,7 @@ module OpenC3
     # @param args [String|Array<String>] See the description for calling style
     def enable_limits(*args, manual: false, scope: $openc3_scope, token: $openc3_token)
       target_name, packet_name, item_name = _tlm_process_args(args, 'enable_limits', scope: scope)
-      authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token)
+      username = Authorization.audit_username(authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token))
       packet = TargetModel.packet(target_name, packet_name, scope: scope)
       found_item = nil
       packet['items'].each do |item|
@@ -136,10 +136,10 @@ module OpenC3
       TargetModel.set_packet(target_name, packet_name, packet, scope: scope)
 
       message = "Enabling Limits For '#{target_name} #{packet_name} #{item_name}'"
-      Logger.info(message, scope: scope)
+      Logger.info(message, scope: scope, user: username)
 
       event = { type: :LIMITS_ENABLE_STATE, target_name: target_name, packet_name: packet_name,
-                item_name: item_name, enabled: true, time_nsec: Time.now.to_nsec_from_epoch, message: message }
+                item_name: item_name, enabled: true, time_nsec: Time.now.to_nsec_from_epoch, message: message, username: username }
       LimitsEventTopic.write(event, scope: scope)
     end
 
@@ -154,7 +154,7 @@ module OpenC3
     # @param args [String|Array<String>] See the description for calling style
     def disable_limits(*args, manual: false, scope: $openc3_scope, token: $openc3_token)
       target_name, packet_name, item_name = _tlm_process_args(args, 'disable_limits', scope: scope)
-      authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token)
+      username = Authorization.audit_username(authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token))
       packet = TargetModel.packet(target_name, packet_name, scope: scope)
       found_item = nil
       packet['items'].each do |item|
@@ -169,10 +169,10 @@ module OpenC3
       TargetModel.set_packet(target_name, packet_name, packet, scope: scope)
 
       message = "Disabling Limits for '#{target_name} #{packet_name} #{item_name}'"
-      Logger.info(message, scope: scope)
+      Logger.info(message, scope: scope, user: username)
 
       event = { type: :LIMITS_ENABLE_STATE, target_name: target_name, packet_name: packet_name,
-                item_name: item_name, enabled: false, time_nsec: Time.now.to_nsec_from_epoch, message: message }
+                item_name: item_name, enabled: false, time_nsec: Time.now.to_nsec_from_epoch, message: message, username: username }
       LimitsEventTopic.write(event, scope: scope)
     end
 
@@ -203,7 +203,7 @@ module OpenC3
     def set_limits(target_name, packet_name, item_name, red_low, yellow_low, yellow_high, red_high,
                    green_low = nil, green_high = nil, limits_set = 'CUSTOM', persistence = nil, enabled = true,
                    manual: false, scope: $openc3_scope, token: $openc3_token)
-      authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token)
+      username = Authorization.audit_username(authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token))
       if (red_low > yellow_low) || (yellow_low >= yellow_high) || (yellow_high > red_high)
         raise "Invalid limits specified. Ensure yellow limits are within red limits."
       end
@@ -240,14 +240,14 @@ module OpenC3
       message = "Setting '#{target_name} #{packet_name} #{item_name}' limits to #{red_low} #{yellow_low} #{yellow_high} #{red_high}"
       message << " #{green_low} #{green_high}" if green_low && green_high
       message << " in set #{limits_set} with persistence #{persistence} as enabled #{enabled}"
-      Logger.info(message, scope: scope)
+      Logger.info(message, scope: scope, user: username)
 
       TargetModel.set_packet(target_name, packet_name, packet, scope: scope)
 
       event = { type: :LIMITS_SETTINGS, target_name: target_name, packet_name: packet_name,
                 item_name: item_name, red_low: red_low, yellow_low: yellow_low, yellow_high: yellow_high, red_high: red_high,
                 green_low: green_low, green_high: green_high, limits_set: limits_set, persistence: persistence, enabled: enabled,
-                time_nsec: Time.now.to_nsec_from_epoch, message: message }
+                time_nsec: Time.now.to_nsec_from_epoch, message: message, username: username }
       LimitsEventTopic.write(event, scope: scope)
     end
 
@@ -285,11 +285,11 @@ module OpenC3
     #
     # @param limits_set [String] The name of the limits set
     def set_limits_set(limits_set, manual: false, scope: $openc3_scope, token: $openc3_token)
-      authorize(permission: 'tlm_set', manual: manual, scope: scope, token: token)
+      username = Authorization.audit_username(authorize(permission: 'tlm_set', manual: manual, scope: scope, token: token))
       message = "Setting Limits Set: #{limits_set}"
-      Logger.info(message, scope: scope)
+      Logger.info(message, scope: scope, user: username)
       LimitsEventTopic.write({ type: :LIMITS_SET, set: limits_set.to_s,
-        time_nsec: Time.now.to_nsec_from_epoch, message: message }, scope: scope)
+        time_nsec: Time.now.to_nsec_from_epoch, message: message, username: username }, scope: scope)
     end
 
     # Returns the active limits set that applies to all telemetry
@@ -319,12 +319,12 @@ module OpenC3
 
     # Enables or disables a limits group
     def _limits_group(group_name, action:, manual:, scope:, token:)
-      authorize(permission: 'tlm_set', manual: manual, scope: scope, token: token)
+      username = Authorization.audit_username(authorize(permission: 'tlm_set', manual: manual, scope: scope, token: token))
       group_name.upcase!
       group = get_limits_groups(scope: scope, token: token)[group_name]
       raise "LIMITS_GROUP #{group_name} undefined. Ensure your telemetry definition contains the line: LIMITS_GROUP #{group_name}" unless group
 
-      Logger.info("#{action.to_s.capitalize} Limits Group: #{group_name}", scope: scope)
+      Logger.info("#{action.to_s.capitalize} Limits Group: #{group_name}", scope: scope, user: username)
       last_target_name = nil
       last_packet_name = nil
       packet = nil
@@ -346,10 +346,10 @@ module OpenC3
               item['limits']['enabled'] = false
               message = "Disabling Limits for '#{target_name} #{packet_name} #{item_name}'"
             end
-            Logger.info(message, scope: scope)
+            Logger.info(message, scope: scope, user: username)
 
             event = { type: :LIMITS_ENABLE_STATE, target_name: target_name, packet_name: packet_name,
-                      item_name: item_name, enabled: enabled, time_nsec: Time.now.to_nsec_from_epoch, message: message }
+                      item_name: item_name, enabled: enabled, time_nsec: Time.now.to_nsec_from_epoch, message: message, username: username }
             LimitsEventTopic.write(event, scope: scope)
             break
           end

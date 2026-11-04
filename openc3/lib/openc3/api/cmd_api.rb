@@ -166,11 +166,14 @@ module OpenC3
     def send_raw(interface_name, data, manual: false, scope: $openc3_scope, token: $openc3_token)
       interface_name = interface_name.upcase
       interface = get_interface(interface_name, scope: scope, token: token)
+      # Always authorize the raw write on the interface itself so an interface with
+      # no mapped command targets is still checked and the caller is identified
+      user = authorize(permission: 'cmd_raw', interface_name: interface_name, manual: manual, scope: scope, token: token)
       # Verify we have command authority on all the targets mapped to this interface
       interface['cmd_target_names'].each do |target_name|
         authorize(permission: 'cmd_raw', interface_name: interface_name, target_name: target_name, manual: manual, scope: scope, token: token)
       end
-      InterfaceTopic.write_raw(interface_name, data, scope: scope)
+      InterfaceTopic.write_raw(interface_name, data, username: Authorization.audit_username(user), scope: scope)
     end
 
     # Returns the raw buffer from the most recent specified command packet.
@@ -482,23 +485,8 @@ module OpenC3
       cmd_name = cmd_name.upcase
       cmd_params = cmd_params.transform_keys(&:upcase)
       user = authorize(permission: 'cmd', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
-      if user.nil?
-        user = {}
-        user['username'] = ENV['OPENC3_MICROSERVICE_NAME']
-
-        # Get the caller stack trace to determine the point in the code where the command was called
-        # This code works but ultimately we didn't want to overload 'username' and take a performance hit
-        # caller.each do |frame|
-        #   # Look for the following line in the stack trace which indicates custom code
-        #   # /tmp/d20240827-62-8e57pf/targets/INST/lib/example_limits_response.rb:31:in `call'
-        #   if frame.include?("/targets/#{target_name}")
-        #     user = {}
-        #     # username is the name of the custom code file
-        #     user['username'] = frame.split("/targets/")[-1].split(':')[0]
-        #     break
-        #   end
-        # end
-      end
+      # Internal callers (no token, e.g. a limits response) are attributed to the microservice
+      username = Authorization.audit_username(user)
 
       packet = TargetModel.packet(target_name, cmd_name, type: :CMD, scope: scope)
       if packet['disabled']
@@ -520,7 +508,6 @@ module OpenC3
         end
       end
       cmd_string = _build_cmd_output_string(method_name, target_name, cmd_name, cmd_params, packet)
-      username = user && user['username'] ? user['username'] : 'anonymous'
       command = {
         'target_name' => target_name,
         'cmd_name' => cmd_name,
