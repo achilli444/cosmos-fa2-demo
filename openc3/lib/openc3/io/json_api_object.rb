@@ -214,14 +214,16 @@ module OpenC3
     # NOTE: This is a helper method and should not be called directly
     def _send_request(method:, endpoint:, kwargs:)
       uri = URI("#{@url}#{endpoint}")
-      @log[0] = "#{method} Request: #{uri.to_s} #{kwargs}"
+      # Redact the Authorization header / token so the request dump that is
+      # echoed in debug output and Api Exception messages never carries a credential
+      @log[0] = "#{method} Request: #{uri.to_s} #{Logger.scrub_hash(kwargs)}"
       STDOUT.puts @log[0] if JsonDRb.debug?
 
       retry_count = 0
       while retry_count <= RETRY_COUNT
         begin
           resp = _http_request(method: method, uri: uri, kwargs: kwargs)
-          @log[1] = "#{method} Response: #{resp.status} #{resp.headers} #{resp.body}"
+          @log[1] = "#{method} Response: #{resp.status} #{Logger.scrub_hash(resp.headers.to_h)} #{Logger.scrub(resp.body)}"
           STDOUT.puts @log[1] if JsonDRb.debug?
           @response_data = resp.body
           return resp

@@ -89,6 +89,46 @@ module OpenC3
       end
     end
 
+    describe "credential redaction" do
+      let(:api_object) { JsonApiObject.new(url: 'http://openc3-cosmos-cmd-tlm-api:2901', timeout: 1.0) }
+
+      before(:each) do
+        api_object.send(:connect)
+        allow(api_object).to receive(:connect)
+        allow(api_object).to receive(:sleep)
+      end
+
+      it "does not embed the Authorization token in the Api Exception message" do
+        expect(api_object).to receive(:_http_request).once.and_raise(Faraday::TimeoutError.new('read timeout'))
+        expect {
+          api_object.request('post', '/openc3-api/timeline', scope: 'DEFAULT', token: 'super_secret_token', data: { 'password' => 'hunter2' }, json: true)
+        }.to raise_error(RuntimeError) do |error|
+          expect(error.message).to include('Api Exception')
+          expect(error.message).not_to include('super_secret_token')
+          expect(error.message).not_to include('hunter2')
+          expect(error.message).to include('[REDACTED]')
+          expect(error.message).to include('/openc3-api/timeline')
+        end
+      end
+
+      it "does not print the Authorization token in debug output" do
+        allow(JsonDRb).to receive(:debug?).and_return(true)
+        stdout = StringIO.new('', 'r+')
+        saved_stdout_const = Object.const_get(:STDOUT)
+        OpenC3.disable_warnings { Object.const_set(:STDOUT, stdout) }
+        begin
+          expect(api_object).to receive(:_http_request).once.and_raise(Faraday::TimeoutError.new('read timeout'))
+          expect {
+            api_object.request('post', '/openc3-api/timeline', scope: 'DEFAULT', token: 'super_secret_token')
+          }.to raise_error(/Api Exception/)
+        ensure
+          OpenC3.disable_warnings { Object.const_set(:STDOUT, saved_stdout_const) }
+        end
+        expect(stdout.string).to include('Request:')
+        expect(stdout.string).not_to include('super_secret_token')
+      end
+    end
+
     describe "timeout retry behavior" do
       let(:api_object) { JsonApiObject.new(url: 'http://openc3-cosmos-cmd-tlm-api:2901', timeout: 1.0) }
 

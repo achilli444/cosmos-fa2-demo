@@ -44,6 +44,17 @@ RSpec.describe RedisController, type: :controller do
       expect(json["result"]).to eq("OK")
     end
 
+    it "does not log command values or results" do
+      expect_any_instance_of(OpenC3::Store).to receive(:method_missing).with(:HGET, ["DEFAULT__openc3__secrets", "API_KEY"]).and_return("plaintext_secret_value")
+      logged = nil
+      expect(OpenC3::Logger).to receive(:info) { |message, **_kwargs| logged = message }
+      request.content_type = "text/plain"
+      post :execute_raw, body: "HGET DEFAULT__openc3__secrets API_KEY", params: { scope: "DEFAULT" }
+      expect(response).to have_http_status(:created)
+      expect(logged).to include("HGET DEFAULT__openc3__secrets")
+      expect(logged).not_to include("plaintext_secret_value")
+    end
+
     it "requires admin access" do
       request.content_type = "text/plain"
       post :execute_raw, body: "GET key"

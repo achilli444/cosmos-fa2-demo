@@ -54,6 +54,20 @@ RSpec.describe ApiController, type: :controller do
       allow(OpenC3::Cts).to receive(:instance).and_return(@cts)
     end
 
+    it "redacts the Authorization header from the debug log" do
+      request.env["RAW_POST_DATA"] = sample_request
+      request.headers["Authorization"] = "super_secret_session_token"
+      allow(@json_drb).to receive(:process_request).and_return([sample_response, nil])
+      logged = []
+      allow(OpenC3::Logger).to receive(:debug) { |message, **_kwargs| logged << message }
+
+      post :api
+      expect(response).to have_http_status(:ok)
+      headers_log = logged.find { |m| m.start_with?("API headers:") }
+      expect(headers_log).to include("HTTP_AUTHORIZATION")
+      expect(headers_log).not_to include("super_secret_session_token")
+    end
+
     it "handles successful requests" do
       request.env["RAW_POST_DATA"] = sample_request
       allow(@json_drb).to receive(:process_request).and_return([sample_response, nil])

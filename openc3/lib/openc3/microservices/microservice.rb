@@ -124,7 +124,7 @@ module OpenC3
         @config = {}
         @plugin = nil
       end
-      @logger.info("Microservice initialized with config:\n#{@config}")
+      @logger.info("Microservice initialized with config:\n#{loggable_config(@config)}")
       @topics ||= []
       @microservice_topic = "MICROSERVICE__#{@name}"
       @db_shard = (@config['db_shard'] || 0).to_i
@@ -254,6 +254,16 @@ module OpenC3
         # Ignore logging failures during shutdown
       end
       @shutdown_complete = true
+    end
+
+    # Copy of the microservice config safe to write to the central log: plugin
+    # ENV values (which may hold credentials) are redacted, only their names kept
+    def loggable_config(config)
+      log_config = Logger.scrub_hash(config)
+      if log_config['env'].is_a?(Hash)
+        log_config['env'] = log_config['env'].transform_values { Logger::REDACTED }
+      end
+      log_config
     end
 
     def setup_microservice_topic
