@@ -35,37 +35,15 @@ class PluginsController < ModelController
     uri = URI.parse(gem_url)
     return gem_url unless ['localhost', '127.0.0.1'].include? uri.host
 
-    api_key_setting = OpenC3::SettingModel.get(name: 'store_api_key', scope: 'DEFAULT')
-    api_key = api_key_setting['data'] if api_key_setting
-
-    test_url = "http://#{uri.host}:#{uri.port}/api/v1.2/cosmos_plugins/#{store_plugin_id}"
-    begin
-      uri_obj = URI(test_url)
-      req = Net::HTTP::Get.new(uri_obj)
-      req['Authorization'] = "Bearer #{api_key}" if api_key && !api_key.strip.empty?
-
-      response = Net::HTTP.start(uri_obj.hostname, uri_obj.port) do |http|
-        http.request(req)
-      end
-      return gem_url if response.code.to_i < 400
-    rescue
-      # localhost not reachable, try host.docker.internal
-    end
+    # Reachability probes only decide which hostname answers; they carry no
+    # credentials. The store API key is sent solely on the gem download.
+    scheme = uri.scheme || 'http'
+    test_url = "#{scheme}://#{uri.host}:#{uri.port}/api/v1.2/cosmos_plugins/#{store_plugin_id}"
+    return gem_url if store_host_reachable?(test_url)
 
     docker_gem_url = gem_url.gsub(uri.host, 'host.docker.internal')
     docker_test_url = test_url.gsub(uri.host, 'host.docker.internal')
-    begin
-      uri_obj = URI(docker_test_url)
-      req = Net::HTTP::Get.new(uri_obj)
-      req['Authorization'] = "Bearer #{api_key}" if api_key && !api_key.strip.empty?
-
-      response = Net::HTTP.start(uri_obj.hostname, uri_obj.port) do |http|
-        http.request(req)
-      end
-      return docker_gem_url if response.code.to_i < 400
-    rescue
-      # host.docker.internal not reachable either
-    end
+    return docker_gem_url if store_host_reachable?(docker_test_url)
 
     nil # indicates unreachable download location
   end
@@ -281,5 +259,21 @@ class PluginsController < ModelController
       logger.error(error.formatted)
       render json: { status: 'error', message: error.message }, status: :internal_server_error
     end
+  end
+
+  private
+
+  # Any HTTP answer below 400 proves the host is reachable. 401/403 also prove
+  # it: the probe is unauthenticated, and the credentialed download follows.
+  def store_host_reachable?(test_url)
+    uri_obj = URI(test_url)
+    req = Net::HTTP::Get.new(uri_obj)
+    response = Net::HTTP.start(uri_obj.hostname, uri_obj.port, use_ssl: uri_obj.scheme == 'https') do |http|
+      http.request(req)
+    end
+    code = response.code.to_i
+    code < 400 || [401, 403].include?(code)
+  rescue
+    false
   end
 end
