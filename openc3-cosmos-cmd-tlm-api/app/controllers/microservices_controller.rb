@@ -65,7 +65,11 @@ class MicroservicesController < ModelController
     head :ok
   end
 
+  # Polled by the traefik HTTP provider (see openc3-traefik/traefik.yaml) to
+  # build the dynamic routes for every microservice. The routing map covers
+  # all scopes so it is only served to the service credential traefik sends.
   def traefik
+    return unless service_authorization()
     result = {}
     result['http'] = {}
     http = result['http']
