@@ -181,7 +181,20 @@ class Store(metaclass=StoreMeta):
             password=OPENC3_REDIS_PASSWORD,
             retry=Retry(EqualJitterBackoff(cap=5, base=0.625), 3),
             retry_on_error=[BusyLoadingError, ConnectionError, TimeoutError],
+            **self.tls_options(),
         )
+
+    @staticmethod
+    def tls_options():
+        """TLS keyword arguments for the Valkey client (mirrors Ruby
+        TransportSecurity.redis_ssl_params): peer-verified TLS unless
+        OPENC3_PLAINTEXT_TRANSPORT is set."""
+        if OPENC3_PLAINTEXT_TRANSPORT:
+            return {}
+        options = {"ssl": True, "ssl_cert_reqs": "required"}
+        if OPENC3_TLS_CA_FILE:
+            options["ssl_ca_certs"] = OPENC3_TLS_CA_FILE
+        return options
 
     ###########################################################################
     # Stream APIs

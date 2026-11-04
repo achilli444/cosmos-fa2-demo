@@ -31,6 +31,8 @@ import psycopg
 from psycopg.rows import dict_row
 from questdb.ingress import Protocol, Sender, TimestampNanos
 
+from openc3.environment import OPENC3_TLS_CA_FILE, OPENC3_TSDB_DEFAULT_SSLMODE
+
 
 # Sentinel values for storing float special values (inf, -inf, nan) in QuestDB.
 # QuestDB stores these as NULL, so we use sentinel values near float max instead.
@@ -190,8 +192,22 @@ class QuestDBClient:
             user=os.environ.get("OPENC3_TSDB_USERNAME"),
             password=os.environ.get("OPENC3_TSDB_PASSWORD"),
             dbname="qdb",
+            **QuestDBClient.tls_connection_params(),
             **extra_kwargs,
         )
+
+    @staticmethod
+    def tls_connection_params():
+        """libpq TLS parameters (mirrors Ruby QuestDBClient.connection_params).
+
+        sslmode defaults to verify-full so a missing or untrusted server
+        certificate fails instead of silently falling back to plaintext;
+        OPENC3_TSDB_SSLMODE overrides it (e.g. 'require' for a self-signed cert).
+        """
+        params = {"sslmode": os.environ.get("OPENC3_TSDB_SSLMODE") or OPENC3_TSDB_DEFAULT_SSLMODE}
+        if OPENC3_TLS_CA_FILE:
+            params["sslrootcert"] = OPENC3_TLS_CA_FILE
+        return params
 
     @classmethod
     def connection(cls, db_shard=0):

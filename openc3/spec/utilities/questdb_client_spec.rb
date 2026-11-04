@@ -189,5 +189,51 @@ module OpenC3
         expect(selects).to eq([QuestDBClient::TIMESTAMP_SELECT])
       end
     end
+
+    describe "connection_params" do
+      around(:each) do |example|
+        saved = ENV.to_h.slice('OPENC3_PLAINTEXT_TRANSPORT', 'OPENC3_TLS_CA_FILE', 'OPENC3_TSDB_SSLMODE', 'OPENC3_TSDB_HOSTNAME')
+        ENV.delete('OPENC3_PLAINTEXT_TRANSPORT')
+        ENV.delete('OPENC3_TLS_CA_FILE')
+        ENV.delete('OPENC3_TSDB_SSLMODE')
+        ENV['OPENC3_TSDB_HOSTNAME'] = 'openc3-tsdb-SHARDNUM'
+        example.run
+      ensure
+        ENV.delete('OPENC3_PLAINTEXT_TRANSPORT')
+        ENV.delete('OPENC3_TLS_CA_FILE')
+        ENV.delete('OPENC3_TSDB_SSLMODE')
+        ENV.delete('OPENC3_TSDB_HOSTNAME')
+        ENV.update(saved)
+      end
+
+      it "requires a verified TLS connection by default" do
+        params = QuestDBClient.connection_params(2)
+        expect(params[:host]).to eq 'openc3-tsdb-2'
+        expect(params[:dbname]).to eq 'qdb'
+        expect(params[:sslmode]).to eq 'verify-full'
+        expect(params).not_to have_key(:sslrootcert)
+      end
+
+      it "passes OPENC3_TLS_CA_FILE as sslrootcert" do
+        ENV['OPENC3_TLS_CA_FILE'] = '/etc/openc3/ca.pem'
+        expect(QuestDBClient.connection_params[:sslrootcert]).to eq '/etc/openc3/ca.pem'
+      end
+
+      it "lets OPENC3_TSDB_SSLMODE override the default" do
+        ENV['OPENC3_TSDB_SSLMODE'] = 'require'
+        expect(QuestDBClient.connection_params[:sslmode]).to eq 'require'
+      end
+
+      it "keeps libpq's prefer only when OPENC3_PLAINTEXT_TRANSPORT is set" do
+        ENV['OPENC3_PLAINTEXT_TRANSPORT'] = '1'
+        expect(QuestDBClient.connection_params[:sslmode]).to eq 'prefer'
+      end
+
+      it "opens both the shared and the health-check connection with those params" do
+        expect(PG::Connection).to receive(:new).with(hash_including(sslmode: 'verify-full')).twice.and_return(double("conn", close: nil))
+        QuestDBClient.check_connection
+        QuestDBClient.check_connection(db_shard: 1)
+      end
+    end
   end
 end

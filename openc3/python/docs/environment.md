@@ -6,12 +6,54 @@
 
 > CORE, ENTERPRISE
 
-Set the schema for OpenC3 COSMOS. Normal options are `http` or `https`. The default is `http`
+Set the schema for OpenC3 COSMOS. Normal options are `http` or `https`. The default is `https`, or `http` when `OPENC3_PLAINTEXT_TRANSPORT` is set (see below).
 
 Example:
 
 ```
-OPENC3_API_SCHEMA=http
+OPENC3_API_SCHEMA=https
+```
+
+## OPENC3_PLAINTEXT_TRANSPORT
+
+---
+
+> CORE, ENTERPRISE
+
+The internal service clients (API authentication, script API proxies, Redis / Valkey, the QuestDB PG wire connection and the local bucket) default to TLS: `https://`, `rediss://` with peer verification and libpq `sslmode=verify-full`. Set this to `1` (or `true`) only for a development stack whose backing services do not terminate TLS; it restores `http://`, `redis://` and `sslmode=prefer`. The shipped `.env` sets it for `compose.yaml`.
+
+Example:
+
+```
+OPENC3_PLAINTEXT_TRANSPORT=1
+```
+
+## OPENC3_TLS_CA_FILE
+
+---
+
+> CORE, ENTERPRISE
+
+Path to a PEM bundle of the CA that signed the Valkey / QuestDB / bucket / API certificates, when it is not in the system trust store.
+
+Example:
+
+```
+OPENC3_TLS_CA_FILE=/etc/openc3/ca.pem
+```
+
+## OPENC3_TSDB_SSLMODE
+
+---
+
+> CORE, ENTERPRISE
+
+libpq `sslmode` for the QuestDB query connection. Defaults to `verify-full` (`prefer` with `OPENC3_PLAINTEXT_TRANSPORT`). Use `require` for a self-signed certificate that cannot be verified.
+
+Example:
+
+```
+OPENC3_TSDB_SSLMODE=require
 ```
 
 ## OPENC3_API_HOSTNAME

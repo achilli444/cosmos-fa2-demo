@@ -18,7 +18,9 @@
 require 'openc3/version'
 require 'openc3/io/json_drb'
 require 'faraday'
+require 'json'
 require 'uri'
+require 'openc3/utilities/transport_security'
 
 module OpenC3
   # Basic exception for known errors
@@ -59,7 +61,13 @@ module OpenC3
     end
 
     def _make_auth_request(password)
-      Faraday.new.post(_generate_auth_url, '{"password": "' + password + '"}', {'Content-Type' => 'application/json'})
+      _http_client.post(_generate_auth_url, _auth_request_body(password), {'Content-Type' => 'application/json'})
+    end
+
+    # JSON-encode rather than concatenate so quotes and backslashes in the
+    # password cannot break out of the JSON string
+    def _auth_request_body(password)
+      JSON.generate({ 'password' => password })
     end
 
     def _make_otp_request(scope: 'DEFAULT')
@@ -69,11 +77,18 @@ module OpenC3
       headers = {
         'Authorization' => token,
       }
-      Faraday.new.get(_generate_auth_url('/auth/otp'), params, headers)
+      _http_client.get(_generate_auth_url('/auth/otp'), params, headers)
+    end
+
+    # Faraday verifies the server certificate by default; OPENC3_TLS_CA_FILE
+    # adds a private CA bundle for deployments not using a public CA
+    def _http_client
+      ca_file = TransportSecurity.ca_file
+      ca_file ? Faraday.new(ssl: { ca_file: ca_file }) : Faraday.new
     end
 
     def _generate_auth_url(endpoint = nil)
-      schema = ENV['OPENC3_API_SCHEMA'] || 'http'
+      schema = ENV['OPENC3_API_SCHEMA'] || TransportSecurity.http_scheme
       hostname = ENV['OPENC3_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-cmd-tlm-api')
       port = ENV['OPENC3_API_PORT'] || '2901'
       port = port.to_i

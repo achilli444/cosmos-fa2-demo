@@ -19,6 +19,7 @@ require 'redis'
 require 'hiredis-client'
 require 'json'
 require 'connection_pool'
+require 'openc3/utilities/transport_security'
 
 module OpenC3
   class StoreConnectionPool < ConnectionPool
@@ -119,7 +120,7 @@ module OpenC3
       @redis_username = ENV.fetch('OPENC3_REDIS_USERNAME', nil)
       @redis_key = ENV.fetch('OPENC3_REDIS_PASSWORD', nil)
       hostname = ENV['OPENC3_REDIS_HOSTNAME'].to_s.gsub("SHARDNUM", db_shard.to_s)
-      @redis_url = "redis://#{hostname}:#{ENV.fetch('OPENC3_REDIS_PORT', 6379)}"
+      @redis_url = "#{TransportSecurity.redis_scheme}://#{hostname}:#{ENV.fetch('OPENC3_REDIS_PORT', 6379)}"
       @redis_pool = StoreConnectionPool.new(size: pool_size) { build_redis() }
     end
 
@@ -140,12 +141,18 @@ module OpenC3
       # (no per-failure backoff callable), so we sample the jittered delays once
       # per connection here.
       # Connection, read, and write timeouts are left as the default: 1s
-      return Redis.new(
+      #
+      # A rediss:// url turns on TLS in redis-rb; ssl_params pins peer
+      # verification (and the OPENC3_TLS_CA_FILE bundle when set).
+      options = {
         url: @redis_url,
         username: @redis_username,
         password: @redis_key,
         reconnect_attempts: reconnect_backoff_delays()
-      )
+      }
+      ssl_params = TransportSecurity.redis_ssl_params
+      options[:ssl_params] = ssl_params if ssl_params
+      return Redis.new(**options)
     end
 
     # Equal-jitter backoff delays for 3 retries, matching Python's
@@ -299,7 +306,7 @@ module OpenC3
     def initialize(pool_size = 10, db_shard: 0)
       super(pool_size)
       hostname = ENV['OPENC3_REDIS_EPHEMERAL_HOSTNAME'].to_s.gsub("SHARDNUM", db_shard.to_s)
-      @redis_url = "redis://#{hostname}:#{ENV.fetch('OPENC3_REDIS_EPHEMERAL_PORT', 6380)}"
+      @redis_url = "#{TransportSecurity.redis_scheme}://#{hostname}:#{ENV.fetch('OPENC3_REDIS_EPHEMERAL_PORT', 6380)}"
       @redis_pool = StoreConnectionPool.new(size: pool_size) { build_redis() }
     end
   end

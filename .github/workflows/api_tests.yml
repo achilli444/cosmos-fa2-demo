@@ -34,6 +34,8 @@ env:
   OPENC3_REDIS_EPHEMERAL_HOSTNAME: 127.0.0.1
   OPENC3_REDIS_EPHEMERAL_PORT: 6380
   OPENC3_SERVICE_PASSWORD: openc3service
+  # The CI redis service does not terminate TLS; clients default to rediss://
+  OPENC3_PLAINTEXT_TRANSPORT: 1
 
 permissions:
   contents: read

@@ -19,6 +19,7 @@ module OpenC3
   autoload(:Logger, 'openc3/utilities/logger.rb')
   autoload(:Authorization, 'openc3/utilities/authorization.rb')
   autoload(:Store, 'openc3/utilities/store_autoload.rb')
+  autoload(:TransportSecurity, 'openc3/utilities/transport_security.rb')
   autoload(:Sleeper, 'openc3/utilities/sleeper.rb')
   autoload(:Crc, 'openc3/utilities/crc.rb')
   autoload(:Crc16, 'openc3/utilities/crc.rb')

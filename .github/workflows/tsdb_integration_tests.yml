@@ -68,6 +68,8 @@ jobs:
       OPENC3_TSDB_USERNAME: admin
       OPENC3_TSDB_PASSWORD: admin
       OPENC3_SCOPE: DEFAULT
+      # The CI QuestDB service does not terminate TLS; clients default to sslmode=verify-full
+      OPENC3_PLAINTEXT_TRANSPORT: 1
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

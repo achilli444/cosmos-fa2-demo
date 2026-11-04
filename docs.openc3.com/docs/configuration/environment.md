@@ -122,6 +122,10 @@ Set in `.env`, or overridden per service in `compose.override.yaml`:
 | `OPENC3_REGISTRY`, `OPENC3_NAMESPACE` | `docker.io`, `openc3inc` | Where to pull COSMOS images from |
 | `OPENC3_LOGS_BUCKET`, `OPENC3_TOOLS_BUCKET`, `OPENC3_CONFIG_BUCKET` | `logs`, `tools`, `config` | Bucket names |
 | `OPENC3_REDIS_HOSTNAME`, `OPENC3_REDIS_PORT` | `openc3-redis`, `6379` | Redis / Valkey connection |
+| `OPENC3_PLAINTEXT_TRANSPORT` | `1` in the shipped `.env` | The service clients (API authentication, script API proxies, Redis / Valkey, QuestDB PG wire, local bucket) default to TLS: `https://`, `rediss://` with peer verification and `sslmode=verify-full`. Setting this to `1` opts a stack whose backing services do not terminate TLS back into `http://`, `redis://` and libpq `sslmode=prefer`. Remove it for a hardened deployment |
+| `OPENC3_TLS_CA_FILE` | _(unset)_ | PEM bundle of the CA that signed the Valkey / QuestDB / bucket / API certificates, when it is not in the system trust store |
+| `OPENC3_TSDB_SSLMODE` | `verify-full` (`prefer` with `OPENC3_PLAINTEXT_TRANSPORT`) | libpq `sslmode` for the QuestDB query connection, e.g. `require` for a self-signed certificate |
+| `OPENC3_API_SCHEMA`, `OPENC3_SCRIPT_API_SCHEMA` | `https` (`http` with `OPENC3_PLAINTEXT_TRANSPORT`) | Scheme the service authentication and script API proxies use to reach the APIs |
 | `OPENC3_CLOUD` | `local` | Cloud provider, for bucket and secret handling |
 | `RUBYGEMS_URL`, `PYPI_URL`, `NPM_URL`, `MAVEN_URL` | public mirrors | Package sources used at *build* time. To change the URLs COSMOS uses at *run* time, set the `rubygems_url` / `pypi_url` Admin settings |
 
