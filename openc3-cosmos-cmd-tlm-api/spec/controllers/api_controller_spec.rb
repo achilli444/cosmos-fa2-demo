@@ -101,6 +101,29 @@ RSpec.describe ApiController, type: :controller do
       expect(response.body).to eq(sample_error_responses[:method_not_found])
     end
 
+    it "redacts credential headers from the debug log but passes them through unchanged" do
+      request.env["RAW_POST_DATA"] = sample_request
+      request.env["HTTP_AUTHORIZATION"] = "Bearer super-secret-token"
+      request.env["HTTP_COOKIE"] = "openc3_session=cookie-secret"
+      request.env["HTTP_IGNORE_ERRORS"] = "404"
+
+      allow(@json_drb).to receive(:process_request).and_return([sample_response, nil])
+
+      post :api
+      expect(response).to have_http_status(:ok)
+
+      expect(OpenC3::Logger).to have_received(:debug).with(a_string_starting_with("API headers:"), anything) do |message, _|
+        expect(message).not_to include("super-secret-token")
+        expect(message).not_to include("cookie-secret")
+        expect(message).to include('"HTTP_AUTHORIZATION" => "[FILTERED]"')
+        expect(message).to include('"HTTP_COOKIE" => "[FILTERED]"')
+        expect(message).to include('"HTTP_IGNORE_ERRORS" => "404"')
+      end
+      expect(@json_drb).to have_received(:process_request).with(
+        hash_including(request_headers: hash_including("HTTP_AUTHORIZATION" => "Bearer super-secret-token"))
+      )
+    end
+
     it "supports ignored errors header" do
       request.env["RAW_POST_DATA"] = sample_request
       request.env["HTTP_IGNORE_ERRORS"] = "500"
