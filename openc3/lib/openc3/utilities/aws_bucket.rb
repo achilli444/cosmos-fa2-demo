@@ -24,13 +24,15 @@ module OpenC3
       super()
       @client = Aws::S3::Client.new
       @aws_arn = ENV['OPENC3_AWS_ARN_PREFIX'] || 'arn:aws'
-      # Checksums are supported by real AWS S3 but may not be supported by
-      # S3-compatible backends like versitygw. Auto-detect based on
-      # whether a custom endpoint is configured. Can be overridden with ENV var.
+      # Request a SHA256 checksum on every write so the stored object carries an
+      # integrity value that response_checksum_validation (s3_autoload.rb) can
+      # verify on read. Supported by AWS S3 and the bundled versitygw (>= 1.8.0).
+      # Set OPENC3_NO_S3_CHECKSUM to a non-empty value to disable for older
+      # S3-compatible backends that reject checksum headers.
       @use_checksum = if ENV.key?('OPENC3_NO_S3_CHECKSUM')
         ENV['OPENC3_NO_S3_CHECKSUM'].to_s.empty?  # Empty string means use checksum
       else
-        ENV.fetch('OPENC3_CLOUD', 'local').downcase == 'aws'
+        true
       end
     end
 

@@ -276,7 +276,8 @@ module OpenC3
           body: anything,
           cache_control: "no-store",
           content_type: "text/html",
-          metadata: nil
+          metadata: nil,
+          checksum_algorithm: "SHA256"
         )
 
         model = ToolModel.new(folder_name: folder, name: name, scope: scope, plugin: 'PLUGIN')
