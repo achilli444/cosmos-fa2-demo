@@ -740,6 +740,109 @@ RSpec.describe StorageController, type: :controller do
     end
   end
 
+  describe "log retention floor" do
+    let(:bucket_client) { instance_double(OpenC3::Bucket) }
+    let(:now) { Time.now }
+    let(:day) { 86_400 }
+
+    def log_key(type, start_time, end_time)
+      dir = start_time.strftime(OpenC3::BucketUtilities::DIRECTORY_TIMESTAMP_FORMAT)
+      "DEFAULT/#{type}/INST/#{dir}/#{start_time.strftime(OpenC3::BucketUtilities::FILE_TIMESTAMP_FORMAT)}__#{end_time.strftime(OpenC3::BucketUtilities::FILE_TIMESTAMP_FORMAT)}__DEFAULT__INST__ALL__rt__raw.bin.gz"
+    end
+
+    before do
+      ENV["OPENC3_LOCAL_MODE"] = nil
+      ENV["OPENC3_LOG_MIN_RETAIN_TIME"] = (7 * day).to_s
+      allow(OpenC3::Bucket).to receive(:getClient).and_return(bucket_client)
+      allow(bucket_client).to receive(:delete_object)
+      allow(bucket_client).to receive(:delete_objects)
+      allow(OpenC3::Logger).to receive(:warn)
+    end
+
+    after do
+      ENV.delete("OPENC3_LOG_MIN_RETAIN_TIME")
+    end
+
+    describe "DELETE delete" do
+      it "refuses a raw cmd log inside the retention floor" do
+        key = log_key("raw_logs/cmd", now - (2 * day), now - day)
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: key, scope: "DEFAULT"}
+        expect(response).to have_http_status(:forbidden)
+        expect(JSON.parse(response.body)["message"]).to include("Refusing to delete 1 cmd/tlm log object")
+        expect(bucket_client).not_to have_received(:delete_object)
+      end
+
+      it "refuses raw tlm and decom logs inside the retention floor" do
+        ["raw_logs/tlm", "decom_logs/tlm"].each do |type|
+          delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: log_key(type, now - (2 * day), now - day), scope: "DEFAULT"}
+          expect(response).to have_http_status(:forbidden)
+        end
+        expect(bucket_client).not_to have_received(:delete_object)
+      end
+
+      it "deletes a raw cmd log older than the retention floor and audits it" do
+        key = log_key("raw_logs/cmd", now - (10 * day), now - (9 * day))
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: key, scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+        expect(bucket_client).to have_received(:delete_object).with(bucket: "logs-bucket", key: key)
+        expect(OpenC3::Logger).to have_received(:info).with(/Log retention delete: logs-bucket\/#{Regexp.escape(key)} 1 object\(s\) older than .*#{Regexp.escape(key)}/, hash_including(scope: "DEFAULT"))
+      end
+
+      it "fails closed when the retention floor is unset" do
+        ENV.delete("OPENC3_LOG_MIN_RETAIN_TIME")
+        key = log_key("raw_logs/cmd", now - (400 * day), now - (399 * day))
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: key, scope: "DEFAULT"}
+        expect(response).to have_http_status(:forbidden)
+        expect(JSON.parse(response.body)["message"]).to include("OPENC3_LOG_MIN_RETAIN_TIME must be set")
+        expect(bucket_client).not_to have_received(:delete_object)
+      end
+
+      it "does not restrict other logs bucket content" do
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: "DEFAULT/tool_logs/sr/run.txt", scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+        expect(bucket_client).to have_received(:delete_object)
+      end
+
+      it "does not apply to the config bucket" do
+        ENV.delete("OPENC3_LOG_MIN_RETAIN_TIME")
+        delete :delete, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "file.txt", scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+      end
+    end
+
+    describe "DELETE delete_directory" do
+      it "refuses the whole directory when any cmd log is inside the retention floor" do
+        objects = [
+          double(key: log_key("raw_logs/cmd", now - (10 * day), now - (9 * day))),
+          double(key: log_key("raw_logs/cmd", now - (2 * day), now - day)),
+        ]
+        allow(bucket_client).to receive(:list_objects).and_return(objects)
+        delete :delete_directory, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: "DEFAULT/raw_logs/cmd/INST", scope: "DEFAULT"}
+        expect(response).to have_http_status(:forbidden)
+        expect(JSON.parse(response.body)["message"]).to include("Refusing to delete 1 cmd/tlm log object")
+        expect(bucket_client).not_to have_received(:delete_objects)
+      end
+
+      it "deletes a directory of expired cmd logs and audits every key" do
+        keys = [log_key("raw_logs/cmd", now - (10 * day), now - (9 * day)), log_key("raw_logs/cmd", now - (9 * day), now - (8 * day))]
+        allow(bucket_client).to receive(:list_objects).and_return(keys.map { |k| double(key: k) })
+        delete :delete_directory, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: "DEFAULT/raw_logs/cmd/INST", scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["deleted_count"]).to eq(2)
+        expect(bucket_client).to have_received(:delete_objects).with(bucket: "logs-bucket", keys: keys)
+        expect(OpenC3::Logger).to have_received(:info).with(/Log retention delete: logs-bucket\/DEFAULT\/raw_logs\/cmd\/INST\/ 2 object\(s\) older than .*#{Regexp.escape(keys[1])}/, hash_including(scope: "DEFAULT"))
+      end
+
+      it "fails closed for a scope-wide directory delete when the floor is unset" do
+        ENV.delete("OPENC3_LOG_MIN_RETAIN_TIME")
+        allow(bucket_client).to receive(:list_objects).and_return([double(key: log_key("raw_logs/cmd", now - (400 * day), now - (399 * day)))])
+        delete :delete_directory, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: "DEFAULT", scope: "DEFAULT"}
+        expect(response).to have_http_status(:forbidden)
+        expect(bucket_client).not_to have_received(:delete_objects)
+      end
+    end
+  end
+
   describe "DELETE delete_directory" do
     describe "bucket directory deletion" do
       let(:bucket_client) { instance_double(OpenC3::Bucket) }

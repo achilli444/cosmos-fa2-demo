@@ -121,6 +121,7 @@ Set in `.env`, or overridden per service in `compose.override.yaml`:
 | `OPENC3_DEMO` | `true` | Install the Demo plugin. Accepts `false` and `0` to disable |
 | `OPENC3_REGISTRY`, `OPENC3_NAMESPACE` | `docker.io`, `openc3inc` | Where to pull COSMOS images from |
 | `OPENC3_LOGS_BUCKET`, `OPENC3_TOOLS_BUCKET`, `OPENC3_CONFIG_BUCKET` | `logs`, `tools`, `config` | Bucket names |
+| `OPENC3_LOG_MIN_RETAIN_TIME` | `2592000` (30 days) | Minimum age in seconds before `raw_logs/cmd`, `raw_logs/tlm` and `decom_logs` objects in the logs bucket may be deleted, whether by an Admin Storage delete or by a target's `CMD_LOG_RETAIN_TIME` / `TLM_LOG_RETAIN_TIME` cleanup (shorter retain times are raised to this floor). If unset, those deletes are refused and every deletion is logged at info level with the prefix, cutoff time and object keys |
 | `OPENC3_REDIS_HOSTNAME`, `OPENC3_REDIS_PORT` | `openc3-redis`, `6379` | Redis / Valkey connection |
 | `OPENC3_CLOUD` | `local` | Cloud provider, for bucket and secret handling |
 | `RUBYGEMS_URL`, `PYPI_URL`, `NPM_URL`, `MAVEN_URL` | public mirrors | Package sources used at *build* time. To change the URLs COSMOS uses at *run* time, set the `rubygems_url` / `pypi_url` Admin settings |
