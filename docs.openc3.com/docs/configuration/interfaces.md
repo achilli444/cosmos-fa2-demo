@@ -184,7 +184,15 @@ openc3-operator:
 
 #### LISTEN_ADDRESS
 
-IP address to accept connections on. Default: `0.0.0.0`.
+IP address to accept connections on. Default: `0.0.0.0` (every address on the host). Set this to a specific address when the server should only be reachable on one network.
+
+#### ALLOWED_CLIENTS
+
+Space separated list of client IP addresses and/or CIDR ranges (e.g. `10.0.0.5 192.168.1.0/24`) that are allowed to connect. Connections from any other address are closed immediately and a warning is logged with the rejected address. Default: any client may connect. (Ruby only)
+
+#### MAX_CLIENTS
+
+Maximum number of simultaneously connected client sockets. Connections beyond the limit are closed immediately and a warning is logged. Default: unlimited. (Ruby only)
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python">
@@ -208,6 +216,8 @@ INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 10.0 TEMPLATE 
 INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 nil PREIDENTIFIED 0xCAFEBABE
 INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 10.0 # no built-in protocol
   OPTION LISTEN_ADDRESS 127.0.0.1
+  OPTION ALLOWED_CLIENTS 127.0.0.1 10.0.0.0/8
+  OPTION MAX_CLIENTS 4
 ```
 </TabItem>
 </Tabs>
