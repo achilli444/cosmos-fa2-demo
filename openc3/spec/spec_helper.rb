@@ -347,6 +347,16 @@ RSpec.configure do |config|
     allow(OpenC3::AuthModel).to receive(:verify_no_service) do |token, **kwargs|
       token == $openc3_token || token == $openc3_mock_token || token = $openc3_mock_otp || token == ENV['OPENC3_API_PASSWORD']
     end
+
+    allow(OpenC3::AuthModel).to receive(:role) do |token, **kwargs|
+      if token == $openc3_token || token == $openc3_mock_token || token == $openc3_mock_otp || token == ENV['OPENC3_API_PASSWORD']
+        OpenC3::AuthModel::ADMIN_ROLE
+      elsif token == ENV['OPENC3_SERVICE_PASSWORD']
+        OpenC3::AuthModel::SERVICE_ROLE
+      else
+        nil
+      end
+    end
   end
 
   # Before each test make sure $stdout and STDOUT are set. They might be messed
