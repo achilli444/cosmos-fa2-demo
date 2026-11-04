@@ -56,3 +56,19 @@ RESPONSE_TEXT=Webhook+Received%21%
 ```
 
 The request data is mirrored back to the PYTHON_SERVER / RUBY_SERVER REQUEST packet and the TEMPERATURE field will contain 123.
+
+### Securing the Server
+
+The servers listen on loopback (`127.0.0.1`) by default; this plugin sets `OPTION LISTEN_ADDRESS 0.0.0.0` so the compose port mapping can reach them. When exposing a server beyond loopback, require a bearer token and/or TLS:
+
+1. Create a secret (e.g. `HTTP_TOKEN`) in Admin / Secrets
+1. Uncomment the `SECRET ENV HTTP_TOKEN ... AUTH_TOKEN` line under the server interface and reinstall the plugin
+1. Pass the token with every request:
+
+```bash
+% curl -H "Authorization: Bearer <token>" "127.0.0.1:9090/webhook"
+RESPONSE_TEXT=Webhook+Received%21%
+% curl "127.0.0.1:9090/webhook"   # no token -> 401, not stored as telemetry
+```
+
+For HTTPS add `SSL_CERT` / `SSL_KEY` (and `SSL_CA_FILE` for client certificates) the same way. See the [HTTP Server Interface](https://docs.openc3.com/docs/configuration/interfaces#http-server-interface) documentation.
