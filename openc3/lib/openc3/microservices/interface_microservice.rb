@@ -81,6 +81,18 @@ module OpenC3
       sleep(0.001) # Allow other threads to run
     end
 
+    # Describe a command message for logs and error acks without exposing raw
+    # parameter values. cmd_string was built by the API with OBFUSCATE
+    # parameters already masked; cmd_params has not been masked.
+    def cmd_description(msg_hash)
+      return msg_hash['cmd_string'] if msg_hash['cmd_string']
+
+      description = [msg_hash['target_name'], msg_hash['cmd_name']].compact.join(' ')
+      return description unless description.empty?
+
+      "keys: #{msg_hash.keys.join(', ')}"
+    end
+
     def run
       InterfaceTopic.receive_commands(@interface, scope: @scope, db_shard: @db_shard) do |topic, msg_id, msg_hash, _redis|
         OpenC3.with_context(msg_hash) do
@@ -266,7 +278,7 @@ module OpenC3
                   command.buffer = cmd_buffer
                 end
               else
-                raise "Invalid command received:\n #{msg_hash}"
+                raise "Invalid command received:\n #{cmd_description(msg_hash)}"
               end
 
               if @interface.cmd_target_enabled[command.target_name]
@@ -283,7 +295,7 @@ module OpenC3
               @logger.error "#{@interface.name}: #{e.message}"
               next e.message
             rescue => e
-              @logger.error "#{@interface.name}: #{msg_hash}"
+              @logger.error "#{@interface.name}: #{cmd_description(msg_hash)}"
               @logger.error "#{@interface.name}: #{e.formatted}"
               next e.message
             end
