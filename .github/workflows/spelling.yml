@@ -45,6 +45,7 @@ jobs:
           # Skip generated code as well as cstol_converter which has false
           # positives on ADN and Adn. *.xsd covers vendored third party schemas
           # (e.g. the OMG XTCE schemas) which must stay byte for byte identical
-          # to the published versions, typos included.
-          skip: ./docs,*.map,*.min.js,*.pem,*.bin,*.xsd,pnpm-lock.yaml,cstol_converter,vue.global*,vuetify-labs*
+          # to the published versions, typos included. common_passwords.txt is a
+          # verbatim third party blocklist (SecLists) whose entries are not words.
+          skip: ./docs,*.map,*.min.js,*.pem,*.bin,*.xsd,pnpm-lock.yaml,cstol_converter,vue.global*,vuetify-labs*,common_passwords.txt
           ignore_words_file: .whitelist

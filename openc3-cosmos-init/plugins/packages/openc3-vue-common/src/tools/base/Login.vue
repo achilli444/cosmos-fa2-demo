@@ -34,6 +34,8 @@
           v-model="password"
           type="password"
           :label="`${!isSet || reset ? 'New ' : ''}Password`"
+          :hint="reset ? passwordPolicyHint : ''"
+          :persistent-hint="reset"
           data-test="new-password"
         />
         <v-text-field
@@ -91,6 +93,9 @@ export default {
       confirmPassword: '',
       oldPassword: '',
       reset: false, // setting a password for the first time, or changing to a new password
+      // Mirrors OpenC3::AuthModel.check_password_policy; the server is authoritative
+      passwordPolicyHint:
+        'At least 15 characters with upper and lower case letters, a number, and a symbol; not a common password',
       alert: '',
       alertType: 'success',
       showAlert: false,

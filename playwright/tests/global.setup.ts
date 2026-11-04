@@ -11,6 +11,9 @@
 import { test as setup, expect, Page } from '@playwright/test'
 import { STORAGE_STATE, ADMIN_STORAGE_STATE } from './../playwright.config'
 
+// Core password set on first run; must satisfy AuthModel.check_password_policy
+const CORE_PASSWORD = 'Playwright!E2E-Credential-1'
+
 // Take the demo sim targets out of QUIET mode. The demo boots quiet
 // (INST/lib/sim_inst.rb @quiet = true, INST2/lib/sim_inst.py self.quiet = True),
 // and QUIET suppresses every limits violation: temps cycle inside in-limits
@@ -146,11 +149,11 @@ setup('global setup', async ({ page }) => {
       }
     }
     if (await page.getByText('Enter the password').isVisible()) {
-      await page.getByLabel('Password').fill('password')
+      await page.getByLabel('Password').fill(CORE_PASSWORD)
       await page.locator('button:has-text("Login")').click()
     } else {
-      await page.getByLabel('New Password').fill('password')
-      await page.getByLabel('Confirm Password').fill('password')
+      await page.getByLabel('New Password').fill(CORE_PASSWORD)
+      await page.getByLabel('Confirm Password').fill(CORE_PASSWORD)
       await page.click('data-test=set-password')
     }
     await new Promise((resolve) => setTimeout(resolve, 500))

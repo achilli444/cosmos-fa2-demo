@@ -39,7 +39,32 @@ module OpenC3
     @@session_cache = nil
     @@session_cache_time = nil
 
-    MIN_PASSWORD_LENGTH = 8
+    # Raised by set / check_password_policy when a candidate password fails the
+    # password policy (NIST 800-53 IA-5(1)). Callers surface the message as a
+    # validation error rather than a server fault.
+    class PasswordPolicyError < StandardError; end
+
+    # Minimum password length. DoD baseline for IA-5(1) is 15 characters; an
+    # operator may require more via OPENC3_MIN_PASSWORD_LENGTH but may not go
+    # below the baseline.
+    MIN_PASSWORD_LENGTH = 15
+
+    # Bundled list of commonly used / compromised passwords (one per line).
+    # Operators can supply an additional organization-maintained list through
+    # OPENC3_PASSWORD_BLOCKLIST_FILE (same format, '#' lines are comments).
+    COMMON_PASSWORDS_FILE = File.expand_path('../../../data/common_passwords.txt', __dir__)
+
+    # Blocklist entries at least this long are also rejected when they appear
+    # anywhere inside the candidate password (e.g. "Password12345!!" contains
+    # "password"). Shorter entries only match the whole password so ordinary
+    # words like "love" or "1234" inside a long passphrase are not rejected.
+    BLOCKLIST_SUBSTRING_MIN_LENGTH = 8
+
+    # Terms an attacker would expect in this system's password regardless of
+    # whether they appear in a generic list.
+    EXPECTED_PASSWORD_TERMS = %w(openc3 cosmos).freeze
+
+    @@common_passwords = nil
 
     SESSION_PREFIX = "ses_"
     OTP_PREFIX = "otp_"
@@ -134,13 +159,37 @@ module OpenC3
       return false
     end
 
+    # The effective minimum password length: MIN_PASSWORD_LENGTH unless
+    # OPENC3_MIN_PASSWORD_LENGTH raises it.
+    # @return [Integer]
+    def self.min_password_length
+      configured = Integer(ENV.fetch('OPENC3_MIN_PASSWORD_LENGTH', ''), exception: false)
+      return MIN_PASSWORD_LENGTH if configured.nil? or configured < MIN_PASSWORD_LENGTH
+
+      configured
+    end
+
+    # Validates a candidate password against the password policy without
+    # touching the store: minimum length, character composition, and the
+    # common / compromised / expected password blocklists.
+    # @param password [String] the plaintext candidate password
+    # @raise [PasswordPolicyError] describing the first rule the password fails
+    def self.check_password_policy(password)
+      raise PasswordPolicyError, "password must not be nil or empty" if password.nil? or password.empty?
+      raise PasswordPolicyError, "password must be at least #{min_password_length} characters" if password.length < min_password_length
+      unless password.match?(/[A-Z]/) and password.match?(/[a-z]/) and password.match?(/[0-9]/) and password.match?(/[^A-Za-z0-9]/)
+        raise PasswordPolicyError, "password must include upper and lower case letters, a number, and a symbol"
+      end
+      raise PasswordPolicyError, "password must not be, or contain, a commonly used password" if blocklisted_password?(password)
+    end
+
     def self.set(password, old_password, key = PRIMARY_KEY)
-      raise "password must not be nil or empty" if password.nil? or password.empty?
-      raise "password must be at least 8 characters" if password.length < MIN_PASSWORD_LENGTH
+      check_password_policy(password)
 
       if set?(key)
         raise "old_password must not be nil or empty" if old_password.nil? or old_password.empty?
         raise "old_password incorrect" unless verify_no_service(old_password, mode: :password)
+        raise PasswordPolicyError, "password must be different from the current password" if password == old_password
       end
       pw_hash = Argon2::Password.create(password, profile: ARGON2_PROFILE)
       Store.set(key, pw_hash)
@@ -148,6 +197,44 @@ module OpenC3
       @@pw_hash_cache_time = nil
       logout
     end
+
+    # Whether the password matches, or contains a long enough entry from, the
+    # bundled blocklist, the operator supplied blocklist or the expected terms.
+    # @param password [String] the plaintext candidate password
+    # @return [Boolean]
+    def self.blocklisted_password?(password)
+      candidate = password.downcase
+      return true if EXPECTED_PASSWORD_TERMS.any? { |term| candidate.include?(term) }
+
+      exact, substrings = common_passwords
+      return true if exact.include?(candidate)
+      return true if substrings.any? { |entry| candidate.include?(entry) }
+
+      extra_file = ENV.fetch('OPENC3_PASSWORD_BLOCKLIST_FILE', nil)
+      if extra_file and !extra_file.empty?
+        raise "OPENC3_PASSWORD_BLOCKLIST_FILE #{extra_file} does not exist" unless File.file?(extra_file)
+
+        extra_exact, extra_substrings = read_blocklist(extra_file)
+        return true if extra_exact.include?(candidate)
+        return true if extra_substrings.any? { |entry| candidate.include?(entry) }
+      end
+      false
+    end
+
+    # The bundled blocklist, loaded once per process.
+    # @return [Array(Set<String>, Array<String>)] whole-password entries and substring entries
+    def self.common_passwords
+      @@common_passwords ||= read_blocklist(COMMON_PASSWORDS_FILE)
+    end
+
+    def self.read_blocklist(filename)
+      entries = File.readlines(filename, chomp: true).map { |line| line.strip.downcase }
+      entries.reject! { |line| line.empty? or line.start_with?('#') }
+      exact = Set.new(entries)
+      substrings = entries.select { |entry| entry.length >= BLOCKLIST_SUBSTRING_MIN_LENGTH }.uniq
+      [exact, substrings]
+    end
+    private_class_method :read_blocklist
 
     # Creates a new session token. DO NOT CALL BEFORE VERIFYING.
     # @param otp [Boolean] whether to create a one-time use token (default: false)

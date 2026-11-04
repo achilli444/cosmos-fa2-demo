@@ -70,7 +70,7 @@ ENV['OPENC3_LOGS_BUCKET'] = 'logs'
 ENV['OPENC3_TOOLS_BUCKET'] = 'tools'
 ENV['OPENC3_CONFIG_BUCKET'] = 'config'
 # Set some usernames / passwords
-ENV['OPENC3_API_PASSWORD'] = 'password'
+ENV['OPENC3_API_PASSWORD'] = 'Unit-Test!Credential-2026' # must satisfy AuthModel.check_password_policy
 ENV['OPENC3_SERVICE_PASSWORD'] = 'openc3service'
 ENV['OPENC3_REDIS_USERNAME'] = 'openc3'
 ENV['OPENC3_REDIS_PASSWORD'] = 'openc3password'
@@ -90,7 +90,7 @@ require 'openc3/top_level'
 # Create a easy alias to the base of the spec directory
 SPEC_DIR = File.dirname(__FILE__)
 $openc3_scope = ENV.fetch('OPENC3_SCOPE', 'DEFAULT')
-$openc3_password = ENV.fetch('OPENC3_API_PASSWORD', 'password')
+$openc3_password = ENV.fetch('OPENC3_API_PASSWORD', 'Unit-Test!Credential-2026')
 $openc3_authorize = false
 $openc3_mock_token = 'mock_token'
 $openc3_mock_otp = 'mock_otp'

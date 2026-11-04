@@ -125,6 +125,11 @@ class AuthController < ApplicationController
       clear_user_bad_attempts
       OpenC3::Logger.info("Password changed", user: username())
       render :plain => OpenC3::AuthModel.generate_session()
+    rescue OpenC3::AuthModel::PasswordPolicyError => e
+      # The candidate password failed policy (length, composition, blocklist,
+      # reuse). That's a client validation error, not a server fault, so answer
+      # 422 with the rule it broke for the login form to display.
+      render json: { status: 'error', message: e.message, type: e.class }, status: :unprocessable_entity
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt

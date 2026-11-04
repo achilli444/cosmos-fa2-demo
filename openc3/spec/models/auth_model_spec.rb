@@ -13,12 +13,14 @@
 # if purchased from OpenC3, Inc.
 
 require 'digest'
+require 'tempfile'
 require 'spec_helper'
 require 'openc3/models/auth_model'
 
 module OpenC3
   PW_HASH_PRIMARY_KEY = 'OPENC3__TOKEN'
-  AUTH_INITIAL_PASSWORD = 'password'
+  AUTH_INITIAL_PASSWORD = ENV['OPENC3_API_PASSWORD']
+  AUTH_NEW_PASSWORD = 'Unit-Test!Credential-2027'
 
   describe AuthModel, type: :model do
     before(:each) do
@@ -36,15 +38,92 @@ module OpenC3
       end
 
       it "self.set" do
-        expect{ AuthModel.set('token1token1', nil) }.to \
+        expect{ AuthModel.set(AUTH_NEW_PASSWORD, nil) }.to \
           raise_error(/old_password must not be nil or empty/)
 
-        expect{ AuthModel.set('token1token1', 'token2token2', PW_HASH_PRIMARY_KEY) }.to \
+        expect{ AuthModel.set(AUTH_NEW_PASSWORD, 'Wrong-Old!Credential-1', PW_HASH_PRIMARY_KEY) }.to \
           raise_error(/old_password incorrect/)
 
-        AuthModel.set('newpassword', AUTH_INITIAL_PASSWORD)
+        AuthModel.set(AUTH_NEW_PASSWORD, AUTH_INITIAL_PASSWORD)
         expect(AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :any)).to eq(false)
-        expect(AuthModel.verify_no_service('newpassword', mode: :any)).to eq(true)
+        expect(AuthModel.verify_no_service(AUTH_NEW_PASSWORD, mode: :any)).to eq(true)
+      end
+
+      describe "password policy" do
+        # IA-5(1): minimum length, composition, common/compromised password
+        # blocklist, and no reuse of the current password. Every rejection is a
+        # PasswordPolicyError so callers can answer with a validation error.
+        it "rejects empty passwords" do
+          expect { AuthModel.set(nil, AUTH_INITIAL_PASSWORD) }.to \
+            raise_error(AuthModel::PasswordPolicyError, /must not be nil or empty/)
+          expect { AuthModel.set('', AUTH_INITIAL_PASSWORD) }.to \
+            raise_error(AuthModel::PasswordPolicyError, /must not be nil or empty/)
+        end
+
+        it "requires at least 15 characters by default" do
+          expect(AuthModel.min_password_length).to eq(15)
+          expect { AuthModel.set('Short!Cred-14c', AUTH_INITIAL_PASSWORD) }.to \
+            raise_error(AuthModel::PasswordPolicyError, /at least 15 characters/)
+          AuthModel.set('Short!Cred-15ch', AUTH_INITIAL_PASSWORD)
+          expect(AuthModel.verify_no_service('Short!Cred-15ch', mode: :password)).to eq(true)
+        end
+
+        it "lets OPENC3_MIN_PASSWORD_LENGTH raise but not lower the minimum" do
+          allow(ENV).to receive(:fetch).and_call_original
+          allow(ENV).to receive(:fetch).with('OPENC3_MIN_PASSWORD_LENGTH', '').and_return('20')
+          expect(AuthModel.min_password_length).to eq(20)
+          expect { AuthModel.set('Short!Cred-15ch', AUTH_INITIAL_PASSWORD) }.to \
+            raise_error(AuthModel::PasswordPolicyError, /at least 20 characters/)
+
+          allow(ENV).to receive(:fetch).with('OPENC3_MIN_PASSWORD_LENGTH', '').and_return('8')
+          expect(AuthModel.min_password_length).to eq(15)
+          allow(ENV).to receive(:fetch).with('OPENC3_MIN_PASSWORD_LENGTH', '').and_return('bogus')
+          expect(AuthModel.min_password_length).to eq(15)
+        end
+
+        it "requires upper, lower, digit and symbol characters" do
+          ['alllowercase-2026!!', 'ALLUPPERCASE-2026!!', 'NoDigitsInHere-!!!', 'NoSymbolsInHere2026'].each do |pw|
+            expect { AuthModel.set(pw, AUTH_INITIAL_PASSWORD) }.to \
+              raise_error(AuthModel::PasswordPolicyError, /upper and lower case letters, a number, and a symbol/), pw
+          end
+        end
+
+        it "rejects passwords that are or contain a commonly used password" do
+          # 'password' and 'qwertyuiop' are in the bundled list; 'openc3' is an expected term
+          ['Password12345!!', 'xxQWERTYUIOPxx-1!', 'My-Openc3-Secret-1!', 'CosmosOperator-2026!'].each do |pw|
+            expect { AuthModel.set(pw, AUTH_INITIAL_PASSWORD) }.to \
+              raise_error(AuthModel::PasswordPolicyError, /commonly used password/), pw
+          end
+          # Short list entries only match the whole password, so a word like
+          # 'love' inside a long passphrase is fine
+          AuthModel.set('Love-The-Mission-2026!', AUTH_INITIAL_PASSWORD)
+        end
+
+        it "rejects entries from an operator supplied blocklist file" do
+          Tempfile.create('blocklist') do |file|
+            file.puts '# site specific'
+            file.puts 'MissionControl'
+            file.puts 'xyzzy'
+            file.flush
+            allow(ENV).to receive(:fetch).and_call_original
+            allow(ENV).to receive(:fetch).with('OPENC3_PASSWORD_BLOCKLIST_FILE', nil).and_return(file.path)
+            expect { AuthModel.set('MissionControl-2026!', AUTH_INITIAL_PASSWORD) }.to \
+              raise_error(AuthModel::PasswordPolicyError, /commonly used password/)
+            # 5 characters is below the substring threshold: whole-match only
+            AuthModel.set('Xyzzy-Is-Fine-2026!', AUTH_INITIAL_PASSWORD)
+          end
+        end
+
+        it "rejects reusing the current password" do
+          expect { AuthModel.set(AUTH_INITIAL_PASSWORD, AUTH_INITIAL_PASSWORD) }.to \
+            raise_error(AuthModel::PasswordPolicyError, /different from the current password/)
+          expect(AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :password)).to eq(true)
+        end
+
+        it "checks policy before touching the stored password" do
+          expect(Store).not_to receive(:set)
+          expect { AuthModel.set('weak', AUTH_INITIAL_PASSWORD) }.to raise_error(AuthModel::PasswordPolicyError)
+        end
       end
 
       it "self.verify" do
@@ -89,7 +168,7 @@ module OpenC3
         token = AuthModel.generate_session
         expect(AuthModel.verify(token)).to eq(true)
 
-        AuthModel.set('newpassword', AUTH_INITIAL_PASSWORD)
+        AuthModel.set(AUTH_NEW_PASSWORD, AUTH_INITIAL_PASSWORD)
         expect(AuthModel.verify(token)).to eq(false)
       end
 
