@@ -228,7 +228,7 @@ module OpenC3
           expect(@redis.exists(session_key(token2))).to eq(0)
         end
 
-        it "treats an unparseable stored session as no session" do
+        it "treats an unparsable stored session as no session" do
           token = AuthModel.generate_session
           @redis.set(session_key(token), 'garbage')
           expect(AuthModel.verify(token)).to eq(false)
