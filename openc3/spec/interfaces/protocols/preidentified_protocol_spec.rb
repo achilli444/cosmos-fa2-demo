@@ -278,6 +278,39 @@ module OpenC3
     end
 
     describe "read" do
+      def preidentified_frame(extra_json)
+        data = [PreidentifiedProtocol::COSMOS4_EXTRA_FLAG_MASK].pack('C')
+        data << [extra_json.length].pack('N') << extra_json
+        data << "\x00\x00\x00\x01" # time seconds
+        data << "\x00\x00\x00\x02" # time microseconds
+        data << "\x04TGT1" # target name
+        data << "\x03PKT" # packet name
+        data << "\x00\x00\x00\x02\xAB\xCD" # packet data length and data
+        data
+      end
+
+      it "parses extra without creating json_class additions" do
+        @interface.instance_variable_set(:@stream, PreStream.new)
+        @interface.add_protocol(PreidentifiedProtocol, [], :READ_WRITE)
+        protocol = @interface.read_protocols[0]
+        extra_json = '{"json_class":"Range","a":[1,2,false],"vcid":2}'
+        data, _extra = protocol.read_data(preidentified_frame(extra_json))
+        expect(data).to eql "\xAB\xCD"
+        packet = protocol.read_packet(Packet.new(nil, nil, :BIG_ENDIAN, nil, data))
+        expect(packet.extra).to be_a(Hash)
+        expect(packet.extra).to eql({ "json_class" => "Range", "a" => [1, 2, false], "vcid" => 2 })
+      end
+
+      it "rejects extra which is not a JSON object" do
+        @interface.instance_variable_set(:@stream, PreStream.new)
+        @interface.add_protocol(PreidentifiedProtocol, [], :READ_WRITE)
+        protocol = @interface.read_protocols[0]
+        expect { protocol.read_data(preidentified_frame('[1,2,3]')) }.to \
+          raise_error(RuntimeError, /Extra field received was a Array but must be a JSON object/)
+        expect(protocol.instance_variable_get(:@data).length).to eq 0
+        expect(protocol.instance_variable_get(:@reduction_state)).to eq :START
+      end
+
       it "handles a sync pattern" do
         @interface.instance_variable_set(:@stream, PreStream.new)
         @interface.add_protocol(PreidentifiedProtocol, ["0x1234"], :READ_WRITE)
