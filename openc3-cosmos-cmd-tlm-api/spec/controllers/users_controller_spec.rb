@@ -23,5 +23,23 @@ RSpec.describe UsersController, type: :controller do
       put :logout, params: {user: "user", scope: "DEFAULT"}
       expect(response).to have_http_status(:ok)
     end
+
+    it "Logout writes an audit record without the token" do
+      mock_redis()
+      request.headers['HTTP_AUTHORIZATION'] = 'ses_mytoken'
+      request.remote_addr = '1.2.3.4'
+      records = []
+      allow(OpenC3::Logger).to receive(:info).and_wrap_original do |original, *args, **kwargs|
+        records << [args[0], kwargs] if kwargs[:type] == OpenC3::Logger::AUDIT
+        original.call(*args, **kwargs)
+      end
+      put :logout, params: {user: "user", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+      logout = records.find { |_message, kwargs| kwargs[:other][:event] == 'logout' }
+      expect(logout).not_to be_nil
+      expect(logout[1][:user]).to eql 'anonymous'
+      expect(logout[1][:other]).to include(client_id: '1.2.3.4', endpoint: 'users#logout', outcome: 'success')
+      expect(records.to_s).not_to include('ses_mytoken')
+    end
   end
 end

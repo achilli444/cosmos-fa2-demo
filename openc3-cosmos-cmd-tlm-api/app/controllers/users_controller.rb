@@ -27,6 +27,7 @@ rescue LoadError
       # header), not the entire global sessions store, so one user logging out
       # does not log out every other operator.
       OpenC3::AuthModel.terminate(request.headers['HTTP_AUTHORIZATION'])
+      audit("Logout", user: username(), event: 'logout', outcome: 'success')
       head :ok
     end
   end
