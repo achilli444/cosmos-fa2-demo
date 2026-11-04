@@ -63,6 +63,20 @@ module OpenC3
         expect { GemModel.put('another.gem', scope: 'DEFAULT') }.to raise_error(/does not exist/)
       end
 
+      it "rejects a gem that is not on OPENC3_PACKAGE_ALLOWLIST before caching it" do
+        allowlist = File.join(@temp_dir, "allowlist.txt")
+        File.write(allowlist, "#{'b' * 64}\n")
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with('OPENC3_PACKAGE_ALLOWLIST', nil).and_return(allowlist)
+        allow(Logger).to receive(:error)
+        tf = Tempfile.new("openc3-test3.gem")
+        tf.write("not approved")
+        tf.close
+        expect { GemModel.put(tf.path, scope: 'DEFAULT') }.to raise_error(PackageIntegrityError, /not in OPENC3_PACKAGE_ALLOWLIST/)
+        expect(Dir.exist?("#{ENV.fetch('GEM_HOME')}/cosmoscache")).to be false
+        tf.unlink
+      end
+
       it "puts the gem to the gem server" do
         pm = class_double("OpenC3::ProcessManager").as_stubbed_const(:transfer_nested_constants => true)
         result = double("fakepm")
@@ -76,6 +90,77 @@ module OpenC3
     end
 
     describe "self.install" do
+      context "integrity" do
+        before(:each) do
+          # A real (empty-spec) gem so Gem.install is reached
+          @gem_file = File.join(@temp_dir, "openc3-real-1.0.0.gem")
+          Dir.mktmpdir do |dir|
+            spec = Gem::Specification.new do |s|
+              s.name = 'openc3-real'
+              s.version = '1.0.0'
+              s.summary = 'test'
+              s.authors = ['test']
+            end
+            Dir.chdir(dir) { Gem::Package.build(spec, true) } # skip_validation silences gemspec warnings
+            FileUtils.mv(File.join(dir, 'openc3-real-1.0.0.gem'), @gem_file)
+          end
+          allow(GemModel).to receive(:get_setting).with('rubygems_url', scope: 'DEFAULT').and_return(nil)
+        end
+
+        it "installs with the MediumSecurity policy by default and logs the digest" do
+          allow(Logger).to receive(:info)
+          expect(Gem).to receive(:install).with(@gem_file, "> 0.pre", hash_including(security_policy: Gem::Security::MediumSecurity, domain: :local))
+          GemModel.install(@gem_file, scope: 'DEFAULT')
+          digest = Digest::SHA256.file(@gem_file).hexdigest
+          expect(Logger).to have_received(:info).with("Verified package openc3-real-1.0.0.gem sha256=#{digest}", scope: 'DEFAULT')
+        end
+
+        it "applies the policy to the remote retry as well" do
+          expect(Gem).to receive(:install).with(@gem_file, "> 0.pre", hash_including(security_policy: Gem::Security::MediumSecurity, domain: :local)).and_raise(Gem::Exception, "local miss")
+          expect(Gem).to receive(:install).with(@gem_file, "> 0.pre", hash_including(security_policy: Gem::Security::MediumSecurity, domain: :both))
+          GemModel.install(@gem_file, scope: 'DEFAULT')
+        end
+
+        it "honors OPENC3_GEM_SECURITY_POLICY=HighSecurity and rejects an unsigned gem" do
+          allow(ENV).to receive(:fetch).and_call_original
+          allow(ENV).to receive(:fetch).with('OPENC3_GEM_SECURITY_POLICY', 'MediumSecurity').and_return('HighSecurity')
+          allow(Logger).to receive(:error)
+          # Both the local and remote attempts run the real installer, which refuses unsigned gems under HighSecurity
+          expect { GemModel.install(@gem_file, scope: 'DEFAULT') }.to raise_error(Gem::Security::Exception, /unsigned gems are not allowed/)
+        end
+
+        it "fails closed on an unknown OPENC3_GEM_SECURITY_POLICY" do
+          allow(ENV).to receive(:fetch).and_call_original
+          allow(ENV).to receive(:fetch).with('OPENC3_GEM_SECURITY_POLICY', 'MediumSecurity').and_return('Whatever')
+          allow(Logger).to receive(:error)
+          expect(Gem).to_not receive(:install)
+          expect { GemModel.install(@gem_file, scope: 'DEFAULT') }.to raise_error(PackageIntegrityError, /Unknown OPENC3_GEM_SECURITY_POLICY 'Whatever'/)
+        end
+
+        it "rejects a gem whose digest is not on OPENC3_PACKAGE_ALLOWLIST" do
+          allowlist = File.join(@temp_dir, "allowlist.txt")
+          File.write(allowlist, "# approved\n#{'a' * 64}  something-else.gem\n")
+          allow(ENV).to receive(:fetch).and_call_original
+          allow(ENV).to receive(:fetch).with('OPENC3_PACKAGE_ALLOWLIST', nil).and_return(allowlist)
+          allow(Logger).to receive(:error)
+          expect(Gem).to_not receive(:install)
+          expect { GemModel.install(@gem_file, scope: 'DEFAULT') }.to raise_error(PackageIntegrityError, /not in OPENC3_PACKAGE_ALLOWLIST/)
+          expect(Logger).to have_received(:error).with(/openc3-real-1.0.0.gem rejected: sha256=/, scope: 'DEFAULT')
+        end
+
+        it "installs a gem whose digest is on OPENC3_PACKAGE_ALLOWLIST" do
+          digest = Digest::SHA256.file(@gem_file).hexdigest
+          allowlist = File.join(@temp_dir, "allowlist.txt")
+          File.write(allowlist, "#{digest.upcase}  openc3-real-1.0.0.gem\n")
+          allow(ENV).to receive(:fetch).and_call_original
+          allow(ENV).to receive(:fetch).with('OPENC3_PACKAGE_ALLOWLIST', nil).and_return(allowlist)
+          allow(Logger).to receive(:info)
+          expect(Gem).to receive(:install).with(@gem_file, "> 0.pre", hash_including(security_policy: Gem::Security::MediumSecurity))
+          GemModel.install(@gem_file, scope: 'DEFAULT')
+          expect(Logger).to have_received(:info).with("Verified package openc3-real-1.0.0.gem sha256=#{digest} (allow-listed)", scope: 'DEFAULT')
+        end
+      end
+
       it "existing gemfile and handles missing" do
         expect { GemModel.install("openc3-test1.gem", scope: 'DEFAULT') }.to \
           raise_error(Gem::Package::FormatError, /package metadata is missing/)

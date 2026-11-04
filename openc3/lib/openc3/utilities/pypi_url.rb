@@ -18,17 +18,19 @@ module OpenC3
   class PypiUrl
     DEFAULT = 'https://pypi.org/simple'
 
-    # Validate that a resolved pypi_url is an http(s) URL before it is handed to
-    # pip. The value can come from a user-writable setting or ENV, so a malformed
-    # or non-http value is rejected and replaced with the default rather than
-    # passed through to pip.
+    # Validate that a resolved pypi_url is an https URL before it is used as a
+    # package source. The value can come from a user-writable setting or ENV, so
+    # a malformed, non-http or plain-http value is rejected and replaced with the
+    # default rather than passed through: packages fetched over http (or with
+    # TLS verification disabled) can be swapped in transit, so only https
+    # indexes are accepted.
     #
-    # @param pypi_url [String] the resolved pypi index url to validate
+    # @param pypi_url [String] the resolved url to validate
     # @return [String] the original url if valid, otherwise DEFAULT
     def self.validate(pypi_url)
       uri = URI.parse(pypi_url)
-      unless uri.is_a?(URI::HTTP) && !uri.host.to_s.empty?
-        raise URI::InvalidURIError, "not an http(s) URL"
+      unless uri.is_a?(URI::HTTPS) && !uri.host.to_s.empty?
+        raise URI::InvalidURIError, "not an https URL"
       end
       pypi_url
     rescue URI::InvalidURIError => e

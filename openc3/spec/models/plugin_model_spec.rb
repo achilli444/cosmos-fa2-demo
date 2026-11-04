@@ -799,10 +799,12 @@ module OpenC3
           eql ["-i", "https://custom.pypi.example.com/simple"]
       end
 
-      it "adds the trusted-host derived from the url when PIP_ENABLE_TRUSTED_HOST is set" do
+      it "never disables TLS verification even when PIP_ENABLE_TRUSTED_HOST is set" do
         allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return('1')
-        expect(PluginModel.build_pypi_args("https://custom.pypi.example.com/simple")).to \
-          eql ["-i", "https://custom.pypi.example.com/simple", "--trusted-host", "custom.pypi.example.com"]
+        expect(OpenC3::Logger).to receive(:warn).with(/PIP_ENABLE_TRUSTED_HOST is no longer supported/)
+        args = PluginModel.build_pypi_args("https://custom.pypi.example.com/simple")
+        expect(args).to eql ["-i", "https://custom.pypi.example.com/simple"]
+        expect(args).to_not include("--trusted-host")
       end
     end
 
@@ -1028,7 +1030,7 @@ module OpenC3
 
         # Gem extraction
         gem = double("gem")
-        expect(Gem::Package).to receive(:new).with("/gems/cache/test.gem").and_return(gem)
+        expect(Gem::Package).to receive(:new).with("/gems/cache/test.gem", Gem::Security::MediumSecurity).and_return(gem)
         expect(gem).to receive(:extract_files) do |path|
           File.open("#{path}/pyproject.toml", 'w') { |f| f.puts "[project]" }
         end
@@ -1056,7 +1058,7 @@ module OpenC3
         expect(GemModel).to receive(:get).with("TEST").and_return("/gems/cache/test.gem")
 
         gem = double("gem")
-        expect(Gem::Package).to receive(:new).with("/gems/cache/test.gem").and_return(gem)
+        expect(Gem::Package).to receive(:new).with("/gems/cache/test.gem", Gem::Security::MediumSecurity).and_return(gem)
         expect(gem).to receive(:extract_files) do |path|
           File.open("#{path}/requirements.txt", 'w') { |f| f.puts "requests" }
         end
@@ -1083,7 +1085,7 @@ module OpenC3
         expect(GemModel).to receive(:get).with("TEST").and_return("/gems/cache/test.gem")
 
         gem = double("gem")
-        expect(Gem::Package).to receive(:new).with("/gems/cache/test.gem").and_return(gem)
+        expect(Gem::Package).to receive(:new).with("/gems/cache/test.gem", Gem::Security::MediumSecurity).and_return(gem)
         # No pyproject.toml or requirements.txt created during extract
         expect(gem).to receive(:extract_files)
 

@@ -1,46 +1,84 @@
 #!/bin/sh
+# Shared-venv Python package installer (used by PythonPackageModel.install and
+# as the fallback when uvinstall is unavailable).
+# Usage: pipinstall [-i INDEX_URL] [uv args...] <package file | project dir | -r requirements.txt>
+#
+# Every install runs in hash-checking mode: the target and its dependencies are
+# first resolved into a pinned requirements file with --generate-hashes, then
+# installed with --require-hashes so uv refuses any distribution whose SHA-256
+# does not match what the index advertised. TLS verification is never disabled
+# (no --trusted-host); the index must be https (enforced by PypiUrl.validate).
 VENV="${PIPINSTALL_VENV:-$PYTHONUSERBASE}"
 uv venv "$VENV" --allow-existing
-echo "uv pip install $@"
-uv pip install --python "$VENV" "$@"
-if [ $? -eq 0 ]; then
-    echo "Command succeeded"
-    exit 0
-fi
 
-# Collect the last arg and all preceding args
+# Split the arguments into the options and the install target (last arg)
 LAST_ARG=""
 OPTS=""
 PREV=""
+HAS_REQ=""
 for ARG in "$@"; do
     if [ -n "$PREV" ]; then
         OPTS="${OPTS} ${PREV}"
+    fi
+    if [ "$ARG" = "-r" ]; then
+        HAS_REQ=1
     fi
     PREV="$ARG"
 done
 LAST_ARG="$PREV"
 
-# If last arg is a directory with pyproject.toml, the build may have failed
-# (e.g. Poetry package-mode = false). Try compiling and installing declared
-# dependencies only, without attempting to build the package itself.
-if [ -d "$LAST_ARG" ] && [ -f "$LAST_ARG/pyproject.toml" ]; then
-    echo "Warning: Failed to build Python package, attempting to install declared dependencies from pyproject.toml"
-    TMPFILE=$(mktemp)
-    uv pip compile ${OPTS} "${LAST_ARG}/pyproject.toml" > "$TMPFILE"
-    if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
-        uv pip install --python "$VENV" ${OPTS} -r "$TMPFILE"
-        if [ $? -eq 0 ]; then
-            echo "Dependencies installed successfully"
-            rm -f "$TMPFILE"
-            exit 0
-        fi
+if [ -z "$LAST_ARG" ]; then
+    echo "ERROR: no package given to pipinstall"
+    exit 1
+fi
+
+# Work out what to resolve. A requirements file or pyproject.toml is compiled
+# directly; a single package file (.whl / .tar.gz) is wrapped in a one-line
+# requirements file so it can be hashed like any other requirement.
+TMPDIR_HASH=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_HASH"' EXIT
+REQ_SRC=""
+if [ -n "$HAS_REQ" ]; then
+    # strip the trailing -r from OPTS, the file becomes REQ_SRC
+    OPTS=$(echo "$OPTS" | sed 's/ -r$//')
+    REQ_SRC="$LAST_ARG"
+elif [ -d "$LAST_ARG" ] && [ -f "$LAST_ARG/pyproject.toml" ]; then
+    REQ_SRC="$LAST_ARG/pyproject.toml"
+else
+    case "$LAST_ARG" in
+        /*) ABS_TARGET="$LAST_ARG" ;;
+        *) ABS_TARGET="$(pwd)/$LAST_ARG" ;;
+    esac
+    REQ_SRC="$TMPDIR_HASH/target.txt"
+    printf '%s\n' "$ABS_TARGET" > "$REQ_SRC"
+fi
+LOCKED="$TMPDIR_HASH/requirements.lock"
+
+# Resolve with hashes then install requiring them. $1 holds extra uv flags
+# (e.g. --no-index) applied to both steps. Both the exit status AND a non-empty
+# lock file are required: a compile that fails partway can still leave output.
+hashed_install() {
+    EXTRA="$1"
+    rm -f "$LOCKED"
+    echo "uv pip compile --generate-hashes ${OPTS} ${EXTRA} ${REQ_SRC}"
+    uv pip compile --generate-hashes ${OPTS} ${EXTRA} "$REQ_SRC" -o "$LOCKED"
+    if [ $? -ne 0 ] || [ ! -s "$LOCKED" ]; then
+        return 1
     fi
-    rm -f "$TMPFILE"
+    echo "uv pip install --require-hashes ${OPTS} ${EXTRA} -r ${LOCKED}"
+    uv pip install --python "$VENV" --require-hashes ${OPTS} ${EXTRA} -r "$LOCKED"
+}
+
+if hashed_install ""; then
+    echo "Command succeeded"
+    exit 0
 fi
 
 echo "Warning: Install failed - retrying with --no-index"
-uv pip install --python "$VENV" --no-index "$@"
-if [ $? -ne 0 ]; then
-    echo "ERROR: uv pip install failed"
-    exit 1
+if hashed_install "--no-index"; then
+    echo "Command succeeded"
+    exit 0
 fi
+
+echo "ERROR: uv pip install failed"
+exit 1

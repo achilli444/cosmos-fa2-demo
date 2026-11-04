@@ -124,6 +124,9 @@ Set in `.env`, or overridden per service in `compose.override.yaml`:
 | `OPENC3_REDIS_HOSTNAME`, `OPENC3_REDIS_PORT` | `openc3-redis`, `6379` | Redis / Valkey connection |
 | `OPENC3_CLOUD` | `local` | Cloud provider, for bucket and secret handling |
 | `RUBYGEMS_URL`, `PYPI_URL`, `NPM_URL`, `MAVEN_URL` | public mirrors | Package sources used at *build* time. To change the URLs COSMOS uses at *run* time, set the `rubygems_url` / `pypi_url` Admin settings |
+| `OPENC3_GEM_SECURITY_POLICY` | `MediumSecurity` | RubyGems trust policy applied when a gem is installed or extracted (`NoSecurity`, `AlmostNoSecurity`, `LowSecurity`, `MediumSecurity`, `HighSecurity`). `MediumSecurity` verifies signed gems against the trust store; `HighSecurity` also rejects unsigned gems |
+| `OPENC3_GEM_TRUST_DIR` | `~/.gem/trust` | Directory of trusted gem signing certificates used by the policy above |
+| `OPENC3_PACKAGE_ALLOWLIST` | unset | Path to a `sha256sum`-format file of approved package digests. When set, a gem or Python package whose SHA-256 is not listed is rejected before it is cached or installed. Every install logs the verified digest. `rubygems_url` / `pypi_url` must be `https`, TLS verification is never disabled (`PIP_ENABLE_TRUSTED_HOST` is ignored) and Python installs run with `--require-hashes` |
 
 Per-service runtime flags - `OPENC3_NO_*`, `OPENC3_FORCE_INSTALL`, `OPENC3_ALLOW_HTTP`, `OPENC3_DEFAULT_QUEUE`, `OPENC3_AUTH_RATE_LIMIT_*`, `OPENC3_LANGUAGE`, `OPENC3_LOG_STDERR` - are documented in `compose.override.yaml` under the service each one applies to, because a flag only takes effect on the container that reads it. See [Install and runtime flags](compose.md#install-and-runtime-flags) for how their values are interpreted.
 

@@ -16,6 +16,7 @@ require 'open3'
 require 'set'
 require 'openc3/utilities/process_manager'
 require 'openc3/utilities/pypi_url'
+require 'openc3/utilities/package_integrity'
 require 'openc3/api/api'
 require 'pathname'
 require 'json'
@@ -200,6 +201,8 @@ module OpenC3
     def self.put(package_file_path, package_install: true, scope:, plugin: nil)
       if File.file?(package_file_path)
         package_filename = File.basename(package_file_path)
+        # Digest / allow-list gate before the package enters the cache we install from
+        PackageIntegrity.verify!(package_file_path, scope: scope)
         FileUtils.mkdir_p("#{ENV.fetch('PYTHONUSERBASE')}/cache") unless Dir.exist?("#{ENV.fetch('PYTHONUSERBASE')}/cache")
         cache_path = "#{ENV.fetch('PYTHONUSERBASE')}/cache/#{File.basename(package_file_path)}"
         FileUtils.cp(package_file_path, cache_path)
@@ -234,6 +237,7 @@ module OpenC3
         package_file_path = get(name_or_path)
       end
       package_filename = File.basename(package_file_path)
+      PackageIntegrity.verify!(package_file_path, scope: scope)
       begin
         pypi_url = get_setting('pypi_url', scope: scope)
         if pypi_url
@@ -251,13 +255,14 @@ module OpenC3
           pypi_url ||= PypiUrl::DEFAULT
         end
       end
+      # https-only index (PypiUrl.validate); pipinstall resolves and installs
+      # with --require-hashes so every downloaded dependency is digest-checked
       pypi_url = PypiUrl.validate(pypi_url)
       Logger.info "Installing python package: #{name_or_path}"
-      if ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
-        pip_args = ["-i", pypi_url, package_file_path]
-      else
-        pip_args = ["-i", pypi_url, "--trusted-host", URI.parse(pypi_url).host, package_file_path]
+      unless ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
+        Logger.warn "PIP_ENABLE_TRUSTED_HOST is no longer supported; TLS verification stays enabled for #{pypi_url}"
       end
+      pip_args = ["-i", pypi_url, package_file_path]
       spawn_env = {}
       if plugin
         venv_path = "#{PLUGIN_VENVS_DIR}/#{plugin}/.venv"
