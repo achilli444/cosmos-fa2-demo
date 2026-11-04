@@ -35,6 +35,26 @@ module OpenC3
         expect(auth.get_otp).to eq($openc3_mock_otp)
       end
 
+      it "re-authenticates on demand without re-reading the environment" do
+        ENV['OPENC3_API_PASSWORD'] = 'test_password'
+        auth = OpenC3Authentication.new
+        ENV['OPENC3_API_PASSWORD'] = nil # Script processes clear this after startup
+        mock_response = Object.new
+        mock_response.define_singleton_method(:body) { 'fresh_token' }
+        expect(auth).to receive(:_make_auth_request).with('test_password').and_return(mock_response)
+        auth.authenticate
+        expect(auth.token).to eq('fresh_token')
+      end
+
+      it "raises if re-authentication returns no token" do
+        ENV['OPENC3_API_PASSWORD'] = 'test_password'
+        auth = OpenC3Authentication.new
+        mock_response = Object.new
+        mock_response.define_singleton_method(:body) { '' }
+        allow(auth).to receive(:_make_auth_request).and_return(mock_response)
+        expect { auth.authenticate }.to raise_error(OpenC3AuthenticationError, /Authentication failed/)
+      end
+
       it "retries on Faraday::ConnectionFailed" do
         ENV['OPENC3_API_PASSWORD'] = 'test_password'
         call_count = 0

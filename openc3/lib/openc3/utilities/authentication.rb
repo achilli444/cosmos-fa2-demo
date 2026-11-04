@@ -28,13 +28,19 @@ module OpenC3
   # OpenC3 COSMOS Core authentication code
   class OpenC3Authentication
     def initialize()
-      password = ENV['OPENC3_API_PASSWORD']
-      if password.nil?
+      @password = ENV['OPENC3_API_PASSWORD']
+      if @password.nil?
         raise OpenC3AuthenticationError, "Authentication requires environment variable OPENC3_API_PASSWORD"
       end
-      @service = password == ENV['OPENC3_SERVICE_PASSWORD']
+      @service = @password == ENV['OPENC3_SERVICE_PASSWORD']
+      authenticate()
+    end
+
+    # Requests a new session token. Called again by the API clients when the
+    # server rejects the current token, e.g. after the session expires.
+    def authenticate
       retry_faraday_request do
-        response = _make_auth_request(password)
+        response = _make_auth_request(@password)
         @token = response.body
       end
       if @token.nil? or @token.empty?
@@ -150,6 +156,13 @@ module OpenC3
         return "Bearer #{@token}"
       else
         return @token
+      end
+    end
+
+    # Discards the current token so the next token() call obtains a new one
+    def authenticate
+      @auth_mutex.synchronize do
+        @token = nil
       end
     end
 

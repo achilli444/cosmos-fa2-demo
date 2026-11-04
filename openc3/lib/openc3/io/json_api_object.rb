@@ -95,7 +95,12 @@ module OpenC3
         kwargs = _generate_kwargs(keyword_params)
         @log = [nil, nil, nil]
         connect() if !@http
-        return _send_request(method: method, endpoint: endpoint, kwargs: kwargs)
+        resp = _send_request(method: method, endpoint: endpoint, kwargs: kwargs)
+        if resp.status == 401 and keyword_params[:token].nil? and reauthenticate()
+          _generate_headers(kwargs) # Pick up the new token
+          resp = _send_request(method: method, endpoint: endpoint, kwargs: kwargs)
+        end
+        return resp
       end
     end
 
@@ -112,6 +117,20 @@ module OpenC3
     end
 
     private
+
+    # Obtains a fresh token after the server rejects the current one, e.g. an
+    # expired session. Returns false if there is nothing to refresh or it fails,
+    # in which case the original response stands.
+    def reauthenticate
+      return false unless @authentication.respond_to?(:authenticate)
+
+      Logger.info("#{self.class.name.split('::').last}: Session token rejected, re-authenticating")
+      @authentication.authenticate
+      return true
+    rescue StandardError => e
+      Logger.warn("#{self.class.name.split('::').last}: Re-authentication failed: #{e.class} #{e.message}")
+      return false
+    end
 
     def connect
       begin

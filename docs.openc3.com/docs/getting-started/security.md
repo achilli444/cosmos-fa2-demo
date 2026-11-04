@@ -113,6 +113,15 @@ The `OPENC3_SERVICE_PASSWORD` is a backend service account password that allows 
 
 Note: In COSMOS Enterprise with Keycloak, user offline access tokens can be used instead when available, but the service password serves as a fallback for automated operations.
 
+### Session Lifetimes
+
+| Variable                       | Default Value | Description                                                     |
+| ------------------------------ | ------------- | --------------------------------------------------------------- |
+| `OPENC3_SESSION_IDLE_TIMEOUT`  | `900`         | Seconds without an API request before a session token is revoked |
+| `OPENC3_SESSION_MAX_LIFETIME`  | `43200`       | Seconds after login before a session token is revoked, regardless of activity |
+
+COSMOS Core session tokens (issued when a user logs in, a service authenticates, or a one-time token is requested) are revoked once either limit is exceeded. Every authenticated request restarts the idle timer. Setting a value to `0` disables that limit. When a token expires the web UI redirects to the login page; scripts and other API clients that authenticate with `OPENC3_API_PASSWORD` transparently request a new token and retry the rejected call. In COSMOS Enterprise, session lifetimes are configured in Keycloak instead.
+
 ### Rails Application Secret
 
 | Variable          | Description                                                     |

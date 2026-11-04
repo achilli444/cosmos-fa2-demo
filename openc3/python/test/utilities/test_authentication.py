@@ -69,6 +69,29 @@ class TestOpenC3Authentication(unittest.TestCase):
 
     @patch("openc3.utilities.authentication.Session")
     @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "test_password")
+    def test_authenticate_requests_a_new_token(self, mock_session_class):
+        """authenticate() re-posts the remembered password and replaces the token"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = "first_token"
+        mock_session.post.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        auth = OpenC3Authentication()
+        self.assertEqual(auth.token(), "first_token")
+
+        mock_response.text = "fresh_token"
+        auth.authenticate()
+        self.assertEqual(mock_session.post.call_count, 2)
+        self.assertEqual(mock_session.post.call_args.kwargs["json"]["password"], "test_password")
+        self.assertEqual(auth.token(), "fresh_token")
+
+        mock_response.text = ""
+        with self.assertRaises(OpenC3AuthenticationError):
+            auth.authenticate()
+
+    @patch("openc3.utilities.authentication.Session")
+    @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "test_password")
     def test_raises_error_on_empty_token(self, mock_session_class):
         """Raises error if authentication returns empty token"""
         mock_session = Mock()
