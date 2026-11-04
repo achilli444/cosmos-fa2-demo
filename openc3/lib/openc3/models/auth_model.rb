@@ -91,7 +91,10 @@ module OpenC3
         if @@session_cache and (time - @@session_cache_time) < SESSION_CACHE_TIMEOUT
           session = @@session_cache[token]
           # An expired cache entry may have been refreshed by another process so fall through to Redis
-          return accept_session(token, session, time) if session and !session_expired?(session, time)
+          if session and !session_expired?(session, time)
+            accept_session(token, session, time)
+            return true
+          end
         end
 
         # Check stored session tokens
@@ -102,7 +105,8 @@ module OpenC3
           if session_expired?(session, time)
             terminate(token)
           else
-            return accept_session(token, session, time)
+            accept_session(token, session, time)
+            return true
           end
         end
       end
@@ -186,7 +190,6 @@ module OpenC3
       else
         touch_session(token, session, time)
       end
-      return true
     end
 
     # Records the session as used so the idle timeout restarts. Writes are rate
