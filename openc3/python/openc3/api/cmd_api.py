@@ -33,6 +33,7 @@ from openc3.topics.topic import Topic
 from openc3.utilities.authorization import authorize
 from openc3.utilities.cmd_log import _build_cmd_output_string
 from openc3.utilities.extract import extract_fields_from_cmd_text
+from openc3.utilities.logger import Logger
 from openc3.utilities.store import Store
 
 
@@ -572,6 +573,21 @@ def _extract_target_command_parameter_names(method_name, *args):
     return (target_name, command_name, parameter_name)
 
 
+def _log_check_bypass(method_name, range_check, hazardous_check, cmd_string, username, scope):
+    """Audit record for commands sent with range and/or hazardous checks bypassed.
+    Always logged (independent of DISABLE_MESSAGES) so the bypass is attributable."""
+    bypassed = []
+    if not range_check:
+        bypassed.append("range")
+    if not hazardous_check:
+        bypassed.append("hazardous")
+    Logger.warn(
+        f"User {username} bypassed {' and '.join(bypassed)} check via {method_name}: {cmd_string}",
+        scope=scope,
+        user=username,
+    )
+
+
 def _cmd_implementation(
     method_name,
     *args,
@@ -609,6 +625,16 @@ def _cmd_implementation(
         scope=scope,
         manual=manual,
     )
+    # Bypassing range or hazardous checks additionally requires a distinct, stronger
+    # permission so roles can allow normal commanding without allowing the safety bypass
+    if not (range_check and hazardous_check):
+        authorize(
+            permission="cmd_no_checks",
+            target_name=target_name,
+            packet_name=cmd_name,
+            scope=scope,
+            manual=manual,
+        )
     if not user:
         user = {}
         user["username"] = os.environ.get("OPENC3_MICROSERVICE_NAME")
@@ -674,6 +700,8 @@ def _cmd_implementation(
         validate = kwargs["validate"]
 
     username = user["username"] if user and user["username"] else "anonymous"
+    if not (range_check and hazardous_check):
+        _log_check_bypass(method_name, range_check, hazardous_check, cmd_string, username, scope)
     command = {
         "target_name": target_name,
         "cmd_name": cmd_name,

@@ -134,6 +134,42 @@ module OpenC3
           expect(command['cmd_params']).to be {}
         end
 
+        if method.include?('no_')
+          it "additionally requires the cmd_no_checks permission" do
+            expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: 'INST', packet_name: 'ABORT')).ordered.and_call_original
+            expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd_no_checks', target_name: 'INST', packet_name: 'ABORT')).ordered.and_call_original
+            @api.send(method, "INST", "ABORT")
+          end
+
+          it "does not send the command if the cmd_no_checks permission is denied" do
+            allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd')).and_call_original
+            allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd_no_checks')).and_raise(ForbiddenError.new("Forbidden"))
+            expect(CommandTopic).not_to receive(:send_command)
+            expect(Logger).not_to receive(:warn)
+            expect { @api.send(method, "INST", "ABORT") }.to raise_error(ForbiddenError)
+          end
+
+          it "logs a bypass audit record with the username" do
+            bypassed = method.include?('no_checks') ? 'range and hazardous' : (method.include?('range') ? 'range' : 'hazardous')
+            allow(Logger).to receive(:warn)
+            expect(Logger).to receive(:warn).with("User anonymous bypassed #{bypassed} check via #{method}: #{method}(\"INST ABORT\")", scope: 'DEFAULT', user: 'anonymous').once
+            @api.send(method, "INST", "ABORT")
+          end
+
+          it "logs the bypass audit record even when the packet has DISABLE_MESSAGES" do
+            allow(Logger).to receive(:warn)
+            expect(Logger).to receive(:warn).with(/User anonymous bypassed .* check via #{method}:/, scope: 'DEFAULT', user: 'anonymous').once
+            command = @api.send(method, "INST", "ABORT", log_message: false)
+            expect(command['log_message']).to eql 'false'
+          end
+        else
+          it "requires only the cmd permission and logs no bypass record" do
+            expect(@api).to receive(:authorize).once.with(hash_including(permission: 'cmd', target_name: 'INST', packet_name: 'ABORT')).and_call_original
+            expect(Logger).not_to receive(:warn)
+            @api.send(method, "INST", "ABORT")
+          end
+        end
+
         it "complains about too many parameters" do
           expect { @api.send(method, "INST", "COLLECT", "TYPE", "DURATION") }.to raise_error(/Invalid number of arguments/)
         end

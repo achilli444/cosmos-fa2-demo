@@ -50,6 +50,7 @@ from openc3.models.interface_status_model import InterfaceStatusModel
 from openc3.models.microservice_model import MicroserviceModel
 from openc3.packets.packet import Packet
 from openc3.top_level import HazardousError
+from openc3.utilities.authorization import ForbiddenError, authorize
 from test.test_helper import capture_io, mock_redis, setup_system
 
 
@@ -272,6 +273,58 @@ class TestCmdApi(unittest.TestCase):
             except Exception:
                 self.fail(f"{name} raised RuntimeError unexpectedly!")
 
+    def test_cmd_requires_only_the_cmd_permission(self):
+        for func in (cmd, cmd_raw):
+            with (
+                patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize,
+                patch("openc3.api.cmd_api.Logger") as mock_logger,
+            ):
+                func("INST ABORT")
+                self.assertEqual(mock_authorize.call_count, 1)
+                self.assertEqual(mock_authorize.call_args.kwargs["permission"], "cmd")
+                mock_logger.warn.assert_not_called()
+
+    def test_cmd_no_checks_variants_require_cmd_no_checks_permission_and_log_bypass(self):
+        cases = {
+            cmd_no_range_check: "range",
+            cmd_raw_no_range_check: "range",
+            cmd_no_hazardous_check: "hazardous",
+            cmd_raw_no_hazardous_check: "hazardous",
+            cmd_no_checks: "range and hazardous",
+            cmd_raw_no_checks: "range and hazardous",
+        }
+        for func, bypassed in cases.items():
+            with (
+                patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize,
+                patch("openc3.api.cmd_api.Logger") as mock_logger,
+            ):
+                func("INST ABORT")
+                permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+                self.assertEqual(permissions, ["cmd", "cmd_no_checks"])
+                for call in mock_authorize.call_args_list:
+                    self.assertEqual(call.kwargs["target_name"], "INST")
+                    self.assertEqual(call.kwargs["packet_name"], "ABORT")
+                mock_logger.warn.assert_called_once_with(
+                    f'User anonymous bypassed {bypassed} check via {func.__name__}: {func.__name__}("INST ABORT")',
+                    scope="DEFAULT",
+                    user="anonymous",
+                )
+
+    def test_cmd_no_checks_is_not_sent_when_cmd_no_checks_permission_is_denied(self):
+        def deny_bypass(permission=None, **kwargs):
+            if permission == "cmd_no_checks":
+                raise ForbiddenError("Forbidden")
+
+        with (
+            patch("openc3.api.cmd_api.authorize", side_effect=deny_bypass),
+            patch("openc3.api.cmd_api.CommandTopic.send_command") as mock_send,
+            patch("openc3.api.cmd_api.Logger") as mock_logger,
+        ):
+            with self.assertRaises(ForbiddenError):
+                cmd_no_checks("INST ABORT")
+            mock_send.assert_not_called()
+            mock_logger.warn.assert_not_called()
+
     def test_cmd_warns_about_hazardous_parameters(self):
         for name in [
             "cmd",
@@ -355,6 +408,10 @@ class TestCmdApi(unittest.TestCase):
             self.process = False
             with self.assertRaisesRegex(RuntimeError, "Timeout of 0.003s waiting for cmd ack"):
                 func("INST", "ABORT", timeout=0.003)
+
+    def _without_bypass_audit(self, stdout):
+        """Log output minus the WARN audit record emitted for check-bypassing commands"""
+        return "\n".join(line for line in stdout.getvalue().splitlines() if " bypassed " not in line)
 
     def test_cmd_log_message_output(self):
         for name in [
@@ -454,15 +511,22 @@ class TestCmdApi(unittest.TestCase):
                 func("INST ABORT", log_message=False)
                 self.assertNotIn(
                     "INST ABORT",
-                    stdout.getvalue(),
+                    self._without_bypass_audit(stdout),
                 )
+                # The check bypass audit record can not be suppressed by log_message
+                if "no_" in name:
+                    self.assertIn("bypassed", stdout.getvalue())
+                    self.assertIn(f"via {name}: ", stdout.getvalue())
 
             for stdout in capture_io():
                 func("INST SETPARAMS")  # This has DISABLE_MESSAGES applied
                 self.assertNotIn(
                     "INST SETPARAMS",
-                    stdout.getvalue(),
+                    self._without_bypass_audit(stdout),
                 )
+                # The check bypass audit record can not be suppressed by DISABLE_MESSAGES
+                if "no_" in name:
+                    self.assertIn(f"via {name}: ", stdout.getvalue())
 
             for stdout in capture_io():
                 func("INST SETPARAMS", log_message=True)  # Force log message
@@ -483,7 +547,7 @@ class TestCmdApi(unittest.TestCase):
                 func("INST ASCIICMD with STRING 'NOOP'")  # This has DISABLE_MESSAGES applied
                 self.assertNotIn(
                     "INST ASCIICMD",
-                    stdout.getvalue(),
+                    self._without_bypass_audit(stdout),
                 )
 
             for stdout in capture_io():

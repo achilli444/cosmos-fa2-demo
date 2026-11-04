@@ -127,6 +127,7 @@ The **Runner** role allows users to execute commands and scripts but cannot crea
 - **cmd_info** - View command definitions and parameters
 - **cmd_raw** - Send raw binary commands
 - **cmd** - Send commands to targets
+- **cmd_no_checks** - Send commands with range and/or hazardous checks bypassed (`cmd_no_range_check`, `cmd_no_hazardous_check`, `cmd_no_checks` and their `cmd_raw_*` variants). Required in addition to `cmd`; every bypass is logged with the username.
 
 ### Script Permissions
 
@@ -156,6 +157,7 @@ When command authority is enabled for a scope, an additional layer of authorizat
   - `tlm_set`
   - `cmd_raw`
   - `cmd`
+  - `cmd_no_checks`
   - `script_run`
 
 ## Custom Roles
