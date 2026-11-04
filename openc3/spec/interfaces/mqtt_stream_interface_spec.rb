@@ -54,7 +54,9 @@ module OpenC3
         expect(double).to receive(:ssl=).with(true).twice
         expect(double).to receive(:cert_file=)
         expect(double).to receive(:key_file=)
-        expect(double).to receive(:ca_file=)
+        ctx = OpenSSL::SSL::SSLContext.new
+        expect(double).to receive(:ca_file=) { |path| ctx.ca_file = path }
+        expect(double).to receive(:ssl_context).and_return(ctx)
         expect(double).to receive(:connect)
         expect(double).to receive(:connected?).and_return(true)
         # inst_tlm.txt declares META TOPIC on the first 2 packets
@@ -70,6 +72,9 @@ module OpenC3
         i.set_option('ACK_TIMEOUT', ['10.0'])
         i.connect()
         expect(i.connected?).to be true
+        # CA_FILE is the trust anchor so the system store is not added
+        expect(ctx.verify_mode).to eql OpenSSL::SSL::VERIFY_PEER
+        expect(ctx.cert_store).to be_nil
       end
 
       it "sets ssl even without cert_file, key_file, or ca_file" do
@@ -81,6 +86,67 @@ module OpenC3
         i = MqttStreamInterface.new('localhost', '1883', true, 'write_topic', 'read_topic')
         i.connect()
         expect(i.connected?).to be true
+      end
+
+      it "verifies the broker certificate against the system trust store when ssl is enabled" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        ctx = OpenSSL::SSL::SSLContext.new
+        allow(double).to receive(:ssl_context).and_return(ctx)
+        expect(double).not_to receive(:verify_host=)
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        i = MqttStreamInterface.new('localhost', '8883', true, 'write_topic', 'read_topic')
+        i.set_option('USERNAME', ['test_user'])
+        i.set_option('PASSWORD', ['test_pass'])
+        i.connect()
+        expect(ctx.verify_mode).to eql OpenSSL::SSL::VERIFY_PEER
+        expect(ctx.cert_store).to be_a OpenSSL::X509::Store
+      end
+
+      it "refuses to send credentials without ssl" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        expect(double).not_to receive(:connect)
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        i = MqttStreamInterface.new('localhost', '1883', false, 'write_topic', 'read_topic')
+        i.set_option('USERNAME', ['test_user'])
+        i.set_option('PASSWORD', ['test_pass'])
+        expect { i.connect() }.to raise_error(RuntimeError, /Refusing to send MQTT USERNAME\/PASSWORD without SSL/)
+      end
+
+      it "sends credentials without ssl only with ALLOW_INSECURE" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        expect(double).to receive(:username=).with('test_user')
+        expect(double).to receive(:password=).with('test_pass')
+        expect(double).to receive(:ssl=).with(false)
+        expect(double).to receive(:connect)
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        capture_io do |stdout|
+          i = MqttStreamInterface.new('localhost', '1883', false, 'write_topic', 'read_topic')
+          i.set_option('USERNAME', ['test_user'])
+          i.set_option('PASSWORD', ['test_pass'])
+          i.set_option('ALLOW_INSECURE', ['true'])
+          i.connect()
+          expect(stdout.string).to match(/ALLOW_INSECURE set, sending MQTT USERNAME\/PASSWORD without SSL/)
+        end
+      end
+
+      it "skips certificate verification only with ALLOW_INSECURE" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        ctx = OpenSSL::SSL::SSLContext.new
+        allow(double).to receive(:ssl_context).and_return(ctx)
+        expect(double).to receive(:verify_host=).with(false)
+        expect(double).to receive(:connect)
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        capture_io do |stdout|
+          i = MqttStreamInterface.new('localhost', '8883', true, 'write_topic', 'read_topic')
+          i.set_option('ALLOW_INSECURE', ['true'])
+          i.connect()
+          expect(stdout.string).to match(/broker certificate will not be verified/)
+        end
+        expect(ctx.verify_mode).to eql OpenSSL::SSL::VERIFY_NONE
       end
     end
 
@@ -163,6 +229,7 @@ module OpenC3
         expect(details['hostname']).to eql('mqtt-server')
         expect(details['port']).to eql(8883)
         expect(details['ssl']).to be true
+        expect(details['allow_insecure']).to be false
         expect(details['write_topic']).to eql('cmd_topic')
         expect(details['read_topic']).to eql('tlm_topic')
 
