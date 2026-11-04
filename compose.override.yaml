@@ -195,8 +195,10 @@
 #       #   SCRIPT_RUNNER_LIFECYCLE  boolean (Enterprise only)
 #       #   SUBTITLE                 free text
 #       #   SOURCE_URL               free text
-#       #   RUBYGEMS_URL             free text
-#       #   PYPI_URL                 free text
+#       #   RUBYGEMS_URL             https URL of a gem source; host must be
+#       #                            on OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS
+#       #                            when that is set (see .env)
+#       #   PYPI_URL                 https URL of a package index, same policy
 #       #   ASTRO                    JSON text
 #       #   CONTEXT_TAG              JSON text
 #       #   CLASSIFICATION_BANNER    JSON text - must contain all five of text,

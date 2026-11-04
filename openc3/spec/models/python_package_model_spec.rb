@@ -373,7 +373,6 @@ module OpenC3
         @temp_dir = Dir.mktmpdir
         allow(ENV).to receive(:[]).and_call_original
         allow(ENV).to receive(:[]).with('PYTHONUSERBASE').and_return(@temp_dir)
-        allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return(nil)
         allow(ENV).to receive(:fetch).and_call_original
         allow(ENV).to receive(:fetch).with('PYPI_URL', nil).and_return(nil)
         allow(OpenC3::Logger).to receive(:info)
@@ -530,7 +529,7 @@ module OpenC3
         PythonPackageModel.install(pkg_file, scope: "DEFAULT")
       end
 
-      it "derives --trusted-host from the pypi_url when PIP_ENABLE_TRUSTED_HOST is set" do
+      it "never passes --trusted-host, even if PIP_ENABLE_TRUSTED_HOST is set" do
         pkg_file = File.join(@temp_dir, "my_lib-1.0.0.tar.gz")
         File.write(pkg_file, "fake")
 
@@ -542,8 +541,8 @@ module OpenC3
         allow(PythonPackageModel).to receive(:get_setting).with('pypi_url', scope: "DEFAULT").and_return("https://custom.pypi.example.com")
 
         expect(pm).to receive(:spawn) do |cmd, _type, _detail, _expires, **_kw|
-          expect(cmd).to include("--trusted-host")
-          expect(cmd).to include("custom.pypi.example.com")
+          expect(cmd).to_not include("--trusted-host")
+          expect(cmd).to include("https://custom.pypi.example.com/simple")
           process_double
         end
 

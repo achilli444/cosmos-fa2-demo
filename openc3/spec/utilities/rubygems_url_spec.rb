@@ -23,13 +23,8 @@ module OpenC3
           expect(RubygemsUrl.validate(url)).to eql url
         end
 
-        it "returns http urls unchanged" do
-          url = "http://gems.example.com"
-          expect(RubygemsUrl.validate(url)).to eql url
-        end
-
         it "allows a host with a port" do
-          url = "http://localhost:8080"
+          url = "https://localhost:8080"
           expect(RubygemsUrl.validate(url)).to eql url
         end
 
@@ -49,6 +44,33 @@ module OpenC3
           expect(Logger).to receive(:error)
           payload = "https://rubygems.org ; id > /tmp/PWNED ; #"
           expect(RubygemsUrl.validate(payload)).to eql RubygemsUrl::DEFAULT
+        end
+
+        it "rejects plain http unless OPENC3_PACKAGE_SOURCE_ALLOW_HTTP is set" do
+          expect(Logger).to receive(:error).with(/plain http is not permitted/)
+          expect(RubygemsUrl.validate("http://gems.example.com")).to eql RubygemsUrl::DEFAULT
+        end
+
+        it "allows plain http when OPENC3_PACKAGE_SOURCE_ALLOW_HTTP is set, with a warning" do
+          allow(ENV).to receive(:[]).and_call_original
+          allow(ENV).to receive(:[]).with(PackageSourceUrl::ALLOW_HTTP_ENV).and_return('1')
+          expect(Logger).to receive(:warn).with(/plain http/)
+          expect(RubygemsUrl.validate("http://gems.example.com")).to eql "http://gems.example.com"
+        end
+
+        it "rejects a host that is not on OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS" do
+          allow(ENV).to receive(:[]).and_call_original
+          allow(ENV).to receive(:[]).with(PackageSourceUrl::ALLOWED_HOSTS_ENV).and_return('rubygems.org, nexus.example.com')
+          expect(Logger).to receive(:error).with(/not listed in OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS/)
+          expect(RubygemsUrl.validate("https://evil.example.com")).to eql RubygemsUrl::DEFAULT
+          expect(RubygemsUrl.validate("https://nexus.example.com/repository/gems")).to eql "https://nexus.example.com/repository/gems"
+        end
+
+        it "fails closed when the default is not on the allow-list either" do
+          allow(ENV).to receive(:[]).and_call_original
+          allow(ENV).to receive(:[]).with(PackageSourceUrl::ALLOWED_HOSTS_ENV).and_return('nexus.example.com')
+          expect(Logger).to receive(:error)
+          expect { RubygemsUrl.validate("https://evil.example.com") }.to raise_error(PackageSourceUrl::Error, /default .* is not permitted/)
         end
 
         it "rejects a non-http(s) scheme" do

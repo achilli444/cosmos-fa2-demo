@@ -18,6 +18,8 @@
 require 'json'
 require 'openc3/config/config_parser'
 require 'openc3/models/model'
+require 'openc3/utilities/rubygems_url'
+require 'openc3/utilities/pypi_url'
 
 module OpenC3
   class SettingModel < Model
@@ -118,8 +120,10 @@ module OpenC3
       # Free text
       'subtitle' => { type: :string, values: nil },
       'source_url' => { type: :string, values: nil },
-      'rubygems_url' => { type: :string, values: nil },
-      'pypi_url' => { type: :string, values: nil },
+      # Package sources: executable gems/wheels are fetched from these, so they
+      # must satisfy the PackageSourceUrl policy (https, admin host allow-list)
+      'rubygems_url' => { type: :string, values: nil, package_source: RubygemsUrl },
+      'pypi_url' => { type: :string, values: nil, package_source: PypiUrl },
       # JSON *text*: these components JSON.stringify before saving and
       # JSON.parse on load, so the stored value is a String, not an object
       'astro' => { type: :json_text, values: nil,
@@ -479,10 +483,33 @@ module OpenC3
         raise "Value for setting '#{name}' is #{size} bytes, exceeds the #{MAX_VALUE_BYTES} byte limit"
       end
 
+      validate_package_source!(name, value)
+
       allowed = KNOWN_SETTINGS.dig(name, :values)
       return if allowed.nil? or allowed.include?(value)
       # Report the coerced value so 'Local' vs 'local' is visible in the error
       raise "Invalid value #{value.inspect} for setting '#{name}'. Must be one of: #{allowed.map(&:inspect).join(', ')}"
+    end
+
+    # Reject a package source (rubygems_url, pypi_url) that is not an https URL
+    # on the admin allow-list. Runs on every write path - Admin Console / API,
+    # initsettings, local mode files and scope seeding - not only on use, so an
+    # operator is told at save time rather than at the next plugin install.
+    def self.validate_package_source!(name, value)
+      checker = KNOWN_SETTINGS.dig(name, :package_source)
+      return unless checker
+      checker.check!(value)
+    rescue PackageSourceUrl::Error => error
+      raise "Invalid value #{value.inspect} for setting '#{name}': #{error.message}"
+    end
+
+    # Every write goes through here (Model.set), including the settings API
+    # behind the Admin Console, so the package source policy cannot be bypassed
+    # by a caller that skips validate_setting!
+    def self.set(json, scope:, queued: false)
+      json = json.transform_keys(&:to_sym)
+      validate_package_source!(json[:name].to_s, json[:data])
+      super(json, scope: scope, queued: queued)
     end
 
     # The stored settings as paste-ready OPENC3_SETTING_* lines, for
@@ -527,7 +554,7 @@ module OpenC3
                     when :json, :json_text
                       keys = details[:require_keys]
                       keys ? "JSON object with keys: #{keys.join(', ')}" : 'JSON object'
-                    else 'any text'
+                    else details[:package_source] ? 'https URL of a package index (host on OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS when set)' : 'any text'
                     end
                   end
         "#{name}: #{allowed}"

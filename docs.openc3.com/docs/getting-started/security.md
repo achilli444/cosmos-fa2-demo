@@ -54,7 +54,11 @@ The following environment variables control the CSP:
 | `OPENC3_ALLOW_HTTP` | _(unset)_ | When set (e.g. `1`), broadens the CSP to allow resources over plain HTTP in addition to HTTPS. Useful for development or air-gapped networks without TLS. |
 | `OPENC3_NO_EVAL` | _(unset)_ | When set (e.g. `1`), removes `'unsafe-eval'` from the CSP `script-src` directive, blocking `eval()`, `new Function()`, and similar dynamic code execution. Only set this if no installed plugins require runtime code evaluation (e.g. Open MCT and other tools that bundle Vue's runtime template compiler will break). |
 
-By default `'unsafe-eval'` is **allowed** for third-party plugin compatibility. WebAssembly (`'wasm-unsafe-eval'`) is always allowed regardless of these flags.
+By default `'unsafe-eval'` is **allowed** for third-party plugin compatibility.
+
+### Package sources
+
+Plugin dependencies are gems and Python packages fetched from the `rubygems_url` and `pypi_url` Admin settings (seeded from `RUBYGEMS_URL` / `PYPI_URL`). Because that code runs inside COSMOS, a source is only accepted if it is an `https` URL, and, when `OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS` is set, if its host is on that list. The check runs when the setting is saved (Admin Console, `initsettings`, local mode) and again before every install, and TLS verification is never disabled for a mirror - add a private CA to `cacert.pem` instead. `OPENC3_PACKAGE_SOURCE_ALLOW_HTTP=1` is the only way to use a plain http mirror and is logged on every use. See [Environment variables](../configuration/environment.md#common-variables). WebAssembly (`'wasm-unsafe-eval'`) is always allowed regardless of these flags.
 
 To harden the CSP on a deployment that does not use plugins requiring eval, add `OPENC3_NO_EVAL` to `.env.local` (recommended) or `compose.override.yaml` under the `openc3-traefik` service, then recreate the Traefik container:
 

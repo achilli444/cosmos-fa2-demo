@@ -24,6 +24,7 @@ require "openc3/models/setting_model"
 require "openc3/models/trigger_group_model"
 require "openc3/topics/system_events_topic"
 require "openc3/utilities/rubygems_url"
+require "openc3/utilities/pypi_url"
 
 begin
   require "openc3-enterprise/models/cmd_authority_model"
@@ -452,10 +453,13 @@ module OpenC3
     def seed_database
       setting = SettingModel.get(name: "source_url")
       SettingModel.set({name: "source_url", data: "https://github.com/OpenC3/cosmos"}, scope: @scope) unless setting
+      # The env values are validated against the package source policy (https,
+      # admin host allow-list) so a bad RUBYGEMS_URL/PYPI_URL is reported and
+      # replaced with the default here rather than stored and used later
       setting = SettingModel.get(name: "rubygems_url")
-      SettingModel.set({name: "rubygems_url", data: ENV["RUBYGEMS_URL"] || RubygemsUrl::DEFAULT}, scope: @scope) unless setting
+      SettingModel.set({name: "rubygems_url", data: RubygemsUrl.validate(ENV["RUBYGEMS_URL"] || RubygemsUrl::DEFAULT)}, scope: @scope) unless setting
       setting = SettingModel.get(name: "pypi_url")
-      SettingModel.set({name: "pypi_url", data: ENV["PYPI_URL"] || "https://pypi.org"}, scope: @scope) unless setting
+      SettingModel.set({name: "pypi_url", data: PackageSourceUrl.validate(ENV["PYPI_URL"] || PypiUrl::BASE_DEFAULT, default: PypiUrl::BASE_DEFAULT, label: 'pypi_url')}, scope: @scope) unless setting
       # Default the news feed on, but only if nothing has set it yet. `openc3cli
       # initsettings` runs before the first plugin load creates this scope, so an
       # unconditional set here would discard OPENC3_SETTING_NEWS_FEED=false and
