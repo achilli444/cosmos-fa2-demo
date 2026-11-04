@@ -33,6 +33,7 @@ from openc3.topics.topic import Topic
 from openc3.utilities.authorization import authorize
 from openc3.utilities.cmd_log import _build_cmd_output_string
 from openc3.utilities.extract import extract_fields_from_cmd_text
+from openc3.utilities.logger import Logger
 from openc3.utilities.store import Store
 
 
@@ -372,11 +373,18 @@ def get_cmd_hazardous(*args, scope=OPENC3_SCOPE, manual=False):
         manual=manual,
     )
     packet = TargetModel.packet(target_name, command_name, type="CMD", scope=scope)
+    return _cmd_pkt_hazardous(packet, parameters)
+
+
+def _cmd_pkt_hazardous(packet, parameters):
+    """Returns whether the command packet itself or any of the given parameter
+    states are marked HAZARDOUS. Shared by get_cmd_hazardous and the
+    hazardous_check=False permission gate in _cmd_implementation."""
     if packet.get("hazardous") is not None:
         return True
 
     for item in packet["items"]:
-        if item["name"] not in parameters and "states" not in item:
+        if item["name"] not in parameters or "states" not in item:
             continue
 
         # States are an array of the name followed by a dict of 'value' and sometimes 'hazardous'
@@ -675,6 +683,22 @@ def _cmd_implementation(
         validate = kwargs["validate"]
 
     username = user["username"] if user and user["username"] else "anonymous"
+    if not hazardous_check and _cmd_pkt_hazardous(packet, cmd_params):
+        # Sending a HAZARDOUS command with the operator confirmation check disabled is an
+        # approval decision, so it requires approve_hazardous in addition to cmd. Core authorize
+        # ignores the permission name; Enterprise enforces it per role.
+        authorize(
+            permission="approve_hazardous",
+            target_name=target_name,
+            packet_name=cmd_name,
+            scope=scope,
+            manual=manual,
+        )
+        Logger.warn(
+            f"Hazardous command {cmd_string} sent via {method_name} with hazardous check disabled",
+            scope=scope,
+            user=username,
+        )
     command = {
         "target_name": target_name,
         "cmd_name": cmd_name,

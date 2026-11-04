@@ -253,51 +253,70 @@ class QueuesController < ApplicationController
     end
   end
 
+  # Executes (sends) a queued command. A HAZARDOUS command is NOT automatically
+  # resent with the hazardous check disabled: the first attempt returns 409 with
+  # the hazardous description and the command is restored to the queue. The
+  # operator must explicitly re-exec with hazardous_confirmed=true, which is
+  # authorized against approve_hazardous and logged with the confirming user.
   def exec_command
     return unless authorization('cmd')
+    hazardous_confirmed = ActiveModel::Type::Boolean.new.cast(params[:hazardous_confirmed]) == true
+    if hazardous_confirmed
+      # Explicit operator confirmation to bypass the hazardous check is an approval decision
+      return unless authorization('approve_hazardous')
+    end
     begin
       model = @model_class.get_model(name: params[:name], scope: params[:scope])
       if model.nil?
         render json: { status: 'error', message: NOT_FOUND }, status: :not_found
         return
       end
-      id = params[:id]&.to_f
+      id = params[:id]
+      if id
+        id = id.to_f
+      else
+        id = nil
+      end
       command_data = model.remove_command(id)
       if command_data
-        hazardous = false
         token = get_token(username(), scope: params[:scope])
-        begin
-          # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
-          validate = command_data.key?('validate') ? command_data['validate'] : true
-          timeout = command_data['timeout'] # Default is nil which means use system default timeout
-          if command_data['target_name'] && command_data['cmd_name']
-            # New format: use 3-parameter cmd() method
-            if command_data['cmd_params']
-              cmd_params = JSON.parse(command_data['cmd_params'], allow_nan: true, create_additions: true)
-            else
-              cmd_params = {}
-            end
-            if hazardous
-              cmd_no_hazardous_check(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            else
-              cmd(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            end
-          elsif command_data['value']
-            # Legacy format: use single string parameter
-            if hazardous
-              cmd_no_hazardous_check(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            else
-              cmd(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            end
+        # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
+        validate = command_data.key?('validate') ? command_data['validate'] : true
+        timeout = command_data['timeout'] # Default is nil which means use system default timeout
+        cmd_params = nil
+        if command_data['target_name'] && command_data['cmd_name']
+          # New format: use 3-parameter cmd() method
+          if command_data['cmd_params']
+            cmd_params = JSON.parse(command_data['cmd_params'], allow_nan: true, create_additions: true)
           else
-            log_error("Invalid command format in queue: #{command_data}")
-            render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
-            return
+            cmd_params = {}
           end
-        rescue HazardousError => e
-          # Rescue hazardous error and retry with cmd_no_hazardous_check
-          hazardous = true
-          retry
+          cmd_args = [command_data['target_name'], command_data['cmd_name'], cmd_params]
+        elsif command_data['value']
+          # Legacy format: use single string parameter
+          cmd_args = [command_data['value']]
+        else
+          log_error("Invalid command format in queue: #{command_data}")
+          render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
+          return
+        end
+        cmd_kwargs = { queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token }
+        begin
+          begin
+            cmd(*cmd_args, **cmd_kwargs)
+          rescue HazardousError => e
+            unless hazardous_confirmed
+              # Put the command back where it was so the operator can confirm and exec again
+              restore_command(model, command_data, cmd_params)
+              OpenC3::Logger.warn("Hazardous command #{e.formatted} in queue #{params[:name]} not sent: operator confirmation required", user: username(), scope: params[:scope])
+              render json: { status: 'error', message: "Hazardous command #{e.formatted} requires confirmation: #{e.hazardous_description}. Re-exec with hazardous_confirmed to send.",
+                             type: 'HazardousError', target_name: e.target_name, cmd_name: e.cmd_name, cmd_params: e.cmd_params,
+                             hazardous_description: e.hazardous_description, formatted: e.formatted, id: command_data['id'] }, status: :conflict
+              return
+            end
+            OpenC3::Logger.warn("Hazardous command #{e.formatted} in queue #{params[:name]} confirmed and sent with hazardous check disabled", user: username(), scope: params[:scope])
+            cmd_no_hazardous_check(*cmd_args, **cmd_kwargs)
+          end
         rescue StandardError => e
           log_error(e)
           render json: { status: 'error', message: "Failed to execute command: #{e.message}", type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
@@ -361,6 +380,18 @@ class QueuesController < ApplicationController
       else
         return nil
       end
+    end
+  end
+
+  # Re-inserts a command removed by exec_command at its original id after a
+  # hazardous command was refused for lack of operator confirmation
+  def restore_command(model, command_data, cmd_params)
+    if command_data['target_name'] && command_data['cmd_name']
+      model.insert_command(id: command_data['id'], username: command_data['username'], target_name: command_data['target_name'],
+                           cmd_name: command_data['cmd_name'], cmd_params: cmd_params, validate: command_data['validate'], timeout: command_data['timeout'])
+    else
+      model.insert_command(id: command_data['id'], username: command_data['username'], command: command_data['value'],
+                           validate: command_data['validate'], timeout: command_data['timeout'])
     end
   end
 end

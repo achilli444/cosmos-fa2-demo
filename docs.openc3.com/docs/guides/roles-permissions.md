@@ -148,7 +148,7 @@ The **Runner** role allows users to execute commands and scripts but cannot crea
 
 ### Approval Permissions
 
-- **approve_hazardous** - Approve hazardous commands
+- **approve_hazardous** - Approve hazardous commands. Also required (in addition to `cmd`) to send a HAZARDOUS command with the hazardous check disabled: `cmd_no_hazardous_check`, `cmd_no_checks`, their `cmd_raw` variants, answering the hazardous prompt in Script Runner, and `queue_exec` with `hazardous_confirmed`.
 - **approve_restricted** - Approve restricted commands
 - **approve_normal** - Approve normal commands
 

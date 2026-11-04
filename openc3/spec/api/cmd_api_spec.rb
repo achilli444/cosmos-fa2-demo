@@ -478,6 +478,46 @@ module OpenC3
       end
     end
 
+    describe "hazardous check bypass permission" do
+      %w(cmd_no_hazardous_check cmd_raw_no_hazardous_check cmd_no_checks cmd_raw_no_checks).each do |method|
+        it "#{method} requires approve_hazardous to send a hazardous command" do
+          expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: 'INST', packet_name: 'CLEAR')).and_call_original
+          expect(@api).to receive(:authorize).with(hash_including(permission: 'approve_hazardous', target_name: 'INST', packet_name: 'CLEAR')).and_call_original
+          expect(Logger).to receive(:warn).with(/Hazardous command .*INST CLEAR.* sent via #{method} with hazardous check disabled/, hash_including(user: 'anonymous', scope: 'DEFAULT'))
+          @api.send(method, "INST CLEAR")
+        end
+
+        it "#{method} requires approve_hazardous to send a command with a hazardous parameter" do
+          type = method.include?('raw') ? 1 : 'SPECIAL'
+          expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd')).and_call_original
+          expect(@api).to receive(:authorize).with(hash_including(permission: 'approve_hazardous', target_name: 'INST', packet_name: 'COLLECT')).and_call_original
+          @api.send(method, "INST COLLECT with TYPE #{type}")
+        end
+
+        it "#{method} does not send a hazardous command without approve_hazardous" do
+          allow(@api).to receive(:authorize).and_call_original
+          allow(@api).to receive(:authorize).with(hash_including(permission: 'approve_hazardous')).and_raise(ForbiddenError, "approve_hazardous required")
+          expect(CommandTopic).not_to receive(:send_command)
+          expect { @api.send(method, "INST CLEAR") }.to raise_error(ForbiddenError, "approve_hazardous required")
+        end
+
+        it "#{method} does not require approve_hazardous for non-hazardous commands" do
+          expect(@api).not_to receive(:authorize).with(hash_including(permission: 'approve_hazardous'))
+          type = method.include?('raw') ? 0 : 'NORMAL'
+          @api.send(method, "INST ABORT")
+          @api.send(method, "INST COLLECT with TYPE #{type}")
+        end
+      end
+
+      %w(cmd cmd_raw cmd_no_range_check cmd_raw_no_range_check).each do |method|
+        it "#{method} does not require approve_hazardous" do
+          expect(@api).not_to receive(:authorize).with(hash_including(permission: 'approve_hazardous'))
+          @api.send(method, "INST ABORT")
+          expect { @api.send(method, "INST CLEAR") }.to raise_error(/Hazardous/)
+        end
+      end
+    end
+
     describe "get_cmd_hazardous" do
       it "returns whether the command with parameters is hazardous" do
         expect(@api.get_cmd_hazardous("inst collect with type NORMAL")).to be false

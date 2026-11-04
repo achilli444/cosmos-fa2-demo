@@ -287,25 +287,7 @@ module OpenC3
 
       authorize(permission: 'cmd_info', target_name: target_name, packet_name: command_name, manual: manual, scope: scope, token: token)
       packet = TargetModel.packet(target_name, command_name, type: :CMD, scope: scope)
-      return true if packet['hazardous']
-
-      packet['items'].each do |item|
-        next unless parameters.keys.include?(item['name']) && item['states']
-
-        # States are an array of the name followed by a hash of 'value' and sometimes 'hazardous'
-        item['states'].each do |name, hash|
-          parameter_name = parameters[item['name']]
-          # Remove quotes from string parameters
-          parameter_name = parameter_name.gsub('"', '').gsub("'", '') if parameter_name.is_a?(String)
-          # To be hazardous the state must be marked hazardous
-          # Check if either the state name or value matches the param passed
-          if hash['hazardous'] && (name == parameter_name || hash['value'] == parameter_name)
-            return true
-          end
-        end
-      end
-
-      false
+      return _cmd_pkt_hazardous?(packet, parameters)
     end
 
     # Returns a value from the specified command
@@ -521,6 +503,13 @@ module OpenC3
       end
       cmd_string = _build_cmd_output_string(method_name, target_name, cmd_name, cmd_params, packet)
       username = user && user['username'] ? user['username'] : 'anonymous'
+      if !hazardous_check && _cmd_pkt_hazardous?(packet, cmd_params)
+        # Sending a HAZARDOUS command with the operator confirmation check disabled is an
+        # approval decision, so it requires approve_hazardous in addition to cmd. Core authorize
+        # ignores the permission name; Enterprise enforces it per role.
+        authorize(permission: 'approve_hazardous', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+        Logger.warn("Hazardous command #{cmd_string} sent via #{method_name} with hazardous check disabled", user: username, scope: scope)
+      end
       command = {
         'target_name' => target_name,
         'cmd_name' => cmd_name,
@@ -558,6 +547,31 @@ module OpenC3
         CommandTopic.send_command(command, timeout: timeout, scope: scope)
       end
       return command
+    end
+
+    # Returns whether the command packet itself or any of the given parameter
+    # states are marked HAZARDOUS. Shared by get_cmd_hazardous and the
+    # hazardous_check: false permission gate in _cmd_implementation.
+    def _cmd_pkt_hazardous?(packet, parameters)
+      return true if packet['hazardous']
+
+      packet['items'].each do |item|
+        next unless parameters.keys.include?(item['name']) && item['states']
+
+        # States are an array of the name followed by a hash of 'value' and sometimes 'hazardous'
+        item['states'].each do |name, hash|
+          parameter_name = parameters[item['name']]
+          # Remove quotes from string parameters
+          parameter_name = parameter_name.gsub('"', '').gsub("'", '') if parameter_name.is_a?(String)
+          # To be hazardous the state must be marked hazardous
+          # Check if either the state name or value matches the param passed
+          if hash['hazardous'] && (name == parameter_name || hash['value'] == parameter_name)
+            return true
+          end
+        end
+      end
+
+      false
     end
   end
 end
