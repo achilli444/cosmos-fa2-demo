@@ -628,6 +628,7 @@ module OpenC3
         usage = "#{keyword}"
         parser.verify_num_parameters(0, 0, usage)
         raise parser.error("EMERGENCY only applies to COMMAND packets") unless @current_cmd_or_tlm == COMMAND
+
         @current_packet.emergency = true
 
       when 'CATCHALL'

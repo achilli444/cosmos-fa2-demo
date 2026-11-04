@@ -545,6 +545,7 @@ module OpenC3
         if queue
           raise "#{target_name} #{cmd_name} is an EMERGENCY command and cannot be queued (queue: #{queue.inspect})"
         end
+
         queue = false
       end
       # Users have to explicitly opt into a default queue by setting the OPENC3_DEFAULT_QUEUE
