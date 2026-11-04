@@ -15,23 +15,39 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
-require 'argon2'
-require 'securerandom'
+require 'base64'
+require 'openssl'
 require 'openc3/utilities/store'
 
 module OpenC3
   class AuthModel
-    ARGON2_PROFILE = ENV["OPENC3_ARGON2_PROFILE"]&.to_sym || :rfc_9106_low_memory
+    # Passwords are stored as PBKDF2-HMAC-SHA-256 (NIST SP 800-132) computed by
+    # OpenSSL, so a FIPS 140 validated OpenSSL provider covers the password
+    # store (SC-13, IA-5(1)). Argon2 is not a FIPS approved algorithm; hashes
+    # written by earlier versions are still verified (via the argon2 gem, loaded
+    # only when such a hash is encountered) and rewritten as PBKDF2 on the next
+    # successful password check.
+    #
+    # Stored format: $pbkdf2-sha256$<iterations>$<base64 salt>$<base64 key>
+    PBKDF2_PREFIX = '$pbkdf2-sha256$'
+    PBKDF2_DIGEST = 'sha256'
+    PBKDF2_SALT_LENGTH = 16 # bytes; SP 800-132 requires at least 128 bits
+    PBKDF2_KEY_LENGTH = 32 # bytes
+    # OWASP recommendation for PBKDF2-HMAC-SHA-256
+    PBKDF2_DEFAULT_ITERATIONS = 600_000
+    # SP 800-63B-4 floor; OPENC3_PBKDF2_ITERATIONS can raise the default but not go below this
+    PBKDF2_MIN_ITERATIONS = 10_000
+    LEGACY_ARGON2_PREFIX = '$argon2'
 
     # Redis keys
-    PRIMARY_KEY = 'OPENC3__TOKEN' # for argon2 password hash
+    PRIMARY_KEY = 'OPENC3__TOKEN' # for the password hash
     SESSIONS_KEY = 'OPENC3__SESSIONS' # for hash containing session tokens
 
     # The length of time in seconds to keep redis values in memory
     PW_HASH_CACHE_TIMEOUT = 5
     SESSION_CACHE_TIMEOUT = 5
 
-    # Cached argon2 password hash
+    # Cached password hash
     @@pw_hash_cache = nil
     @@pw_hash_cache_time = nil
 
@@ -45,8 +61,9 @@ module OpenC3
     OTP_PREFIX = "otp_"
 
     # A session token is SESSION_PREFIX followed by the unpadded urlsafe base64
-    # encoding of 16 random bytes, i.e. exactly 22 characters of [A-Za-z0-9_-].
-    # Keep this in sync with generate_session.
+    # encoding of SESSION_TOKEN_BYTES random bytes, i.e. exactly 22 characters
+    # of [A-Za-z0-9_-]. Keep this in sync with generate_session.
+    SESSION_TOKEN_BYTES = 16
     SESSION_TOKEN_REGEX = /\A#{SESSION_PREFIX}[A-Za-z0-9_-]{22}\z/
 
     # Whether the given value could have been produced by generate_session.
@@ -121,18 +138,111 @@ module OpenC3
       end
 
       unless mode == :token
-        return true if @@pw_hash_cache and (time - @@pw_hash_cache_time) < PW_HASH_CACHE_TIMEOUT and Argon2::Password.verify_password(token, @@pw_hash_cache)
+        return true if @@pw_hash_cache and (time - @@pw_hash_cache_time) < PW_HASH_CACHE_TIMEOUT and check_password?(token, @@pw_hash_cache)
 
         # Check stored password hash
         pw_hash = Store.get(PRIMARY_KEY)
-        raise "invalid password hash" if pw_hash.nil? || !pw_hash.start_with?("$argon2") # Catch users who didn't run the migration utility when upgrading to COSMOS 7
+        raise "invalid password hash" unless supported_hash?(pw_hash) # Catch users who didn't run the migration utility when upgrading to COSMOS 7
+
         @@pw_hash_cache = pw_hash
         @@pw_hash_cache_time = time
-        return true if Argon2::Password.verify_password(token, @@pw_hash_cache)
+        return true if check_password?(token, @@pw_hash_cache)
       end
 
       return false
     end
+
+    # Derives the stored representation of a password with PBKDF2-HMAC-SHA-256
+    # and a fresh random salt. This is the only hash format new passwords are
+    # written in.
+    # @param password [String] the plaintext password
+    # @return [String] the PBKDF2 hash string
+    def self.hash_password(password)
+      iterations = pbkdf2_iterations()
+      salt = OpenSSL::Random.random_bytes(PBKDF2_SALT_LENGTH)
+      key = OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: iterations, length: PBKDF2_KEY_LENGTH, hash: PBKDF2_DIGEST)
+      "#{PBKDF2_PREFIX}#{iterations}$#{Base64.strict_encode64(salt)}$#{Base64.strict_encode64(key)}"
+    end
+
+    # The PBKDF2 iteration count used for new hashes. OPENC3_PBKDF2_ITERATIONS
+    # overrides the default but is clamped to PBKDF2_MIN_ITERATIONS.
+    # @return [Integer]
+    def self.pbkdf2_iterations
+      configured = ENV.fetch('OPENC3_PBKDF2_ITERATIONS', nil)
+      iterations = (configured.nil? or configured.empty?) ? PBKDF2_DEFAULT_ITERATIONS : configured.to_i
+      [iterations, PBKDF2_MIN_ITERATIONS].max
+    end
+
+    # Whether the stored hash is in a format this version can verify.
+    # @param pw_hash [String, nil] the stored hash
+    # @return [Boolean]
+    def self.supported_hash?(pw_hash)
+      return false if pw_hash.nil?
+
+      pw_hash.start_with?(PBKDF2_PREFIX) or legacy_hash?(pw_hash)
+    end
+
+    # Whether the stored hash was written by a pre-PBKDF2 version (Argon2).
+    # @param pw_hash [String] the stored hash
+    # @return [Boolean]
+    def self.legacy_hash?(pw_hash)
+      pw_hash.start_with?(LEGACY_ARGON2_PREFIX)
+    end
+
+    # Compares a plaintext password against a stored hash of any supported format.
+    # Does not touch the store.
+    # @param password [String] the plaintext password
+    # @param pw_hash [String] the stored hash
+    # @return [Boolean] whether the password produced the hash
+    def self.password_matches?(password, pw_hash)
+      if pw_hash.start_with?(PBKDF2_PREFIX)
+        pbkdf2_matches?(password, pw_hash)
+      elsif legacy_hash?(pw_hash)
+        legacy_argon2_matches?(password, pw_hash)
+      else
+        false
+      end
+    end
+
+    # Verifies the password and, if the stored hash is a legacy format,
+    # rewrites it as PBKDF2 so the legacy verifier is never needed again.
+    def self.check_password?(password, pw_hash)
+      return false unless password_matches?(password, pw_hash)
+
+      if legacy_hash?(pw_hash)
+        new_hash = hash_password(password)
+        Store.set(PRIMARY_KEY, new_hash)
+        @@pw_hash_cache = new_hash
+        @@pw_hash_cache_time = Time.now
+      end
+      true
+    end
+
+    def self.pbkdf2_matches?(password, pw_hash)
+      fields = pw_hash.split('$')
+      # ["", "pbkdf2-sha256", iterations, salt, key]
+      return false unless fields.length == 5
+
+      iterations = fields[2].to_i
+      return false if iterations <= 0
+
+      salt = Base64.strict_decode64(fields[3])
+      expected = Base64.strict_decode64(fields[4])
+      return false if expected.empty?
+
+      actual = OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: iterations, length: expected.bytesize, hash: PBKDF2_DIGEST)
+      OpenSSL.fixed_length_secure_compare(actual, expected)
+    rescue ArgumentError
+      false
+    end
+
+    # Argon2 is only loaded here, on demand, so deployments whose hash has
+    # already been migrated never load the non-FIPS library.
+    def self.legacy_argon2_matches?(password, pw_hash)
+      require 'argon2'
+      Argon2::Password.verify_password(password, pw_hash)
+    end
+    private_class_method :pbkdf2_matches?, :legacy_argon2_matches?
 
     def self.set(password, old_password, key = PRIMARY_KEY)
       raise "password must not be nil or empty" if password.nil? or password.empty?
@@ -142,7 +252,7 @@ module OpenC3
         raise "old_password must not be nil or empty" if old_password.nil? or old_password.empty?
         raise "old_password incorrect" unless verify_no_service(old_password, mode: :password)
       end
-      pw_hash = Argon2::Password.create(password, profile: ARGON2_PROFILE)
+      pw_hash = hash_password(password)
       Store.set(key, pw_hash)
       @@pw_hash_cache = nil
       @@pw_hash_cache_time = nil
@@ -150,10 +260,13 @@ module OpenC3
     end
 
     # Creates a new session token. DO NOT CALL BEFORE VERIFYING.
+    # Random bytes come from OpenSSL's DRBG (RAND_bytes) rather than Ruby's
+    # SecureRandom so the token source is the same (optionally FIPS validated)
+    # module as the password KDF.
     # @param otp [Boolean] whether to create a one-time use token (default: false)
     # @return [String] the new session token
     def self.generate_session(otp: false)
-      token = SecureRandom.urlsafe_base64(nil, false)
+      token = Base64.urlsafe_encode64(OpenSSL::Random.random_bytes(SESSION_TOKEN_BYTES), padding: false)
       if otp
         token = OTP_PREFIX + token
       else

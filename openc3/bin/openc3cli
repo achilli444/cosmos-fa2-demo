@@ -20,6 +20,7 @@
 
 require 'openc3'
 require 'openc3/bridge/bridge'
+require 'openc3/models/auth_model'
 require 'openc3/models/bridge_model'
 require 'openc3/models/gem_model'
 require 'openc3/models/migration_model'
@@ -44,7 +45,6 @@ require 'erb'
 require 'irb'
 require 'irb/completion'
 require 'digest'
-require 'argon2'
 
 $redis_shardnum = ENV['OPENC3_SHARDNUM'] || "0"
 $redis_url = "redis://#{ENV['OPENC3_REDIS_HOSTNAME'].to_s.gsub("SHARDNUM", $redis_shardnum)}:#{ENV['OPENC3_REDIS_PORT']}"
@@ -961,34 +961,42 @@ end
 
 def set_password
   password = ENV['OPENC3_API_PASSWORD']
-  argon2_profile = ENV["OPENC3_ARGON2_PROFILE"]&.to_sym || :rfc_9106_low_memory
   if password.nil? or password.empty?
     abort "OPENC3_API_PASSWORD environment variable is required"
   end
-  if password.length < 8
-    abort "Password must be at least 8 characters"
+  if password.length < OpenC3::AuthModel::MIN_PASSWORD_LENGTH
+    abort "Password must be at least #{OpenC3::AuthModel::MIN_PASSWORD_LENGTH} characters"
   end
   redis = Redis.new(url: $redis_url, username: ENV['OPENC3_REDIS_USERNAME'], password: ENV['OPENC3_REDIS_PASSWORD'])
   if redis.exists('OPENC3__TOKEN') == 1
     abort "Password has already been set. Use the web interface to change the password."
   end
-  pw_hash = Argon2::Password.create(password, profile: argon2_profile)
+  pw_hash = OpenC3::AuthModel.hash_password(password)
   redis.set('OPENC3__TOKEN', pw_hash)
   puts "Password set successfully."
   exit 0
 end
 
+# Rewrites the stored password hash as PBKDF2-HMAC-SHA-256. Accepts the COSMOS 6
+# SHA-256 hex digest and the earlier COSMOS 7 Argon2 format. Argon2 hashes are
+# also migrated automatically on the next successful login, so this command is
+# only required when coming from COSMOS 6.
 def migrate_password_hash
   password = ENV['OPENC3_API_PASSWORD']
-  argon2_profile = ENV["OPENC3_ARGON2_PROFILE"]&.to_sym || :rfc_9106_low_memory
   if password.nil? or password.empty?
     abort "OPENC3_API_PASSWORD environment variable is required for password migration"
   end
   redis = Redis.new(url: $redis_url, username: ENV['OPENC3_REDIS_USERNAME'], password: ENV['OPENC3_REDIS_PASSWORD'])
   old_pw_hash = redis.get('OPENC3__TOKEN')
-  abort "Password hash already migrated" if old_pw_hash.start_with?('$argon2')
-  abort "OPENC3_API_PASSWORD incorrect" unless old_pw_hash == Digest::SHA256.hexdigest(password)
-  new_pw_hash = Argon2::Password.create(password, profile: argon2_profile)
+  abort "No password hash stored. Use setpassword instead." if old_pw_hash.nil?
+  abort "Password hash already migrated" if old_pw_hash.start_with?(OpenC3::AuthModel::PBKDF2_PREFIX)
+  if OpenC3::AuthModel.legacy_hash?(old_pw_hash)
+    matches = OpenC3::AuthModel.password_matches?(password, old_pw_hash)
+  else
+    matches = OpenSSL.secure_compare(old_pw_hash, Digest::SHA256.hexdigest(password))
+  end
+  abort "OPENC3_API_PASSWORD incorrect" unless matches
+  new_pw_hash = OpenC3::AuthModel.hash_password(password)
   redis.set('OPENC3__TOKEN', new_pw_hash)
   puts "Password migrated successfully."
   exit 0

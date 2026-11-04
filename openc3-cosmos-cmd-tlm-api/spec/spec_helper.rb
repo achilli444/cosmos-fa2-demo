@@ -68,6 +68,8 @@ ENV['OPENC3_REDIS_EPHEMERAL_HOSTNAME'] = '127.0.0.1'
 ENV['OPENC3_REDIS_EPHEMERAL_PORT'] = '6380'
 # Set some usernames / passwords
 ENV['OPENC3_API_PASSWORD'] = 'password'
+# Specs re-hash and re-verify the password constantly; use the AuthModel floor to keep them fast
+ENV['OPENC3_PBKDF2_ITERATIONS'] = '10000'
 ENV['OPENC3_SERVICE_PASSWORD'] = 'openc3service'
 ENV['OPENC3_REDIS_USERNAME'] = 'openc3'
 ENV['OPENC3_REDIS_PASSWORD'] = 'openc3password'

@@ -31,7 +31,8 @@ on:
 #   cancel-in-progress: true
 
 env:
-  OPENC3_ARGON2_PROFILE: "unsafe_cheapest"
+  # Floor PBKDF2 cost so the many test logins stay fast (AuthModel clamps to its minimum)
+  OPENC3_PBKDF2_ITERATIONS: "10000"
   # Build the tool bundles with sourcemaps (openc3-cosmos-init build arg) so
   # V8 coverage collected by the tests can map back to original sources.
   # The build-cosmos action mixes this into the init image cache key, so the
