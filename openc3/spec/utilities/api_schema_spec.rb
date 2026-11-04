@@ -18,7 +18,11 @@ require 'openc3/script'
 
 module OpenC3
   describe ApiSchema do
-    schema_vars = %w(OPENC3_API_SCHEMA OPENC3_SCRIPT_API_SCHEMA OPENC3_ALLOW_PLAINTEXT_API)
+    # Cleared so the URL builders fall back to their compiled-in defaults
+    # regardless of what the surrounding suite or CI runner exports
+    schema_vars = %w(OPENC3_API_SCHEMA OPENC3_SCRIPT_API_SCHEMA OPENC3_ALLOW_PLAINTEXT_API
+                     OPENC3_API_HOSTNAME OPENC3_API_PORT OPENC3_API_CABLE_PORT
+                     OPENC3_SCRIPT_API_HOSTNAME OPENC3_SCRIPT_API_PORT OPENC3_SCRIPT_API_CABLE_PORT)
 
     before(:each) do
       @saved = schema_vars.to_h { |v| [v, ENV[v]] }
