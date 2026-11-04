@@ -53,6 +53,28 @@ module OpenC3
       it "returns nil if the value doesn't exist" do
         expect(@api.stash_get('nope')).to be_nil
       end
+
+      it "restores NaN and Infinity floats" do
+        @api.stash_set('key', { 'nan' => Float::NAN, 'inf' => Float::INFINITY })
+        result = @api.stash_get('key')
+        expect(result['nan']).to be_nan
+        expect(result['inf']).to eql Float::INFINITY
+      end
+
+      it "does not instantiate classes named by json_class in stored values" do
+        klass = Class.new do
+          def self.json_create(_object)
+            raise "json_create must not be called"
+          end
+        end
+        stub_const("SpecJsonCreateTarget", klass)
+        # A script_run user can store any hash, including one carrying a json_class marker
+        @api.stash_set('key', { 'json_class' => 'SpecJsonCreateTarget', 'raw' => 1 })
+        expect(@api.stash_get('key')).to eql({ 'json_class' => 'SpecJsonCreateTarget', 'raw' => 1 })
+        expect(@api.stash_all['key']).to eql({ 'json_class' => 'SpecJsonCreateTarget', 'raw' => 1 })
+        @api.stash_set('key', { 'json_class' => 'Time', 's' => 0, 'n' => 0 })
+        expect(@api.stash_get('key')).to eql({ 'json_class' => 'Time', 's' => 0, 'n' => 0 })
+      end
     end
 
     describe "stash_delete" do

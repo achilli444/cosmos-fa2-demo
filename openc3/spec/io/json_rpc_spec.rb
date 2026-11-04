@@ -113,4 +113,118 @@ module OpenC3
       end
     end
   end
+
+  describe JsonRpc do
+    describe "self.parse" do
+      it "restores Float NaN and Infinity encodings" do
+        json = { "a" => Float::NAN, "b" => Float::INFINITY, "c" => -Float::INFINITY, "d" => 1.5 }.as_json.to_json(allow_nan: true)
+        result = JsonRpc.parse(json)
+        expect(result["a"]).to be_nan
+        expect(result["b"]).to eql Float::INFINITY
+        expect(result["c"]).to eql(-Float::INFINITY)
+        expect(result["d"]).to eql 1.5
+      end
+
+      it "restores binary String encodings nested in arrays and hashes" do
+        bytes = "\xDE\xAD\xBE\xEF".b
+        json = { "list" => [bytes, { "inner" => bytes }] }.as_json.to_json(allow_nan: true)
+        result = JsonRpc.parse(json)
+        expect(result["list"][0]).to eql bytes
+        expect(result["list"][0].encoding).to eql Encoding::ASCII_8BIT
+        expect(result["list"][1]["inner"]).to eql bytes
+      end
+
+      it "leaves malformed String raw values as plain hashes" do
+        result = JsonRpc.parse('{"json_class":"String","raw":[1,"x",300]}')
+        expect(result).to eql({ "json_class" => "String", "raw" => [1, "x", 300] })
+        result = JsonRpc.parse('{"json_class":"String","raw":"text"}')
+        expect(result).to eql({ "json_class" => "String", "raw" => "text" })
+      end
+
+      it "never instantiates classes named by json_class" do
+        klass = Class.new do
+          def self.json_create(_object)
+            raise "json_create must not be called"
+          end
+        end
+        stub_const("SpecJsonCreateTarget", klass)
+        result = JsonRpc.parse('{"json_class":"SpecJsonCreateTarget","raw":{"a":1}}')
+        expect(result).to eql({ "json_class" => "SpecJsonCreateTarget", "raw" => { "a" => 1 } })
+        result = JsonRpc.parse('{"json_class":"Time","s":0,"n":0}')
+        expect(result).to eql({ "json_class" => "Time", "s" => 0, "n" => 0 })
+        expect(JsonRpc.parse('[{"json_class":"Range","a":[0,1,false]}]')).to eql([{ "json_class" => "Range", "a" => [0, 1, false] }])
+      end
+    end
+  end
+
+  describe JsonRpcRequest do
+    describe "self.from_json" do
+      it "parses a request with typed params" do
+        json = { "jsonrpc" => "2.0", "method" => "cmd", "params" => ["INST", "\xDE\xAD".b, Float::NAN], "keyword_params" => { "scope" => "DEFAULT" }, "id" => 1 }.as_json.to_json(allow_nan: true)
+        request = JsonRpcRequest.from_json(json, { 'HTTP_AUTHORIZATION' => 'token' })
+        expect(request.method).to eql 'cmd'
+        expect(request.params[0]).to eql 'INST'
+        expect(request.params[1]).to eql "\xDE\xAD".b
+        expect(request.params[2]).to be_nan
+        expect(request.keyword_params).to eql({ scope: 'DEFAULT', token: 'token' })
+        expect(request.id).to eql 1
+      end
+
+      it "does not instantiate classes named by json_class" do
+        klass = Class.new do
+          def self.json_create(_object)
+            raise "json_create must not be called"
+          end
+        end
+        stub_const("SpecJsonCreateTarget", klass)
+        json = '{"jsonrpc":"2.0","method":"cmd","params":[{"json_class":"SpecJsonCreateTarget","raw":1}],"id":1}'
+        request = JsonRpcRequest.from_json(json, {})
+        expect(request.params[0]).to eql({ "json_class" => "SpecJsonCreateTarget", "raw" => 1 })
+      end
+
+      it "rejects requests with the wrong shape" do
+        expect { JsonRpcRequest.from_json('[]', {}) }.to raise_error(/Invalid JSON-RPC 2.0 Request/)
+        expect { JsonRpcRequest.from_json('{"jsonrpc":"2.0","method":["cmd"],"id":1}', {}) }.to raise_error(/Invalid JSON-RPC 2.0 Request/)
+        expect { JsonRpcRequest.from_json('{"jsonrpc":"2.0","method":"cmd","params":{},"id":1}', {}) }.to raise_error(/Invalid JSON-RPC 2.0 Request/)
+        expect { JsonRpcRequest.from_json('{"jsonrpc":"2.0","method":"cmd","keyword_params":[],"id":1}', {}) }.to raise_error(/Invalid JSON-RPC 2.0 Request/)
+      end
+    end
+  end
+
+  describe JsonRpcResponse do
+    describe "self.from_json" do
+      it "parses a success response with typed result" do
+        json = JsonRpcSuccessResponse.new({ "value" => Float::INFINITY, "raw" => "\xDE\xAD".b }, 5).to_json(allow_nan: true)
+        response = JsonRpcResponse.from_json(json)
+        expect(response).to be_a JsonRpcSuccessResponse
+        expect(response.result["value"]).to eql Float::INFINITY
+        expect(response.result["raw"]).to eql "\xDE\xAD".b
+      end
+
+      it "does not instantiate classes named by json_class" do
+        klass = Class.new do
+          def self.json_create(_object)
+            raise "json_create must not be called"
+          end
+        end
+        stub_const("SpecJsonCreateTarget", klass)
+        response = JsonRpcResponse.from_json('{"jsonrpc":"2.0","result":{"json_class":"SpecJsonCreateTarget","raw":1},"id":1}')
+        expect(response.result).to eql({ "json_class" => "SpecJsonCreateTarget", "raw" => 1 })
+      end
+
+      it "rejects responses that are not objects" do
+        expect { JsonRpcResponse.from_json('[1]') }.to raise_error(/Invalid JSON-RPC 2.0 Response/)
+      end
+    end
+  end
+
+  describe Exception do
+    describe "self.from_hash" do
+      it "only instantiates Exception subclasses" do
+        expect { Exception.from_hash({ 'class' => 'OpenC3::JsonRpcRequest', 'message' => 'msg', 'backtrace' => [], 'instance_variables' => {} }) }.to raise_error(JsonDRbUnknownError, 'msg')
+        error = Exception.from_hash({ 'class' => 'RuntimeError', 'message' => 'msg', 'backtrace' => [], 'instance_variables' => {} })
+        expect(error).to be_a RuntimeError
+      end
+    end
+  end
 end
