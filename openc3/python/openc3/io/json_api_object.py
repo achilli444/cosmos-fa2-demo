@@ -65,6 +65,7 @@ class JsonApiObject:
         self.mutex = Lock()
         self.request_data = ""
         self.response_data = ""
+        self.response_status = None
         self.url: str = url
         self.log = [None, None, None]
         self.authentication = authentication if authentication else self.generate_auth()
@@ -96,7 +97,25 @@ class JsonApiObject:
             self.log = [None, None, None]
             if not self.http:
                 self.connect()
-            return self._send_request(method, endpoint, kwargs)
+            resp = self._send_request(method, endpoint, kwargs)
+            if resp.status_code == 401 and keyword_params.get("token") is None and self.reauthenticate():
+                self._generate_headers(kwargs)  # Pick up the new token
+                resp = self._send_request(method, endpoint, kwargs)
+            return resp
+
+    def reauthenticate(self):
+        """Obtains a fresh token after the server rejects the current one, e.g. an
+        expired session. Returns False if there is nothing to refresh or it fails,
+        in which case the original response stands."""
+        if not self.authentication or not hasattr(self.authentication, "authenticate"):
+            return False
+        try:
+            Logger.info(f"{self.__class__.__name__}: Session token rejected, re-authenticating")
+            self.authentication.authenticate()
+            return True
+        except Exception as e:
+            Logger.warn(f"{self.__class__.__name__}: Re-authentication failed: {repr(e)}")
+            return False
 
     def disconnect(self):
         """Disconnects from http server"""

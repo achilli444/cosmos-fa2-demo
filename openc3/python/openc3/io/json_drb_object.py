@@ -106,6 +106,8 @@ class JsonDRbObject(JsonApiObject):
                 json_rpc_request = JsonRpcRequest(0, func, *args, **kwargs)
                 token = kwargs.get("token")
                 response_body = self.make_request(json_rpc_request, token)
+                if self.response_status == 401 and token is None and self.reauthenticate():
+                    response_body = self.make_request(json_rpc_request, token)
                 if not response_body:
                     self.disconnect()
                     error = f"No response from server: {self.log[0]} ::: {self.log[1]} ::: {self.log[2]}"
@@ -138,10 +140,12 @@ class JsonDRbObject(JsonApiObject):
         }
         self.log[0] = f"Request: {request_kwargs}"
 
+        self.response_status = None
         retry = 0
         while retry <= RETRY_COUNT:
             try:
                 resp = self.http.post(**request_kwargs)
+                self.response_status = resp.status_code
                 self.log[1] = f"Response: {resp.status_code} {resp.headers} {resp.text}"
                 self.response_data = resp.json()
                 return resp.json()

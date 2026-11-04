@@ -31,13 +31,18 @@ class OpenC3AuthenticationRetryableError(OpenC3AuthenticationError):
 # OpenC3 COSMOS Core authentication code
 class OpenC3Authentication:
     def __init__(self):
-        password = OPENC3_API_PASSWORD
-        if not password:
+        self._password = OPENC3_API_PASSWORD
+        if not self._password:
             raise OpenC3AuthenticationError("Authentication requires environment variable OPENC3_API_PASSWORD")
-        self.service = password == OPENC3_SERVICE_PASSWORD
+        self.service = self._password == OPENC3_SERVICE_PASSWORD
+        self.authenticate()
+
+    def authenticate(self):
+        """Requests a new session token. Called again by the API clients when the
+        server rejects the current token, e.g. after the session expires."""
         response = Session().post(
             self._generate_auth_url(),
-            json={"password": password},
+            json={"password": self._password},
             headers={"Content-Type": "application/json"},
         )
         self._token = response.text
@@ -110,6 +115,11 @@ class OpenC3KeycloakAuthentication(OpenC3Authentication):
             return f"Bearer {self._token}"
         else:
             return self._token
+
+    def authenticate(self):
+        """Discards the current token so the next token() call obtains a new one"""
+        with self.auth_mutex:
+            self._token = None
 
     def get_token_from_refresh_token(self, refresh_token):
         current_time = time.time()

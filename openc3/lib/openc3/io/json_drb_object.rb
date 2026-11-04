@@ -60,6 +60,9 @@ module OpenC3
         data = json_rpc_request.to_json(allow_nan: true)
         token = keyword_params[:token]
         response_body = make_request(data: data, token: token)
+        if @response_status == 401 and token.nil? and reauthenticate()
+          response_body = make_request(data: data, token: token)
+        end
         if !response_body or response_body.to_s.length < 1
           disconnect()
         else
@@ -91,10 +94,12 @@ module OpenC3
       @log[0] = "Request: #{@uri.to_s} #{USER_AGENT} #{data.to_s}"
       STDOUT.puts @log[0] if JsonDRb.debug?
 
+      @response_status = nil
       retry_count = 0
       while retry_count <= RETRY_COUNT
         begin
           resp = @http.post(@uri, data, headers)
+          @response_status = resp.status
           @log[1] = "Response: #{resp.status} #{resp.headers} #{resp.body}"
           @response_data = resp.body
           STDOUT.puts @log[1] if JsonDRb.debug?
