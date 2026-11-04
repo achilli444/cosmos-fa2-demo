@@ -61,6 +61,49 @@ class TestMqttStreamInterface(unittest.TestCase):
         mock_client_instance.tls_set.assert_called_with(ca_certs=ANY, certfile=ANY, keyfile=ANY)
         mock_client_instance.loop_start.assert_called_once()
         mock_client_instance.connect.assert_called_with("localhost", 1883)
+
+    @patch("openc3.streams.mqtt_stream.mqtt.Client")
+    def test_defaults_to_ssl_when_not_specified(self, mock_client):
+        mock_client_instance = mock_client.return_value
+        mock_client_instance.is_connected.return_value = True
+        i = MqttStreamInterface("mqtt.example.com", "8883")
+        self.assertTrue(i.ssl)
+        with patch("openc3.streams.mqtt_stream.Logger") as mock_logger:
+            i.connect()
+            mock_logger.warn.assert_not_called()
+        mock_client_instance.tls_set.assert_called_once_with()
+
+    @patch("openc3.streams.mqtt_stream.mqtt.Client")
+    def test_warns_when_connecting_without_ssl_to_non_loopback_host(self, mock_client):
+        mock_client_instance = mock_client.return_value
+        mock_client_instance.is_connected.return_value = True
+        i = MqttStreamInterface("mqtt.example.com", "1883", False, "write_topic", "read_topic")
+        with patch("openc3.streams.mqtt_stream.Logger") as mock_logger:
+            i.connect()
+            mock_logger.warn.assert_called_once()
+            self.assertIn("without TLS", mock_logger.warn.call_args[0][0])
+        mock_client_instance.tls_set.assert_not_called()
+
+    @patch("openc3.streams.mqtt_stream.mqtt.Client")
+    def test_does_not_warn_when_connecting_without_ssl_to_loopback(self, mock_client):
+        mock_client_instance = mock_client.return_value
+        mock_client_instance.is_connected.return_value = True
+        for host in ["localhost", "127.0.0.1", "::1"]:
+            i = MqttStreamInterface(host, "1883", False, "write_topic", "read_topic")
+            with patch("openc3.streams.mqtt_stream.Logger") as mock_logger:
+                i.connect()
+                mock_logger.warn.assert_not_called()
+
+    @patch("openc3.streams.mqtt_stream.mqtt.Client")
+    def test_does_not_warn_when_ca_file_enables_tls(self, mock_client):
+        mock_client_instance = mock_client.return_value
+        mock_client_instance.is_connected.return_value = True
+        i = MqttStreamInterface("mqtt.example.com", "8883", False, "write_topic", "read_topic")
+        i.set_option("CA_FILE", ["ca_file_content"])
+        with patch("openc3.streams.mqtt_stream.Logger") as mock_logger:
+            i.connect()
+            mock_logger.warn.assert_not_called()
+        mock_client_instance.tls_set.assert_called_once_with(ca_certs=ANY)
         mock_client_instance.is_connected.assert_called()
         # Manually call the callback
         reason_code = Mock()

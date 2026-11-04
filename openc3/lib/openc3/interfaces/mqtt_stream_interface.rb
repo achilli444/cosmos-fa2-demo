@@ -23,9 +23,10 @@ module OpenC3
   class MqttStreamInterface < StreamInterface
     # @param hostname [String] MQTT server to connect to
     # @param port [Integer] MQTT port
+    # @param ssl [Boolean] Whether to use TLS (default true). Pass false to opt in to cleartext.
     # @param write_topic [String] MQTT publish topic
     # @param read_topic [String] MQTT receive topic
-    def initialize(hostname, port = 1883, ssl = false, write_topic = nil, read_topic = nil, protocol_type = nil, *protocol_args)
+    def initialize(hostname, port = 1883, ssl = true, write_topic = nil, read_topic = nil, protocol_type = nil, *protocol_args)
       super(protocol_type, protocol_args)
       @hostname = hostname
       @port = Integer(port)

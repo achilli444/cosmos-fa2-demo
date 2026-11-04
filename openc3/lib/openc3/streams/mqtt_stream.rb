@@ -28,7 +28,7 @@ module OpenC3
     attr_accessor :key
     attr_accessor :ca_file
 
-    def initialize(hostname, port = 1883, ssl = false, write_topic = nil, read_topic = nil, ack_timeout = 5)
+    def initialize(hostname, port = 1883, ssl = true, write_topic = nil, read_topic = nil, ack_timeout = 5)
       super()
 
       @hostname = hostname
@@ -57,14 +57,20 @@ module OpenC3
       @client.ssl = @ssl
       @client.username = @username if @username
       @client.password = @password if @password
+      tls = @ssl
       if @cert and @key
+        tls = true
         @client.ssl = true
         @client.cert_file = @cert.path
         @client.key_file = @key.path
       end
       if @ca_file
+        tls = true
         @client.ssl = true
         @client.ca_file = @ca_file.path
+      end
+      unless tls or loopback_host?
+        Logger.warn "MqttStream: connecting to #{@hostname}:#{@port} without TLS; MQTT credentials and cmd/tlm traffic are sent in cleartext"
       end
       @client.connect
       @client.subscribe(@read_topic) if @read_topic
@@ -107,6 +113,12 @@ module OpenC3
       @write_mutex.synchronize do
         @client.publish(@write_topic, data)
       end
+    end
+
+    private
+
+    def loopback_host?
+      !!(@hostname.to_s =~ /\A(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1)\z/i)
     end
   end
 end
