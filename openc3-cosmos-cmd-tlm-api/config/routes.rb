@@ -230,6 +230,9 @@ Rails.application.routes.draw do
     post "/auth/verify_service" => "auth#verify_service"
     post "/auth/set" => "auth#set"
     get "/auth/otp" => "auth#get_otp"
+    get "/auth/users" => "auth#users"
+    post "/auth/users" => "auth#set_user"
+    delete "/auth/users/:username" => "auth#delete_user", username: /[^\/]+/
 
     get "/internal/health" => "internal_health#health"
     get "/internal/metrics" => "internal_metrics#index"

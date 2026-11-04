@@ -25,6 +25,14 @@
     <v-card-text>
       <v-form>
         <v-text-field
+          v-if="isSet && !reset"
+          v-model="username"
+          type="text"
+          label="Username (blank for admin)"
+          autocomplete="username"
+          data-test="username"
+        />
+        <v-text-field
           v-if="isSet && reset"
           v-model="oldPassword"
           type="password"
@@ -87,6 +95,7 @@ export default {
   data() {
     return {
       isSet: true,
+      username: '',
       password: '',
       confirmPassword: '',
       oldPassword: '',
@@ -207,6 +216,7 @@ export default {
       this.showAlert = false
       Api.post('/openc3-api/auth/verify', {
         data: {
+          username: this.username,
           password: this.password,
         },
         ...this.options,

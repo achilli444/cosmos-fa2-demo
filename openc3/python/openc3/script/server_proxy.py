@@ -46,7 +46,7 @@ class ApiServerProxy:
     def generate_auth(self):
         """Generate auth object for use with the JsonDRbObject"""
         if OPENC3_API_TOKEN is None and OPENC3_API_USER is None:
-            if OPENC3_API_PASSWORD:
+            if OPENC3_API_PASSWORD or OPENC3_API_SESSION_TOKEN:
                 return OpenC3Authentication()
             else:
                 return None

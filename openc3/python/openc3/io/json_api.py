@@ -13,6 +13,7 @@ import os
 
 from openc3.environment import (
     OPENC3_API_PASSWORD,
+    OPENC3_API_SESSION_TOKEN,
     OPENC3_API_TOKEN,
     OPENC3_API_USER,
     OPENC3_KEYCLOAK_URL,
@@ -103,7 +104,7 @@ class JsonApi:
     @staticmethod
     def _generate_auth():
         if OPENC3_API_TOKEN is None and OPENC3_API_USER is None:
-            if OPENC3_API_PASSWORD:
+            if OPENC3_API_PASSWORD or OPENC3_API_SESSION_TOKEN:
                 return OpenC3Authentication()
             else:
                 return None

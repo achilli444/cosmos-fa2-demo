@@ -272,7 +272,7 @@ class WebSocketApi:
     def _generate_auth(self):
         """Generate the appropriate token for OpenC3"""
         if os.environ.get("OPENC3_API_TOKEN") is None and os.environ.get("OPENC3_API_USER") is None:
-            if os.environ.get("OPENC3_API_PASSWORD"):
+            if os.environ.get("OPENC3_API_PASSWORD") or os.environ.get("OPENC3_API_SESSION_TOKEN"):
                 return OpenC3Authentication()
             else:
                 raise RuntimeError("Environment Variables Not Set for Authentication")

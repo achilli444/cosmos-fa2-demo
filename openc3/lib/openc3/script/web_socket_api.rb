@@ -247,7 +247,7 @@ module OpenC3
     # Generate the appropriate token for OpenC3
     def generate_auth
       if ENV['OPENC3_API_TOKEN'].nil? and ENV['OPENC3_API_USER'].nil?
-        if ENV['OPENC3_API_PASSWORD']
+        if ENV['OPENC3_API_PASSWORD'] or ENV['OPENC3_API_SESSION_TOKEN']
           return OpenC3Authentication.new()
         else
           raise "Environment Variables Not Set for Authentication"

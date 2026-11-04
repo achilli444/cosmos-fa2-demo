@@ -30,6 +30,7 @@ require 'openc3/utilities/store_queued'
 require 'openc3/utilities/bucket_require'
 require 'openc3/utilities/python_venv'
 require 'openc3/models/offline_access_model'
+require 'openc3/models/auth_model'
 require 'openc3/models/environment_model'
 require 'openc3/models/script_engine_model'
 require 'openc3/models/script_status_model'
@@ -542,12 +543,15 @@ class RunningScript
           raise "offline_access token invalid for script"
         end
       else
-        process.environment['OPENC3_API_USER'] = ENV.fetch('OPENC3_API_USER', nil)
-        if ENV['OPENC3_SERVICE_PASSWORD']
-          process.environment['OPENC3_API_PASSWORD'] = ENV.fetch('OPENC3_SERVICE_PASSWORD')
-        else
-          raise "No authentication available for script"
-        end
+        # Core: run the script as the user who started it with a delegated
+        # session token bound to their identity and roles. The shared service
+        # password is never handed to a script so every command the script
+        # sends is authorized and attributed to the real operator.
+        roles = OpenC3::AuthModel.user_roles(username)
+        raise "No authentication available for script: user '#{username}' has no account" unless roles
+        process.environment['OPENC3_API_USER'] = nil
+        process.environment['OPENC3_API_PASSWORD'] = nil
+        process.environment['OPENC3_API_SESSION_TOKEN'] = OpenC3::AuthModel.generate_session(username: username, roles: roles, name: user_full_name)
       end
       process.environment['GEM_HOME'] = ENV.fetch('GEM_HOME', nil)
 
