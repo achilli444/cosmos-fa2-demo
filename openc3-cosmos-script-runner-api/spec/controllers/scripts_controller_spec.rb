@@ -234,6 +234,35 @@ RSpec.describe ScriptsController, type: :controller do
 
         expect(response).to have_http_status(:ok)
       end
+
+      # The approval gate must fail closed: an unreadable lifecycle store
+      # means the script may be approved, so the save is refused (503).
+      it "refuses to save and logs a WARN when the lifecycle state cannot be determined" do
+        expect(Script).to receive(:lifecycle).with("DEFAULT", "script.rb").and_raise("git unavailable")
+        allow_any_instance_of(ScriptsController).to receive(:log_error)
+        expect(Script).not_to receive(:create)
+        expect(OpenC3::Logger).to receive(:warn).with(
+          /lifecycle state unknown; create of script\.rb refused for user anonymous/,
+          hash_including(scope: "DEFAULT", user: "anonymous")
+        )
+
+        post :create, params: {scope: "DEFAULT", name: "script.rb", text: "text"}
+
+        expect(response).to have_http_status(:service_unavailable)
+        json = JSON.parse(response.body)
+        expect(json["status"]).to eq("error")
+        expect(json["message"]).to match(/could not be determined/)
+      end
+
+      it "refuses to save when the store returns no state" do
+        allow(FakeVersionStore).to receive(:lifecycle).and_return({ 'state' => nil, 'history' => [] })
+        allow(OpenC3::Logger).to receive(:warn)
+        expect(Script).not_to receive(:create)
+
+        post :create, params: {scope: "DEFAULT", name: "script.rb", text: "text"}
+
+        expect(response).to have_http_status(:service_unavailable)
+      end
     end
 
     it "does not check the lifecycle when the feature is disabled" do
@@ -360,6 +389,57 @@ RSpec.describe ScriptsController, type: :controller do
 
       it "runs an unapproved script when the user has script_edit" do
         expect(Script).to receive(:run).and_return(1)
+
+        post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+        expect(response).to have_http_status(:ok)
+      end
+
+      context "as a runner-only user (script_run without script_edit)" do
+        before(:each) do
+          allow(controller).to receive(:authorize) do |args|
+            raise OpenC3::ForbiddenError.new("script_edit required") if args[:permission] == 'script_edit'
+            true
+          end
+        end
+
+        it "denies an unapproved script" do
+          Script.set_lifecycle("DEFAULT", "INST/procedures/test.rb", "review", "anonymous", "")
+          expect(Script).not_to receive(:run)
+
+          post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+          expect(response).to have_http_status(:forbidden)
+        end
+
+        # Fail closed: when approval cannot be verified a runner must not be
+        # able to execute, and the refusal is recorded against the user/script.
+        it "refuses to run and logs a WARN when the lifecycle state cannot be determined" do
+          expect(Script).to receive(:lifecycle).with("DEFAULT", "INST/procedures/test.rb").and_raise("git unavailable")
+          allow_any_instance_of(ScriptsController).to receive(:log_error)
+          expect(Script).not_to receive(:run)
+          expect(OpenC3::Logger).to receive(:warn).with(
+            %r{lifecycle state unknown; run of INST/procedures/test\.rb refused for user anonymous},
+            hash_including(scope: "DEFAULT", user: "anonymous")
+          )
+
+          post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+          expect(response).to have_http_status(:service_unavailable)
+          json = JSON.parse(response.body)
+          expect(json["status"]).to eq("error")
+          expect(json["message"]).to match(/could not be determined/)
+        end
+      end
+
+      it "runs for a script_edit user when the lifecycle state cannot be determined but logs a WARN naming the user and script" do
+        expect(Script).to receive(:lifecycle).with("DEFAULT", "INST/procedures/test.rb").and_raise("git unavailable")
+        allow_any_instance_of(ScriptsController).to receive(:log_error)
+        expect(Script).to receive(:run).and_return(1)
+        expect(OpenC3::Logger).to receive(:warn).with(
+          %r{lifecycle state unknown; run of INST/procedures/test\.rb allowed for user anonymous via script_edit},
+          hash_including(scope: "DEFAULT", user: "anonymous")
+        )
 
         post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
 
@@ -783,6 +863,27 @@ RSpec.describe ScriptsController, type: :controller do
       expect(response).to have_http_status(:forbidden)
       json = JSON.parse(response.body)
       expect(json["message"]).to match(/approved/)
+    end
+
+    # Fail closed: the script may be approved, so deletion is refused (503)
+    # and the refusal is logged against the user/script.
+    it "refuses to destroy and logs a WARN when the lifecycle state cannot be determined" do
+      OpenC3::SettingModel.set({name: 'script_runner_lifecycle', data: true}, scope: 'DEFAULT')
+      enable_lifecycle_store
+      expect(Script).to receive(:lifecycle).with("DEFAULT", "INST/procedures/test.rb").and_raise("git unavailable")
+      allow_any_instance_of(ScriptsController).to receive(:log_error)
+      expect(Script).not_to receive(:destroy)
+      expect(OpenC3::Logger).to receive(:warn).with(
+        %r{lifecycle state unknown; destroy of INST/procedures/test\.rb refused for user anonymous},
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+
+      delete :destroy, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+      expect(response).to have_http_status(:service_unavailable)
+      json = JSON.parse(response.body)
+      expect(json["status"]).to eq("error")
+      expect(json["message"]).to match(/could not be determined/)
     end
   end
 
