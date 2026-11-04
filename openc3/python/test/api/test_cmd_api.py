@@ -450,17 +450,19 @@ class TestCmdApi(unittest.TestCase):
                     stdout.getvalue(),
                 )
 
+            # log_message=False and DISABLE_MESSAGES only suppress the parameter detail,
+            # every transmitted command still produces a reduced audit record
             for stdout in capture_io():
                 func("INST ABORT", log_message=False)
-                self.assertNotIn(
-                    "INST ABORT",
+                self.assertIn(
+                    'cmd(\\"INST ABORT\\") (messages disabled)',
                     stdout.getvalue(),
                 )
 
             for stdout in capture_io():
                 func("INST SETPARAMS")  # This has DISABLE_MESSAGES applied
-                self.assertNotIn(
-                    "INST SETPARAMS",
+                self.assertIn(
+                    'cmd(\\"INST SETPARAMS\\") (messages disabled)',
                     stdout.getvalue(),
                 )
 
@@ -481,8 +483,12 @@ class TestCmdApi(unittest.TestCase):
             # Check that array parameters are logged corre
             for stdout in capture_io():
                 func("INST ASCIICMD with STRING 'NOOP'")  # This has DISABLE_MESSAGES applied
+                self.assertIn(
+                    'cmd(\\"INST ASCIICMD\\") (messages disabled)',
+                    stdout.getvalue(),
+                )
                 self.assertNotIn(
-                    "INST ASCIICMD",
+                    "NOOP",
                     stdout.getvalue(),
                 )
 

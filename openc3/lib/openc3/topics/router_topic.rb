@@ -78,13 +78,18 @@ module OpenC3
       end
     end
 
-    def self.route_command(packet, target_names, scope:)
+    # Routed commands carry the router name as the username so the interface
+    # microservice can attribute the transmitted command in the audit record.
+    def self.route_command(packet, target_names, scope:, username: nil, cmd_string: nil, log_message: true)
+      msg_hash = { 'cmd_buffer' => packet.buffer(false), 'log_message' => log_message.to_s }
+      msg_hash['username'] = username if username
+      msg_hash['cmd_string'] = cmd_string if cmd_string
       if packet.identified?
         topic = "{#{scope}__CMD}TARGET__#{packet.target_name}"
-        Topic.write_topic(topic, { 'target_name' => packet.target_name, 'cmd_name' => packet.packet_name, 'cmd_buffer' => packet.buffer(false) }, '*', 100)
+        Topic.write_topic(topic, { 'target_name' => packet.target_name, 'cmd_name' => packet.packet_name }.merge(msg_hash), '*', 100)
       elsif target_names.length == 1
         topic = "{#{scope}__CMD}TARGET__#{target_names[0]}"
-        Topic.write_topic(topic, { 'target_name' => packet.target_name ? packet.target_name : 'UNKNOWN', 'cmd_name' => 'UNKNOWN', 'cmd_buffer' => packet.buffer(false) }, '*', 100)
+        Topic.write_topic(topic, { 'target_name' => packet.target_name ? packet.target_name : 'UNKNOWN', 'cmd_name' => 'UNKNOWN' }.merge(msg_hash), '*', 100)
       else
         raise "No route for command: #{packet.target_name ? packet.target_name : 'UNKNOWN'} #{packet.packet_name ? packet.packet_name : 'UNKNOWN'}"
       end

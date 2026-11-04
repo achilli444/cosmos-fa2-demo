@@ -283,6 +283,8 @@ class InterfaceCmdHandlerThread:
             hazardous_check = ConfigParser.handle_true_false(msg_hash.get(b"hazardous_check", b"TRUE").decode())
         elif msg_hash.get(b"cmd_buffer") is not None:
             cmd_buffer = msg_hash.get(b"cmd_buffer")
+            # Routed (cmd_buffer) commands have no operator to confirm a hazardous prompt so check by default
+            hazardous_check = ConfigParser.handle_true_false(msg_hash.get(b"hazardous_check", b"TRUE").decode())
 
         try:
             try:
@@ -325,7 +327,18 @@ class InterfaceCmdHandlerThread:
 
             # Return back the error, description, and the formatted command
             # This allows the error handler to simply re-send the command
-            if hazardous_check and hazardous and not release_critical:
+            # Routed (cmd_buffer) hazardous commands have no operator to confirm them so they are
+            # held for critical command approval when enabled, otherwise rejected outright
+            routed_approval = (
+                cmd_buffer is not None and self.critical_commanding is not None and self.critical_commanding != "OFF"
+            )
+            if hazardous_check and hazardous and not release_critical and not routed_approval:
+                if cmd_buffer is not None:
+                    self.logger.warn(
+                        f"Hazardous command rejected (no operator confirmation): {command.extra['cmd_string']}",
+                        user=command.extra["username"],
+                        scope=self.scope,
+                    )
                 return f"HazardousError\n{hazardous_description}\n{command.extra['cmd_string']}"
 
             if self.critical_commanding is not None and self.critical_commanding != "OFF" and not release_critical:
@@ -371,11 +384,19 @@ class InterfaceCmdHandlerThread:
                     if self.metric is not None:
                         self.metric.set(name="interface_cmd_total", value=self.count, type="counter")
 
+                    # Every transmitted command gets an attributed message log record.
+                    # DISABLE_MESSAGES / log_message: false only suppress the parameter detail.
                     log_message = ConfigParser.handle_true_false(msg_hash.get(b"log_message", b"TRUE").decode())
-                    if log_message:
+                    if log_message and command.extra["cmd_string"]:
                         self.logger.info(
-                            msg_hash.get(b"cmd_string", b"").decode(),
-                            user=msg_hash.get(b"username", b"").decode(),
+                            command.extra["cmd_string"],
+                            user=command.extra["username"],
+                            scope=self.scope,
+                        )
+                    else:
+                        self.logger.info(
+                            self.audit_cmd_string(command),
+                            user=command.extra["username"],
                             scope=self.scope,
                         )
 
@@ -411,6 +432,10 @@ class InterfaceCmdHandlerThread:
             self.logger.error(f"{self.interface.name}: {traceback.format_exc()}")
             # Return only the error message (not full traceback) to match Ruby behavior
             return str(e)
+
+    def audit_cmd_string(self, command):
+        """Reduced audit record (target and command only) used when the full cmd_string is suppressed"""
+        return f'cmd("{command.target_name} {command.packet_name}") (messages disabled)'
 
 
 class RouterTlmHandlerThread:

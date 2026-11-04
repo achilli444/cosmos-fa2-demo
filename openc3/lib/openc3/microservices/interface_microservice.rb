@@ -244,6 +244,8 @@ module OpenC3
             hazardous_check = ConfigParser.handle_true_false(msg_hash['hazardous_check'])
           elsif msg_hash['cmd_buffer']
             cmd_buffer = msg_hash['cmd_buffer']
+            # Routed (cmd_buffer) commands have no operator to confirm a hazardous prompt so check by default
+            hazardous_check = msg_hash['hazardous_check'] ? ConfigParser.handle_true_false(msg_hash['hazardous_check']) : true
           end
 
           begin
@@ -290,7 +292,15 @@ module OpenC3
             # Initial Are you sure? Hazardous check
             # Return back the error, description, and the formatted command
             # This allows the error handler to simply re-send the command
-            next "HazardousError\n#{hazardous_description}\n#{msg_hash['cmd_string']}" if hazardous_check and hazardous and not release_critical
+            if hazardous_check and hazardous and not release_critical
+              # Routed hazardous commands are held for critical command approval when enabled, otherwise rejected
+              unless cmd_buffer and @critical_commanding and @critical_commanding != 'OFF'
+                if cmd_buffer
+                  @logger.warn("Hazardous command rejected (no operator confirmation): #{msg_hash['cmd_string']}", user: msg_hash['username'], scope: @scope)
+                end
+                next "HazardousError\n#{hazardous_description}\n#{msg_hash['cmd_string']}"
+              end
+            end
 
             # Check for Critical Command
             if @critical_commanding and @critical_commanding != 'OFF' and not release_critical
@@ -331,9 +341,13 @@ module OpenC3
                 @count += 1
                 @metric.set(name: 'interface_cmd_total', value: @count, type: 'counter') if @metric
 
+                # Every transmitted command gets an attributed message log record.
+                # DISABLE_MESSAGES / log_message: false only suppress the parameter detail.
                 log_message = ConfigParser.handle_true_false(msg_hash['log_message'])
-                if log_message
+                if log_message and msg_hash['cmd_string']
                   @logger.info(msg_hash['cmd_string'], user: msg_hash['username'], scope: @scope)
+                else
+                  @logger.info(audit_cmd_string(command), user: msg_hash['username'], scope: @scope)
                 end
 
                 @interface.write(command)
@@ -376,6 +390,11 @@ module OpenC3
           end
         end
       end
+    end
+
+    # Reduced audit record (target and command only) used when the full cmd_string is suppressed
+    def audit_cmd_string(command)
+      "cmd(\"#{command.target_name} #{command.packet_name}\") (messages disabled)"
     end
   end
 

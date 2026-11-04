@@ -557,6 +557,64 @@ class TestInterfaceMicroservice(unittest.TestCase):
         result = handler.process_cmd(topic, msg_id, full_msg_hash, None)
         self.assertIsNone(result)
 
+    def _start_handler(self):
+        im = InterfaceMicroservice("DEFAULT__INTERFACE__INST_INT")
+        thread = threading.Thread(target=im.run)
+        thread.start()
+        # Cleanups run LIFO: shutdown signals stop, then join waits.
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(im.shutdown)
+        time.sleep(0.1)
+        return im.handler_thread
+
+    def _routed_msg_hash(self, cmd_name, cmd_string, log_message=b"TRUE"):
+        packet = System.commands.packet("INST", cmd_name)
+        packet.restore_defaults()
+        return {
+            b"target_name": b"INST",
+            b"cmd_name": cmd_name.encode(),
+            b"cmd_buffer": bytes(packet.buffer_no_copy()),
+            b"username": b"TEST_ROUTER",
+            b"cmd_string": cmd_string.encode(),
+            b"log_message": log_message,
+        }
+
+    def test_process_cmd_writes_reduced_audit_record_when_log_message_false(self):
+        handler = self._start_handler()
+        msg_hash = {
+            b"target_name": b"INST",
+            b"cmd_name": b"COLLECT",
+            b"cmd_params": json.dumps({"TYPE": "NORMAL", "DURATION": 5}).encode(),
+            b"hazardous_check": b"TRUE",
+            b"cmd_string": b'cmd("INST COLLECT with TYPE NORMAL, DURATION 5")',
+            b"username": b"test_user",
+            b"log_message": b"FALSE",
+        }
+        for stdout in capture_io():
+            result = handler.process_cmd("{DEFAULT__CMD}TARGET__INST", "1-0", msg_hash, None)
+            self.assertEqual(result, "SUCCESS")
+            self.assertIn('cmd(\\"INST COLLECT\\") (messages disabled)', stdout.getvalue())
+            self.assertIn('"user": "test_user"', stdout.getvalue())
+            self.assertNotIn("DURATION 5", stdout.getvalue())
+
+    def test_process_cmd_attributes_routed_commands_to_the_router(self):
+        handler = self._start_handler()
+        msg_hash = self._routed_msg_hash("ABORT", 'cmd("INST ABORT")', log_message=b"FALSE")
+        for stdout in capture_io():
+            result = handler.process_cmd("{DEFAULT__CMD}TARGET__INST", "1-0", msg_hash, None)
+            self.assertEqual(result, "SUCCESS")
+            self.assertIn('cmd(\\"INST ABORT\\") (messages disabled)', stdout.getvalue())
+            self.assertIn('"user": "TEST_ROUTER"', stdout.getvalue())
+
+    def test_process_cmd_rejects_routed_hazardous_commands(self):
+        handler = self._start_handler()
+        msg_hash = self._routed_msg_hash("CLEAR", 'cmd("INST CLEAR")')
+        for stdout in capture_io():
+            result = handler.process_cmd("{DEFAULT__CMD}TARGET__INST", "1-0", msg_hash, None)
+            self.assertTrue(result.startswith("HazardousError\n"))
+            self.assertIn("Hazardous command rejected (no operator confirmation)", stdout.getvalue())
+            self.assertIn('"user": "TEST_ROUTER"', stdout.getvalue())
+
     def test_supports_optimize_throughput_option_for_backward_compatibility(self):
         # Update the model to use OPTIMIZE_THROUGHPUT option (legacy name)
         model = InterfaceModel(

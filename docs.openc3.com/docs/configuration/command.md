@@ -623,6 +623,8 @@ Hides the command and also disables it from being sent by scripts. Attempts to s
 ### DISABLE_MESSAGES
 **Disable the Server from printing cmd(...) messages. Commands are still logged.**
 
+Suppresses the full cmd(...) message with its parameters. Every transmitted command still produces a reduced message log record of the form cmd("TARGET COMMAND") (messages disabled) attributed to the sending user or router, and is still written to the binary command log.
+
 
 ### META
 **Stores metadata for the current command**

@@ -21,6 +21,7 @@ require 'openc3/script/extract'
 require 'openc3/interfaces/interface'
 require 'openc3/utilities/authorization'
 require 'openc3/microservices/interface_microservice'
+require 'openc3/topics/router_topic'
 require 'openc3/topics/telemetry_decom_topic'
 
 module OpenC3
@@ -278,6 +279,55 @@ module OpenC3
 
         @api.cmd("INST SET_PASSWORD with USERNAME username, PASSWORD password")
         sleep 0.01
+        im.shutdown
+      end
+
+      it "writes a reduced audit record when log_message is false" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        capture_io do |stdout|
+          Thread.new { im.run }
+          sleep 0.01
+          @api.cmd("INST COLLECT with TYPE NORMAL, DURATION 5", log_message: false)
+          sleep 0.05
+          expect(stdout.string).to include('cmd(\\"INST COLLECT\\") (messages disabled)')
+          expect(stdout.string).to_not include('DURATION 5')
+        end
+        im.shutdown
+      end
+
+      it "transmits a routed command attributed to the router" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        expect(CommandDecomTopic).to receive(:write_packet) do |command, _scope|
+          expect(command.target_name).to eql("INST")
+          expect(command.packet_name).to eql("ABORT")
+          expect(command.extra['username']).to eql("TEST_ROUTER")
+        end
+        capture_io do |stdout|
+          Thread.new { im.run }
+          sleep 0.01
+          packet = System.commands.packet('INST', 'ABORT')
+          packet.restore_defaults
+          RouterTopic.route_command(packet, ['INST'], scope: 'DEFAULT', username: 'TEST_ROUTER', cmd_string: 'cmd("INST ABORT")', log_message: false)
+          sleep 0.05
+          expect(stdout.string).to include('cmd(\\"INST ABORT\\") (messages disabled)')
+          expect(stdout.string).to include('"user":"TEST_ROUTER"')
+        end
+        im.shutdown
+      end
+
+      it "rejects a routed hazardous command without operator confirmation" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        expect(CommandDecomTopic).to_not receive(:write_packet)
+        capture_io do |stdout|
+          Thread.new { im.run }
+          sleep 0.01
+          packet = System.commands.packet('INST', 'CLEAR')
+          packet.restore_defaults
+          RouterTopic.route_command(packet, ['INST'], scope: 'DEFAULT', username: 'TEST_ROUTER', cmd_string: 'cmd("INST CLEAR")')
+          sleep 0.05
+          expect(stdout.string).to include('Hazardous command rejected (no operator confirmation): cmd(\\"INST CLEAR\\")')
+          expect(stdout.string).to include('"user":"TEST_ROUTER"')
+        end
         im.shutdown
       end
     end
