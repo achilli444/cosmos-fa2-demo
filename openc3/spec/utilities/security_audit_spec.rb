@@ -97,9 +97,14 @@ module OpenC3
         end
       end
 
-      it "logs to the NOSCOPE topic regardless of the requested scope" do
-        expect(Logger).to receive(:warn).with(/Security event authorize failure/, hash_including(scope: nil, type: 'security'))
+      it "logs to the requested scope's topic so it shows in that scope's Log Messages" do
+        expect(Logger).to receive(:warn).with(/Security event authorize failure/, hash_including(scope: 'DEFAULT', type: 'security'))
         SecurityAudit.log(event: 'authorize', outcome: SecurityAudit::FAILURE, scope: 'DEFAULT')
+      end
+
+      it "logs to the NOSCOPE topic when the scope is unknown (e.g. login)" do
+        expect(Logger).to receive(:warn).with(/Security event login failure/, hash_including(scope: nil, type: 'security'))
+        SecurityAudit.log(event: 'login', outcome: SecurityAudit::FAILURE)
       end
 
       it "fills user, source and method from the thread context" do

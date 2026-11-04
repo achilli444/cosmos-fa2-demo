@@ -252,7 +252,7 @@ export default {
           {
             // Channel parameter is history_count with underscore
             history_count: this.historyCount,
-            types: ['log', 'notification', 'alert'],
+            types: ['log', 'notification', 'alert', 'security'],
           },
         )
         .then((subscription) => {

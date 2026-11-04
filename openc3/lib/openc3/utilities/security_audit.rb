@@ -78,9 +78,9 @@ module OpenC3
     # @param reason [String] why the outcome happened (never a credential)
     # @param user [String] user name, defaults to the context user
     # @param source [String] client address, defaults to the context source
-    # @param scope [String] scope the request targeted (used only as data,
-    #   events are always written to the NOSCOPE log so they are kept
-    #   together regardless of which scope was requested)
+    # @param scope [String] scope the request targeted. The event is written
+    #   to that scope's log stream (so it shows in its Log Messages tool) or to
+    #   the NOSCOPE stream when the scope is unknown, e.g. at login.
     # @param details [Hash] additional structured fields
     def self.log(event:, outcome:, reason: nil, user: nil, source: nil, scope: nil, **details)
       ctx = context
@@ -100,9 +100,9 @@ module OpenC3
       # XADDed to the Redis log stream, which cannot hold nested hashes
       fields = data.reject { |key, _| key == :user }.transform_values(&:to_s)
       if outcome == SUCCESS
-        Logger.info(message, scope: nil, user: data[:user], type: TYPE, other: fields)
+        Logger.info(message, scope: scope, user: data[:user], type: TYPE, other: fields)
       else
-        Logger.warn(message, scope: nil, user: data[:user], type: TYPE, other: fields)
+        Logger.warn(message, scope: scope, user: data[:user], type: TYPE, other: fields)
       end
       data
     end
