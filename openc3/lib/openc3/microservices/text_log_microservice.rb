@@ -41,7 +41,7 @@ module OpenC3
       @tlws = {}
       @error_count = 0
       @metric.set(name: 'text_log_total', value: @count, type: 'counter')
-      @metric.set(name: 'text_error_total', value: @error_count, type: 'counter')
+      @metric.set(name: 'text_log_error_total', value: @error_count, type: 'counter')
     end
 
     def run
