@@ -156,7 +156,7 @@ module OpenC3
       end
       # Owner-only permissions regardless of the process umask. fchmod on the
       # open descriptor also tightens a pre-existing file left by an earlier run.
-      File.open(path, File::WRONLY | File::CREAT | File::TRUNC, SECRET_FILE_MODE, binmode: true) do |file|
+      File.open(path, 'wb', SECRET_FILE_MODE) do |file|
         file.chmod(SECRET_FILE_MODE)
         file.write(secret_value)
       end
