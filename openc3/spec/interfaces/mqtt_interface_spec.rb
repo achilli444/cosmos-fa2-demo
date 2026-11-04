@@ -22,6 +22,20 @@ module OpenC3
       setup_system()
     end
 
+    let(:ca_pem) do
+      key = OpenSSL::PKey::RSA.new(2048)
+      cert = OpenSSL::X509::Certificate.new
+      cert.version = 2
+      cert.serial = 1
+      cert.subject = OpenSSL::X509::Name.parse('/CN=test_ca')
+      cert.issuer = cert.subject
+      cert.public_key = key.public_key
+      cert.not_before = Time.now - 60
+      cert.not_after = Time.now + 3600
+      cert.sign(key, OpenSSL::Digest.new('SHA256'))
+      cert.to_pem
+    end
+
     describe "initialize" do
       it "sets all the instance variables" do
         i = MqttInterface.new('localhost', '1883')
@@ -50,9 +64,10 @@ module OpenC3
         expect(double).to receive(:password=).with('test_pass')
         expect(double).to receive(:ssl=).with(false)
         expect(double).to receive(:ssl=).with(true).twice
-        expect(double).to receive(:cert_file=)
-        expect(double).to receive(:key_file=)
-        expect(double).to receive(:ca_file=)
+        expect(double).to receive(:cert=).with('cert_content')
+        expect(double).to receive(:key=).with('key_content')
+        ssl_context = OpenSSL::SSL::SSLContext.new
+        allow(double).to receive(:ssl_context).and_return(ssl_context)
         expect(double).to receive(:connect)
         expect(double).to receive(:connected?).and_return(true)
         # inst_tlm.txt declares META TOPIC on the first 2 packets
@@ -65,10 +80,29 @@ module OpenC3
         i.set_option('PASSWORD', ['test_pass'])
         i.set_option('CERT', ['cert_content'])
         i.set_option('KEY', ['key_content'])
-        i.set_option('CA_FILE', ['ca_file_content'])
+        i.set_option('CA_FILE', [ca_pem])
         i.set_option('ACK_TIMEOUT', ['10.0'])
         i.connect()
         expect(i.connected?).to be true
+        expect(ssl_context.verify_mode).to eql OpenSSL::SSL::VERIFY_PEER
+        expect(ssl_context.cert_store).to_not be_nil
+      end
+
+      it "never writes the cert, key or CA to a temp file" do
+        double = double(MQTT_CLIENT).as_null_object
+        allow(double).to receive(:ssl_context).and_return(OpenSSL::SSL::SSLContext.new)
+        allow(MQTT::Client).to receive(:new).and_return(double)
+        expect(Tempfile).not_to receive(:new)
+        expect(Tempfile).not_to receive(:create)
+
+        i = MqttInterface.new('localhost', '1883')
+        i.set_option('CERT', ['cert_content'])
+        i.set_option('KEY', ['key_content'])
+        i.set_option('CA_FILE', [ca_pem])
+        expect(i.instance_variable_get(:@cert)).to eql 'cert_content'
+        expect(i.instance_variable_get(:@key)).to eql 'key_content'
+        i.connect()
+        i.disconnect()
       end
 
       it "sets ssl even without cert_file, key_file, or ca_file" do
