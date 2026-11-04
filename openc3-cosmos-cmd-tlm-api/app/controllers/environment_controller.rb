@@ -64,12 +64,13 @@ class EnvironmentController < ApplicationController
     begin
       name = Digest::SHA1.hexdigest("#{params['key']}__#{params['value']}")
       unless @model_class.get(name: name, scope: params[:scope]).nil?
-        raise OpenC3::EnvironmentError.new "Key: '#{params['key']}' value: '#{params['value']}' already exists"
+        raise OpenC3::EnvironmentError.new "Key: '#{params['key']}' with the given value already exists (name: #{name})"
       end
 
       model = @model_class.new(name: name, key: params['key'], value: params['value'], scope: params[:scope])
       model.create()
-      OpenC3::Logger.info("Environment variable created: #{name} #{params['key']} #{params['value']}", scope: params[:scope], user: username())
+      # Values may carry credentials passed to scripts, so only the key and record name are logged
+      OpenC3::Logger.info("Environment variable created: #{name} #{params['key']}", scope: params[:scope], user: username())
       render json: model.as_json(), status: :created
     rescue RuntimeError, JSON::ParserError => e
       log_error(e)
