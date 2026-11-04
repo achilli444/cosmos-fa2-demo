@@ -240,7 +240,7 @@ module OpenC3
           cached = false
         end
         running = ScriptStatusModel.all(scope: RunningScript.instance.scope, type: 'running')
-        running_script_anycable_publish("all-scripts-channel", { type: :start, filename: procedure_name, active_scripts: running.length, scope: RunningScript.instance.scope })
+        running_script_anycable_publish("all-scripts-channel:#{RunningScript.instance.scope}", { type: :start, filename: procedure_name, active_scripts: running.length, scope: RunningScript.instance.scope })
 
         if use_script_engine
           if line_no != 1 or !end_line_no.nil?

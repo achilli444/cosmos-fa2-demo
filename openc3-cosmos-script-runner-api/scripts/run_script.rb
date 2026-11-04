@@ -90,7 +90,7 @@ begin
 
       # Notify frontend of number of running scripts in this scope
       running = OpenC3::ScriptStatusModel.all(scope: scope, type: "running")
-      running_script_anycable_publish("all-scripts-channel", { type: :start, filename: script_status.filename, active_scripts: running.length, scope: scope })
+      running_script_anycable_publish("all-scripts-channel:#{scope}", { type: :start, filename: script_status.filename, active_scripts: running.length, scope: scope })
     end
 
     on.message do |_channel, msg|
@@ -187,7 +187,7 @@ ensure
     running_script_anycable_publish("running-script-channel:#{id}", complete_msg)
 
     # Inform frontend of number of running scripts in this scope
-    running_script_anycable_publish("all-scripts-channel", { type: :complete, filename: script_status.filename, active_scripts: running.length, scope: scope })
+    running_script_anycable_publish("all-scripts-channel:#{scope}", { type: :complete, filename: script_status.filename, active_scripts: running.length, scope: scope })
 
     # Flush the queued replay-stream writes (EphemeralStoreQueued) before the
     # process exits. The :complete (and any crash) events above are published
