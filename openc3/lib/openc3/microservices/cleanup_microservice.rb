@@ -48,12 +48,24 @@ module OpenC3
             slice.each do |item|
               bucket.delete_object(bucket: ENV['OPENC3_LOGS_BUCKET'], key: item)
             end
-            @logger.debug("Cleanup deleted #{slice.length} log files")
+            log_deletion(prefix, retain_time, time, slice)
             @delete_count += slice.length
             @metric.set(name: 'cleanup_delete_total', value: @delete_count, type: 'counter')
           end
         end
       end
+    end
+
+    # Durable audit record of a retention deletion. These files are command
+    # and audit logs, so their destruction must be recorded at INFO (the
+    # default log level) naming what was removed, from where, and why.
+    def log_deletion(prefix, retain_time, cutoff_time, keys)
+      cutoff = cutoff_time.utc.iso8601
+      @logger.info(
+        "Cleanup deleted #{keys.length} log files under #{prefix} older than #{cutoff} " \
+        "(retain_time #{retain_time}s): #{keys.first} .. #{keys.last}",
+        other: { cleanup: { prefix: prefix, retain_time: retain_time, cutoff: cutoff, count: keys.length, keys: keys } }
+      )
     end
 
     def get_areas_and_poll_time
