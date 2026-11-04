@@ -28,7 +28,9 @@ from decimal import Decimal
 import numpy
 import psycopg
 from psycopg.rows import dict_row
-from questdb.ingress import Protocol, Sender, TimestampNanos
+from questdb.ingress import Sender, TimestampNanos
+
+from openc3.utilities import tls_config
 
 
 # Sentinel values for storing float special values (inf, -inf, nan) in QuestDB.
@@ -174,6 +176,7 @@ class QuestDBClient:
             user=os.environ.get("OPENC3_TSDB_USERNAME"),
             password=os.environ.get("OPENC3_TSDB_PASSWORD"),
             dbname="qdb",
+            **tls_config.tsdb_pg_kwargs(),
             **extra_kwargs,
         )
 
@@ -401,7 +404,15 @@ class QuestDBClient:
         try:
             if self.ingest:
                 self.ingest.close()
-            self.ingest = Sender(Protocol.Http, host, port, username=username, password=password)
+            # OPENC3_TSDB_TLS switches to HTTPS with certificate verification (see tls_config)
+            self.ingest = Sender(
+                tls_config.tsdb_ilp_protocol(),
+                host,
+                port,
+                username=username,
+                password=password,
+                **tls_config.tsdb_ilp_kwargs(),
+            )
             self.ingest.establish()
         except Exception as e:
             raise ConnectionError(f"Failed to connect to QuestDB: {e}") from e

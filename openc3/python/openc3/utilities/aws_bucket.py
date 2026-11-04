@@ -16,18 +16,15 @@ from botocore.config import Config
 from botocore.exceptions import ClientError, WaiterError
 
 from openc3.environment import *
+from openc3.utilities import tls_config
 from openc3.utilities.bucket import Bucket
 from openc3.utilities.logger import Logger
 
 
 aws_arn = OPENC3_AWS_ARN_PREFIX
 s3_config = Config(s3={"addressing_style": "path"})
-if OPENC3_BUCKET_URL:
-    s3_endpoint_url = OPENC3_BUCKET_URL
-elif OPENC3_DEVEL:
-    s3_endpoint_url = "http://127.0.0.1:9000"
-else:
-    s3_endpoint_url = "http://openc3-buckets:9000"
+# Honors OPENC3_BUCKET_URL and OPENC3_BUCKET_TLS (rejects a plaintext endpoint when TLS is required)
+s3_endpoint_url = tls_config.bucket_endpoint(devel=bool(OPENC3_DEVEL))
 
 if OPENC3_CLOUD == "local":
     s3_session = boto3.session.Session(
@@ -51,7 +48,9 @@ class AwsBucket(Bucket):
     def __init__(self):
         # Check whether the session is a real Session or a MockS3
         # print(f"\nAwsBucket INIT session:{s3_session}\n")
-        self.client = s3_session.client("s3", endpoint_url=s3_endpoint_url, config=s3_config)
+        self.client = s3_session.client(
+            "s3", endpoint_url=s3_endpoint_url, config=s3_config, verify=tls_config.bucket_verify()
+        )
 
     def create(self, bucket):
         if not self.exist(bucket):

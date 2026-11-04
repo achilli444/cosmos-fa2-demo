@@ -19,6 +19,7 @@ require 'redis'
 require 'hiredis-client'
 require 'json'
 require 'connection_pool'
+require 'openc3/utilities/tls_config'
 
 module OpenC3
   class StoreConnectionPool < ConnectionPool
@@ -119,12 +120,12 @@ module OpenC3
       @redis_username = ENV['OPENC3_REDIS_USERNAME']
       @redis_key = ENV['OPENC3_REDIS_PASSWORD']
       hostname = ENV['OPENC3_REDIS_HOSTNAME'].to_s.gsub("SHARDNUM", db_shard.to_s)
-      @redis_url = "redis://#{hostname}:#{ENV.fetch('OPENC3_REDIS_PORT', 6379)}"
+      @redis_url = TlsConfig.redis_url(hostname, ENV.fetch('OPENC3_REDIS_PORT', 6379))
       @redis_pool = StoreConnectionPool.new(size: pool_size) { build_redis() }
     end
 
     def build_redis
-      return Redis.new(url: @redis_url, username: @redis_username, password: @redis_key)
+      return Redis.new(url: @redis_url, username: @redis_username, password: @redis_key, **TlsConfig.redis_options)
     end
 
     ###########################################################################
@@ -261,7 +262,7 @@ module OpenC3
     def initialize(pool_size = 10, db_shard: 0)
       super(pool_size)
       hostname = ENV['OPENC3_REDIS_EPHEMERAL_HOSTNAME'].to_s.gsub("SHARDNUM", db_shard.to_s)
-      @redis_url = "redis://#{hostname}:#{ENV.fetch('OPENC3_REDIS_EPHEMERAL_PORT', 6380)}"
+      @redis_url = TlsConfig.redis_url(hostname, ENV.fetch('OPENC3_REDIS_EPHEMERAL_PORT', 6380))
       @redis_pool = StoreConnectionPool.new(size: pool_size) { build_redis() }
     end
   end
