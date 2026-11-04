@@ -14,7 +14,9 @@
 require 'openc3/models/model'
 require 'openc3/models/microservice_model'
 require 'base64'
+require 'digest'
 require 'json'
+require 'openssl'
 require 'securerandom'
 
 module OpenC3
@@ -24,7 +26,9 @@ module OpenC3
   # connect to. This model stores the bridge's Iroh public key (its EndpointId)
   # and most recent connection ticket, plus the authorized openc3-app control
   # identity (app_public_key) recorded during enrollment. The bridge's own
-  # private key lives in the secrets store, never here.
+  # private key lives in the secrets store, never here. Only a SHA-256 digest of
+  # a pending one-time enrollment code is stored (enroll_code_hash); the code
+  # itself is returned exactly once inside the enrollment token.
   #
   # This Ruby model mirrors the Python BridgeModel (same scoped primary key and
   # JSON shape) so the openc3cli `bridgeenroll` command can read and update the
@@ -36,7 +40,7 @@ module OpenC3
     attr_accessor :public_key
     attr_accessor :ticket
     attr_accessor :app_public_key
-    attr_accessor :enroll_code
+    attr_accessor :enroll_code_hash
     attr_accessor :enroll_code_generated_at
     attr_accessor :port
 
@@ -86,17 +90,18 @@ module OpenC3
       public_key: nil,
       ticket: nil,
       app_public_key: nil,
-      enroll_code: nil,
+      enroll_code_hash: nil,
       enroll_code_generated_at: nil,
       port: nil,
       updated_at: nil,
-      plugin: nil
+      plugin: nil,
+      enroll_code: nil # legacy plaintext field: accepted so old records load, never kept
     )
       super("#{scope}__#{PRIMARY_KEY}", name: name, updated_at: updated_at, plugin: plugin, scope: scope)
       @public_key = public_key
       @ticket = ticket
       @app_public_key = app_public_key
-      @enroll_code = enroll_code
+      @enroll_code_hash = enroll_code_hash
       @enroll_code_generated_at = enroll_code_generated_at
       @port = port
     end
@@ -110,24 +115,51 @@ module OpenC3
         'public_key' => @public_key,
         'ticket' => @ticket,
         'app_public_key' => @app_public_key,
-        'enroll_code' => @enroll_code,
+        'enroll_code_hash' => @enroll_code_hash,
         'enroll_code_generated_at' => @enroll_code_generated_at,
         'port' => @port
       }
     end
 
-    # Generate a one-time manual-enrollment code, store it on this bridge, and
-    # return a token (base64 JSON of bridge name + hub ticket + code) that a
-    # remote openc3-app pastes to enroll. Requires the bridge to be up (ticket
-    # present). The code is redeemed once over the api/enroll ALPN.
+    # SHA-256 hex digest of an enrollment code; this is what is persisted and
+    # compared (mirrors BridgeModel.hash_enrollment_code in Python).
+    def self.hash_enrollment_code(code)
+      Digest::SHA256.hexdigest(code.to_s)
+    end
+
+    # Generate a one-time manual-enrollment code, store only its hash on this
+    # bridge, and return a token (base64 JSON of bridge name + hub ticket + code)
+    # that a remote openc3-app pastes to enroll. Requires the bridge to be up
+    # (ticket present). The code is redeemed once over the api/enroll ALPN.
     def generate_enrollment_token
       raise "Bridge '#{@name}' has no ticket yet; is its bridge_microservice running?" if @ticket.nil? || @ticket.empty?
 
-      @enroll_code = SecureRandom.hex(16)
+      code = SecureRandom.hex(16)
+      @enroll_code_hash = self.class.hash_enrollment_code(code)
       @enroll_code_generated_at = Time.now.to_i
       update()
-      payload = { 'v' => 1, 'bridge' => @name, 'ticket' => @ticket, 'code' => @enroll_code }
+      payload = { 'v' => 1, 'bridge' => @name, 'ticket' => @ticket, 'code' => code }
       Base64.urlsafe_encode64(JSON.generate(payload), padding: false)
+    end
+
+    # True if `code` matches the pending enrollment code hash and the code is
+    # still within ENROLLMENT_CODE_TTL_SECONDS of generation.
+    def enrollment_code_valid?(code, now = Time.now.to_i)
+      return false if @enroll_code_hash.nil? || @enroll_code_hash.empty? || code.nil? || code.to_s.empty?
+      return false if @enroll_code_generated_at.nil?
+
+      age = now.to_i - @enroll_code_generated_at.to_i
+      return false unless age >= 0 && age <= ENROLLMENT_CODE_TTL_SECONDS
+
+      OpenSSL.fixed_length_secure_compare(self.class.hash_enrollment_code(code), @enroll_code_hash.to_s)
+    rescue ArgumentError
+      false
+    end
+
+    # Drop the pending enrollment code (after redemption or expiry).
+    def clear_enrollment_code
+      @enroll_code_hash = nil
+      @enroll_code_generated_at = nil
     end
   end
 end

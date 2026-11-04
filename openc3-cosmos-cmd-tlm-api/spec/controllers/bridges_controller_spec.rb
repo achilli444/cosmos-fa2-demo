@@ -23,7 +23,7 @@ RSpec.describe BridgesController, type: :controller do
       public_key: "hub-public-key",
       ticket: "secret-ticket",
       app_public_key: "app-public-key",
-      enroll_code: "secret-code",
+      enroll_code_hash: OpenC3::BridgeModel.hash_enrollment_code("secret-code"),
       enroll_code_generated_at: Time.now.to_i,
     ).create
     OpenC3::BridgeModel.new(name: "ORPHAN", scope: "DEFAULT", ticket: "orphan-ticket").create

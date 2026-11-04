@@ -10,10 +10,12 @@
 # if purchased from OpenC3, Inc.
 
 import asyncio
+import json
 import unittest
 from unittest.mock import Mock, patch
 
 from openc3.microservices.bridge_microservice import BridgeMicroservice
+from openc3.models.bridge_model import BridgeModel
 
 
 class FakeRecv:
@@ -72,6 +74,22 @@ class FakeConnection:
         self.closed_event.set()
 
 
+class FakeEnrollConnection(FakeConnection):
+    def __init__(self, request, remote_id="app-public-key"):
+        super().__init__([json.dumps(request).encode()])
+        self._remote_id = remote_id
+        # The client finishes writing the request, then closes its side as
+        # soon as it has read the response
+        self.bi.recv().block.set()
+        self.closed_event.set()
+
+    async def accept_bi(self):
+        return self.bi
+
+    def remote_id(self):
+        return self._remote_id
+
+
 class TestBridgeMicroservice(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.service = BridgeMicroservice.__new__(BridgeMicroservice)
@@ -121,6 +139,60 @@ class TestBridgeMicroservice(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(b"CHANNEL", self.service._waiting)
         self.assertGreaterEqual(cosmos.close_count, 1)
         self.assertGreaterEqual(host.close_count, 1)
+
+    def _enroll_model(self, code="one-time-code", generated_at=1_000):
+        model = BridgeModel(
+            name="BRIDGE",
+            scope="DEFAULT",
+            enroll_code_hash=BridgeModel.hash_enrollment_code(code),
+            enroll_code_generated_at=generated_at,
+        )
+        model.create = Mock()
+        return model
+
+    async def _serve_enroll(self, model, request, now=1_000):
+        conn = FakeEnrollConnection(request)
+        with (
+            patch("openc3.microservices.bridge_microservice.BridgeModel.get_model", return_value=model),
+            patch("openc3.microservices.bridge_microservice.time.time", return_value=now),
+        ):
+            await self.service._serve_enroll(conn)
+        return json.loads(b"".join(conn.bi.send().data))
+
+    async def test_enroll_redeems_a_hashed_code_once_and_clears_it(self):
+        model = self._enroll_model()
+
+        response = await self._serve_enroll(model, {"code": "one-time-code"})
+
+        self.assertEqual(response, {"ok": True, "app_public_key": "app-public-key"})
+        self.assertEqual(model.app_public_key, "app-public-key")
+        self.assertIsNone(model.enroll_code_hash)
+        self.assertIsNone(model.enroll_code_generated_at)
+        model.create.assert_called_once_with(force=True)
+        self.assertNotIn("enroll_code", model.as_json())
+
+    async def test_enroll_rejects_a_wrong_code_without_touching_the_model(self):
+        model = self._enroll_model()
+
+        response = await self._serve_enroll(model, {"code": "wrong-code"})
+
+        self.assertFalse(response["ok"])
+        self.assertIsNone(model.app_public_key)
+        self.assertEqual(model.enroll_code_hash, BridgeModel.hash_enrollment_code("one-time-code"))
+        model.create.assert_not_called()
+
+    async def test_enroll_clears_an_expired_code_hash(self):
+        model = self._enroll_model(generated_at=1_000)
+
+        response = await self._serve_enroll(
+            model, {"code": "one-time-code"}, now=1_001 + BridgeModel.ENROLLMENT_CODE_TTL_SECONDS
+        )
+
+        self.assertFalse(response["ok"])
+        self.assertIsNone(model.app_public_key)
+        self.assertIsNone(model.enroll_code_hash)
+        self.assertIsNone(model.enroll_code_generated_at)
+        model.create.assert_called_once_with(force=True)
 
     async def test_read_request_has_a_size_limit(self):
         recv = FakeRecv([b"1234"])
