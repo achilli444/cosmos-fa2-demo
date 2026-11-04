@@ -173,7 +173,7 @@ module OpenC3
     end
 
     # Returns whether the stored session has exceeded its idle timeout or maximum lifetime.
-    # Unparseable values are treated as expired.
+    # Unparsable values are treated as expired.
     def self.session_expired?(session, time = Time.now)
       created_at, last_used_at = session_times(session)
       return true unless created_at and last_used_at

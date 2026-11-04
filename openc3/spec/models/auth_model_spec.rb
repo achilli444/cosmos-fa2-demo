@@ -205,7 +205,7 @@ module OpenC3
         expect(@redis.hexists(SESSIONS_KEY, 'ses_stale')).to eq(false)
       end
 
-      it "treats an unparseable session value as expired" do
+      it "treats an unparsable session value as expired" do
         @redis.hset(SESSIONS_KEY, 'ses_bad', 'garbage')
         @redis.hset(SESSIONS_KEY, 'ses_json', '{"created_at":"nope"}')
         expect(AuthModel.verify('ses_bad')).to eq(false)
