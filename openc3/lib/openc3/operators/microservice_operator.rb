@@ -28,6 +28,9 @@ module OpenC3
   # Creates new OperatorProcess objects based on querying the Redis key value store.
   # Any keys under 'openc3_microservices' will be created into microservices.
   class MicroserviceOperator < Operator
+    SECRET_DIR_MODE = 0o700
+    SECRET_FILE_MODE = 0o600
+
     def initialize
       Logger.microservice_name = "MicroserviceOperator"
       super
@@ -135,7 +138,9 @@ module OpenC3
         return
       end
 
-      FileUtils.mkdir_p(dir)
+      # Secret files hold microservice credentials so the directory and file are
+      # created owner-only regardless of the process umask.
+      FileUtils.mkdir_p(dir, mode: SECRET_DIR_MODE)
       # Re-check after creating the directories in case one was created through a
       # symlink or the tree changed underneath us.
       real_dir = File.realpath(dir)
@@ -149,7 +154,10 @@ module OpenC3
         Logger.error("Microservice #{microservice_name} secret #{secret_name} file path is a symlink which is not allowed: #{path}")
         return
       end
-      File.open(path, 'wb') do |file|
+      File.open(path, File::WRONLY | File::CREAT | File::TRUNC | File::BINARY, SECRET_FILE_MODE) do |file|
+        # The mode passed to open only applies when the file is created (and is
+        # still masked by umask) so chmod to cover pre-existing files as well.
+        file.chmod(SECRET_FILE_MODE)
         file.write(secret_value)
       end
     end
