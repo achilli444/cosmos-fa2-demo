@@ -34,39 +34,53 @@ RSpec.describe StreamingChannel, :type => :channel do
   end
 
   it "subscribes" do
-    subscribe()
+    subscribe(token: $openc3_token)
     expect(subscription).to be_confirmed
     expect(subscription).to have_stream_from('streaming_12345')
   end
 
+  it "rejects a subscription without a token" do
+    subscribe()
+    expect(subscription).to be_rejected
+  end
+
+  it "rejects a subscription with an invalid token" do
+    $openc3_authorize = true
+    allow(OpenC3::AuthModel).to receive(:verify).with('bogus').and_return(false)
+    subscribe(token: 'bogus')
+    expect(subscription).to be_rejected
+  ensure
+    $openc3_authorize = false
+  end
+
   context "adds" do
     it "rejects without scope" do
-      subscribe()
+      subscribe(token: $openc3_token)
       subscription.add({ items: ['TLM__TGT__PKT__ITEM__CONVERTED'] })
       expect(subscription).to be_rejected
     end
 
     it "rejects without items" do
-      subscribe()
+      subscribe(token: $openc3_token)
       subscription.add({ scope: 'DEFAULT' })
       expect(subscription).to be_rejected
     end
 
     it "rejects with empty items" do
-      subscribe()
+      subscribe(token: $openc3_token)
       subscription.add({ scope: 'DEFAULT', items: [] })
       expect(subscription).to be_rejected
     end
 
     it "rejects with start_time greater than now" do
       time = Time.now.to_nsec_from_epoch + 1_000_000_000
-      subscribe()
+      subscribe(token: $openc3_token)
       subscription.add({ scope: 'DEFAULT', items: ['TLM__TGT__PKT__ITEM__CONVERTED'], start_time: time })
       expect(subscription).to be_rejected
     end
 
     it "adds specified items" do
-      subscribe()
+      subscribe(token: $openc3_token)
       subscription.add({ scope: 'DEFAULT', items: ['TLM__TGT__PKT__ITEM__CONVERTED'] })
       expect(subscription).to be_confirmed
     end
@@ -79,7 +93,7 @@ RSpec.describe StreamingChannel, :type => :channel do
     # on the connection. (String keys here mirror the JSON-parsed data a real
     # client sends, so validate_data passes and we actually exercise the guard.)
     before do
-      subscribe()
+      subscribe(token: $openc3_token)
       StreamingChannel.class_variable_get(:@@broadcasters)['streaming_12345'] = nil
     end
 

@@ -407,7 +407,7 @@ The Streaming API is a server-side subsystem within the `openc3-cosmos-cmd-tlm-a
 | File                              | Class                          | Purpose                                                                           |
 | --------------------------------- | ------------------------------ | --------------------------------------------------------------------------------- |
 | `streaming_channel.rb`            | `StreamingChannel`             | ActionCable channel. Entry point for WebSocket streaming requests.                |
-| `application_cable/connection.rb` | `ApplicationCable::Connection` | WebSocket connection authentication. Authorizes via token and assigns UUID/scope. |
+| `application_cable/connection.rb` | `ApplicationCable::Connection` | WebSocket connection setup. Assigns UUID/scope and rejects connections that put the token in the URL query string; authentication happens per subscription via `params[:token]`. |
 | `application_cable/channel.rb`    | `ApplicationCable::Channel`    | Base ActionCable channel class.                                                   |
 
 ### Core Library Files (openc3/lib/openc3/)
