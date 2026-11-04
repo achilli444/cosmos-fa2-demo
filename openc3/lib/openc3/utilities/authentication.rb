@@ -17,6 +17,7 @@
 
 require 'openc3/version'
 require 'openc3/io/json_drb'
+require 'openc3/utilities/api_schema'
 require 'faraday'
 require 'uri'
 
@@ -73,7 +74,7 @@ module OpenC3
     end
 
     def _generate_auth_url(endpoint = nil)
-      schema = ENV['OPENC3_API_SCHEMA'] || 'http'
+      schema = ApiSchema.resolve('OPENC3_API_SCHEMA')
       hostname = ENV['OPENC3_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-cmd-tlm-api')
       port = ENV['OPENC3_API_PORT'] || '2901'
       port = port.to_i

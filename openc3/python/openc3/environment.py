@@ -15,6 +15,7 @@ from openc3.__version__ import __title__, __version__
 
 
 _openc3_api_schema = "OPENC3_API_SCHEMA"
+_openc3_allow_plaintext_api = "OPENC3_ALLOW_PLAINTEXT_API"
 _openc3_api_hostname = "OPENC3_API_HOSTNAME"
 _openc3_api_port = "OPENC3_API_PORT"
 _openc3_api_timeout = "OPENC3_API_TIMEOUT"
@@ -97,7 +98,40 @@ def get_env_bool(key: str, default: bool = False) -> bool:
     return value.lower() in ("true", "1", "yes", "on")
 
 
-OPENC3_API_SCHEMA = os.environ.get(_openc3_api_schema, "http")
+class OpenC3PlaintextApiError(Exception):
+    """Raised when an API client would send credentials or data over a plaintext
+    scheme without the operator having explicitly allowed it"""
+
+
+_SECURE_API_SCHEMAS = ("https", "wss")
+_plaintext_warned: set[str] = set()
+
+
+def resolve_api_schema(key: str = _openc3_api_schema) -> str:
+    """Resolve the URL scheme used by every API client (JsonDRbObject,
+    OpenC3Authentication, WebSocketApi). Defaults to https. A plaintext scheme
+    (http / ws) is only honored when OPENC3_ALLOW_PLAINTEXT_API is set, so
+    passwords, bearer tokens and telemetry never leave the process unencrypted
+    because a variable was left unset.
+
+    Raises OpenC3PlaintextApiError if the scheme is not TLS protected and
+    OPENC3_ALLOW_PLAINTEXT_API is not set.
+    """
+    schema = (os.environ.get(key) or "").strip().lower() or "https"
+    if schema in _SECURE_API_SCHEMAS:
+        return schema
+    if not get_env_bool(_openc3_allow_plaintext_api):
+        raise OpenC3PlaintextApiError(
+            f"{key}={schema} would send credentials and data unencrypted. "
+            f"Set {key}=https (the default) or explicitly set {_openc3_allow_plaintext_api}=true to accept plaintext."
+        )
+    if key not in _plaintext_warned:
+        _plaintext_warned.add(key)
+        print(f"WARN: {_openc3_allow_plaintext_api} is set: {key}={schema} sends credentials and data unencrypted")
+    return schema
+
+
+OPENC3_API_SCHEMA = os.environ.get(_openc3_api_schema, "https")
 OPENC3_API_HOSTNAME = os.environ.get(_openc3_api_hostname, "openc3-cosmos-cmd-tlm-api")
 try:
     OPENC3_API_PORT = int(os.environ.get(_openc3_api_port))
@@ -108,7 +142,7 @@ try:
 except TypeError:
     OPENC3_API_TIMEOUT = 1.0
 
-OPENC3_SCRIPT_API_SCHEMA = os.environ.get(_openc3_script_api_schema, "http")
+OPENC3_SCRIPT_API_SCHEMA = os.environ.get(_openc3_script_api_schema, "https")
 OPENC3_SCRIPT_API_HOSTNAME = os.environ.get(_openc3_script_api_hostname, "openc3-cosmos-script-runner-api")
 try:
     OPENC3_SCRIPT_API_PORT = int(os.environ.get(_openc3_script_api_port))

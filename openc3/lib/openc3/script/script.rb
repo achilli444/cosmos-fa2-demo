@@ -40,6 +40,7 @@ require 'openc3/script/tables'
 require 'openc3/script/telemetry'
 require 'openc3/script/web_socket_api'
 require 'openc3/utilities/authentication'
+require 'openc3/utilities/api_schema'
 
 $api_server = nil
 $script_runner_api_server = nil
@@ -259,7 +260,7 @@ module OpenC3
   class ServerProxy
     # pull openc3-cosmos-cmd-tlm-api url from environment variables
     def generate_url
-      schema = ENV['OPENC3_API_SCHEMA'] || 'http'
+      schema = ApiSchema.resolve('OPENC3_API_SCHEMA')
       hostname = ENV['OPENC3_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-cmd-tlm-api')
       port = ENV['OPENC3_API_PORT'] || '2901'
       port = port.to_i
@@ -329,7 +330,7 @@ module OpenC3
   class ScriptServerProxy
     # pull openc3-cosmos-script-runner-api url from environment variables
     def generate_url
-      schema = ENV['OPENC3_SCRIPT_API_SCHEMA'] || 'http'
+      schema = ApiSchema.resolve('OPENC3_SCRIPT_API_SCHEMA')
       hostname = ENV['OPENC3_SCRIPT_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-script-runner-api')
       port = ENV['OPENC3_SCRIPT_API_PORT'] || '2902'
       port = port.to_i

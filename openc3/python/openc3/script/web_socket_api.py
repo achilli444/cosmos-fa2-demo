@@ -13,7 +13,7 @@ import json
 import os
 import time
 
-from openc3.environment import OPENC3_SCOPE
+from openc3.environment import OPENC3_SCOPE, resolve_api_schema
 from openc3.streams.web_socket_client_stream import WebSocketClientStream
 from openc3.utilities.authentication import (
     OpenC3Authentication,
@@ -198,7 +198,7 @@ class CmdTlmWebSocketApi(WebSocketApi):
         )
 
     def generate_url(self):
-        schema = os.environ.get("OPENC3_API_SCHEMA") or "http"
+        schema = resolve_api_schema("OPENC3_API_SCHEMA")
         if schema == "http":
             schema = "ws"
         if schema == "https":
@@ -235,7 +235,7 @@ class ScriptWebSocketApi(WebSocketApi):
         )
 
     def generate_url(self):
-        schema = os.environ.get("OPENC3_SCRIPT_API_SCHEMA") or "http"
+        schema = resolve_api_schema("OPENC3_SCRIPT_API_SCHEMA")
         if schema == "http":
             schema = "ws"
         if schema == "https":

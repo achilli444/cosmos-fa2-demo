@@ -12,6 +12,8 @@
 # if purchased from OpenC3, Inc.
 
 ENV['OPENC3_API_SCHEMA'] ||= 'http'
+# API clients default to https; plaintext must be explicitly accepted (local development only)
+ENV['OPENC3_ALLOW_PLAINTEXT_API'] ||= 'true'
 ENV['OPENC3_API_HOSTNAME'] ||= '127.0.0.1'
 ENV['OPENC3_API_PORT'] ||= '2900'
 ENV['OPENC3_SCRIPT_API_SCHEMA'] ||= 'http'

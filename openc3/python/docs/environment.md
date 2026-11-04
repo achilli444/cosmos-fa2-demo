@@ -6,12 +6,26 @@
 
 > CORE, ENTERPRISE
 
-Set the schema for OpenC3 COSMOS. Normal options are `http` or `https`. The default is `http`
+Set the schema for OpenC3 COSMOS. Normal options are `http` or `https`. The default is `https`. A plaintext scheme is refused unless `OPENC3_ALLOW_PLAINTEXT_API` is also set.
 
 Example:
 
 ```
-OPENC3_API_SCHEMA=http
+OPENC3_API_SCHEMA=https
+```
+
+## OPENC3_ALLOW_PLAINTEXT_API
+
+---
+
+> CORE, ENTERPRISE
+
+Explicitly accept a plaintext (`http` / `ws`) `OPENC3_API_SCHEMA` or `OPENC3_SCRIPT_API_SCHEMA`. Without it the API clients raise `OpenC3PlaintextApiError` instead of sending passwords, tokens or telemetry unencrypted. When set, a warning is printed once per process. Intended for local development or for deployments where the API traffic is encrypted below the application (service mesh, sidecar).
+
+Example:
+
+```
+OPENC3_ALLOW_PLAINTEXT_API=true
 ```
 
 ## OPENC3_API_HOSTNAME
@@ -58,12 +72,12 @@ OPENC3_API_TIMEOUT=1.0
 
 > CORE, ENTERPRISE
 
-Set the schema for OpenC3 COSMOS script api calls. Normal options are `http` or `https`. The default is `http`
+Set the schema for OpenC3 COSMOS script api calls. Normal options are `http` or `https`. The default is `https`. A plaintext scheme is refused unless `OPENC3_ALLOW_PLAINTEXT_API` is also set.
 
 Example:
 
 ```
-OPENC3_SCRIPT_API_SCHEMA=http
+OPENC3_SCRIPT_API_SCHEMA=https
 ```
 
 ## OPENC3_SCRIPT_API_HOSTNAME
