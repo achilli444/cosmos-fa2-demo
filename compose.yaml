@@ -261,6 +261,9 @@ services:
       # - "./openc3-traefik/traefik-letsencrypt.yaml:/etc/traefik/traefik.yaml:z"
       # - "./openc3-traefik/cert.key:/etc/traefik/cert.key:z"
       # - "./openc3-traefik/cert.crt:/etc/traefik/cert.crt:z"
+    # entrypoint.sh renders the install configuration here (root fs is read only)
+    tmpfs:
+      - /tmp
     ports:
       - "127.0.0.1:2900:2900"
       - "127.0.0.1:2943:2943"
@@ -280,6 +283,8 @@ services:
       OPENC3_TOOLS_BUCKET: "${OPENC3_TOOLS_BUCKET}"
       OPENC3_BUCKET_URL: "${OPENC3_BUCKET_URL}"
       OPENC3_ALLOW_HTTP: "${OPENC3_ALLOW_HTTP:-}"
+      # Sent as the Authorization header when polling /openc3-api/traefik
+      OPENC3_SERVICE_PASSWORD: "${OPENC3_SERVICE_PASSWORD}"
       SSL_CERT_FILE: "/devel/cacert.pem"
       CURL_CA_BUNDLE: "/devel/cacert.pem"
       REQUESTS_CA_BUNDLE: "/devel/cacert.pem"
