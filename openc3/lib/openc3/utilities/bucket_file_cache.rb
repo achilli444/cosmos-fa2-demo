@@ -20,6 +20,7 @@ require 'tmpdir'
 require 'openc3'
 require 'openc3/utilities/bucket_utilities'
 require 'openc3/utilities/bucket'
+require 'openc3/utilities/log_integrity'
 
 class BucketFile
   MAX_AGE_SECONDS = 3600 * 4 # 4 hours
@@ -83,6 +84,13 @@ class BucketFile
         end
 
         if File.exist?(local_path)
+          # Detect modified or replaced log files before they are read (AU-9(3))
+          begin
+            OpenC3::LogIntegrity.verify_object(client, ENV['OPENC3_LOGS_BUCKET'], @bucket_path, local_path)
+          rescue OpenC3::LogIntegrity::IntegrityError
+            File.delete(local_path)
+            raise
+          end
           basename = File.basename(local_path)
           if uncompress and File.extname(basename) == ".gz"
             uncompressed = OpenC3::BucketUtilities.uncompress_file(local_path)

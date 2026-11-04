@@ -9,10 +9,13 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+import hashlib
+import hmac
 import os
 import threading
 import time
 import zlib
+from datetime import datetime, timezone
 
 from openc3.environment import OPENC3_LOGS_BUCKET
 from openc3.utilities.bucket import Bucket
@@ -22,6 +25,71 @@ from openc3.utilities.logger import Logger
 class BucketUtilities:
     FILE_TIMESTAMP_FORMAT = "%Y%m%d%H%M%S%N"
     DIRECTORY_TIMESTAMP_FORMAT = "%Y%m%d"
+
+    # Log integrity metadata, same layout as the Ruby OpenC3::LogIntegrity module (AU-9(3))
+    DIGEST_METADATA_KEY = "log-digest"
+    ALGORITHM_METADATA_KEY = "log-digest-algorithm"
+    INDEX_DIRECTORY = "log_integrity"
+    INDEX_SUFFIX = ".sha256"
+    DIGEST_CHUNK_SIZE = 50_000_000
+
+    @classmethod
+    def integrity_key(cls):
+        return os.environ.get("OPENC3_LOG_INTEGRITY_KEY") or None
+
+    @classmethod
+    def integrity_algorithm(cls):
+        return "hmac-sha256" if cls.integrity_key() else "sha256"
+
+    @classmethod
+    def digest_file(cls, filename, algorithm=None):
+        algorithm = algorithm or cls.integrity_algorithm()
+        if algorithm == "hmac-sha256":
+            key = cls.integrity_key()
+            if not key:
+                raise ValueError("hmac-sha256 digest requested but OPENC3_LOG_INTEGRITY_KEY is not set")
+            digest = hmac.new(key.encode(), digestmod=hashlib.sha256)
+        elif algorithm == "sha256":
+            digest = hashlib.sha256()
+        else:
+            raise ValueError(f"Unknown log digest algorithm: {algorithm}")
+        with open(filename, "rb") as file:
+            while True:
+                chunk = file.read(cls.DIGEST_CHUNK_SIZE)
+                if not chunk:
+                    break
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @classmethod
+    def integrity_metadata(cls, filename):
+        algorithm = cls.integrity_algorithm()
+        return {
+            cls.DIGEST_METADATA_KEY: cls.digest_file(filename, algorithm),
+            cls.ALGORITHM_METADATA_KEY: algorithm,
+        }
+
+    @classmethod
+    def integrity_index_key(cls, bucket_key):
+        parts = bucket_key.split("/", 1)
+        if len(parts) == 1:
+            return f"{cls.INDEX_DIRECTORY}/{parts[0]}{cls.INDEX_SUFFIX}"
+        return f"{parts[0]}/{cls.INDEX_DIRECTORY}/{parts[1]}{cls.INDEX_SUFFIX}"
+
+    @classmethod
+    def integrity_index_record(cls, bucket_key, metadata):
+        now = datetime.now(timezone.utc).isoformat()
+        return f"{metadata[cls.ALGORITHM_METADATA_KEY]}  {metadata[cls.DIGEST_METADATA_KEY]}  {bucket_key}  {now}\n"
+
+    @classmethod
+    def write_integrity_index(cls, client, bucket, bucket_key, metadata):
+        client.put_object(
+            bucket=bucket,
+            key=cls.integrity_index_key(bucket_key),
+            body=cls.integrity_index_record(bucket_key, metadata).encode(),
+            content_type="text/plain",
+            metadata=metadata,
+        )
 
     # TODO: This is never called
     # @classmethod
@@ -61,6 +129,10 @@ class BucketUtilities:
                 filename = cls.compress_file(filename)
                 bucket_key += ".gz"
 
+            # Digest the exact bytes being uploaded so the stored object can be verified on read (AU-9(3))
+            integrity = cls.integrity_metadata(filename)
+            metadata = {**metadata, **integrity}
+
             retry_count = 0
             while retry_count < 3:
                 try:
@@ -74,6 +146,7 @@ class BucketUtilities:
                             body=file,
                             metadata=metadata,
                         )
+                    cls.write_integrity_index(client, OPENC3_LOGS_BUCKET, bucket_key, integrity)
                     break
                 except Exception as err:
                     # Try to upload file three times

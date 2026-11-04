@@ -17,6 +17,7 @@
 
 require 'openc3/utilities/bucket'
 require 'openc3/utilities/target_file'
+require 'openc3/utilities/log_integrity'
 require 'zlib'
 
 module OpenC3
@@ -86,14 +87,20 @@ module OpenC3
           bucket_key += '.gz'
         end
 
+        # Digest the exact bytes being uploaded so the stored object can be verified on read (AU-9(3))
+        integrity = LogIntegrity.metadata_for(filename)
+        metadata = metadata.merge(integrity)
+        bucket = ENV.fetch('OPENC3_LOGS_BUCKET', nil)
+
         retry_count = 0
         begin
           # We want to open this as a file and pass that to put_object to allow
           # this to work with really large files. Otherwise the entire file has
           # to be held in memory!
           File.open(filename, 'rb') do |file|
-            client.put_object(bucket: ENV.fetch('OPENC3_LOGS_BUCKET', nil), key: bucket_key, body: file, metadata: metadata)
+            client.put_object(bucket: bucket, key: bucket_key, body: file, metadata: metadata)
           end
+          LogIntegrity.write_index(client, bucket, bucket_key, integrity)
         rescue => err
           # Try to upload file three times
           retry_count += 1
@@ -103,7 +110,7 @@ module OpenC3
           retry
         end
 
-        Logger.debug "wrote #{ENV.fetch('OPENC3_LOGS_BUCKET', nil)}/#{bucket_key}"
+        Logger.debug "wrote #{bucket}/#{bucket_key} #{integrity[LogIntegrity::ALGORITHM_METADATA_KEY]}=#{integrity[LogIntegrity::DIGEST_METADATA_KEY]}"
 
         File.delete(orig_filename) if orig_filename
         File.delete(filename)

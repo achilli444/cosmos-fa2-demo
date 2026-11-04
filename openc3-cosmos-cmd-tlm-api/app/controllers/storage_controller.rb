@@ -19,6 +19,7 @@ require 'openc3/utilities/local_mode'
 require 'openc3/utilities/bucket'
 require 'openc3/utilities/config_overlay'
 require 'openc3/utilities/bucket_utilities'
+require 'openc3/utilities/log_retention'
 require 'openc3/utilities/ctrf'
 require 'openc3/utilities/process_manager'
 require 'openc3/utilities/questdb_client'
@@ -662,16 +663,35 @@ class StorageController < ApplicationController
     authorized = non_admin_config_overlay_write?(params[:bucket], path) || authorization('admin')
 
     if authorized
+      bucket = OpenC3::Bucket.getClient()
+      # Logs bucket objects inside the minimum retention period can not be deleted (AU-9, SI-12)
+      if OpenC3::LogRetention.logs_bucket?(params[:bucket]) && OpenC3::LogRetention.minimum_retain_time > 0
+        if OpenC3::LogRetention.retained?(object_last_modified(bucket, bucket_name, path))
+          OpenC3::Logger.warn("Delete refused, within minimum log retention (#{OpenC3::LogRetention.minimum_retain_time}s): #{bucket_name}/#{path}",
+                              scope: params[:scope], user: username())
+          render json: { status: 'error', message: "#{path} is within the minimum log retention period (#{OpenC3::LogRetention.minimum_retain_time}s)" }, status: :forbidden
+          return false
+        end
+      end
+
       if ENV.fetch('OPENC3_LOCAL_MODE', false)
         OpenC3::LocalMode.delete_local(path)
       end
 
-      OpenC3::Bucket.getClient().delete_object(bucket: bucket_name, key: path)
+      bucket.delete_object(bucket: bucket_name, key: path)
       OpenC3::Logger.info("Deleted: #{bucket_name}/#{path}", scope: params[:scope], user: username())
       return true
     else
       return false
     end
+  end
+
+  # Age of a logs bucket object; nil (treated as retained) when it can not be determined
+  def object_last_modified(bucket, bucket_name, key)
+    head = bucket.head_object(bucket: bucket_name, key: key)
+    head.respond_to?(:last_modified) ? head.last_modified : nil
+  rescue OpenC3::Bucket::NotFound
+    Time.at(0)
   end
 
   def delete_volume_item(params)
@@ -711,10 +731,25 @@ class StorageController < ApplicationController
     # List all objects under the prefix (same pattern as TargetModel#undeploy)
     bucket = OpenC3::Bucket.getClient()
     objects = bucket.list_objects(bucket: bucket_name, prefix: path)
+
+    # Logs bucket objects inside the minimum retention period are kept (AU-9, SI-12)
+    retained_count = 0
+    logs_bucket = OpenC3::LogRetention.logs_bucket?(params[:bucket])
+    if logs_bucket && OpenC3::LogRetention.minimum_retain_time > 0
+      now = Time.now
+      objects, retained = objects.partition do |object|
+        !OpenC3::LogRetention.retained?(object.respond_to?(:last_modified) ? object.last_modified : nil, now: now)
+      end
+      retained_count = retained.length
+      if retained_count > 0
+        OpenC3::Logger.warn("Delete directory kept #{retained_count} objects within minimum log retention (#{OpenC3::LogRetention.minimum_retain_time}s): #{bucket_name}/#{path}",
+                            scope: params[:scope], user: username())
+      end
+    end
     keys = objects.map(&:key)
 
     if keys.empty?
-      render json: { deleted_count: 0 }
+      render json: { deleted_count: 0, retained_count: retained_count }
       return true
     end
 
@@ -723,6 +758,8 @@ class StorageController < ApplicationController
     keys.each_slice(1000) do |key_batch|
       bucket.delete_objects(bucket: bucket_name, keys: key_batch)
       deleted_count += key_batch.length
+      # Audit record of each log file removed (AU-9)
+      key_batch.each { |key| OpenC3::Logger.info("Deleted: #{bucket_name}/#{key}", scope: params[:scope], user: username()) } if logs_bucket
 
       # Handle local mode
       if ENV.fetch('OPENC3_LOCAL_MODE', false)
@@ -730,9 +767,9 @@ class StorageController < ApplicationController
       end
     end
 
-    OpenC3::Logger.info("Deleted directory: #{bucket_name}/#{path} (#{deleted_count} files)",
+    OpenC3::Logger.info("Deleted directory: #{bucket_name}/#{path} (#{deleted_count} files, #{retained_count} retained)",
                         scope: params[:scope], user: username())
-    render json: { deleted_count: deleted_count }
+    render json: { deleted_count: deleted_count, retained_count: retained_count }
     true
   end
 

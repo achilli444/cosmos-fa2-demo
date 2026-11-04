@@ -19,6 +19,7 @@ require 'openc3/models/target_model'
 require 'openc3/microservices/microservice'
 require 'openc3/utilities/bucket'
 require 'openc3/utilities/bucket_utilities'
+require 'openc3/utilities/log_retention'
 
 module OpenC3
   class CleanupMicroservice < Microservice
@@ -35,6 +36,8 @@ module OpenC3
       start_time = Time.now
       areas.each do |prefix, retain_time|
         next unless retain_time
+        # Organization-defined minimum retention overrides a shorter per-target / per-scope setting (SI-12)
+        retain_time = LogRetention.effective_retain_time(retain_time, prefix: prefix, logger: @logger)
         time = start_time - retain_time
         oldest_list = BucketUtilities.files_between_time(ENV['OPENC3_LOGS_BUCKET'], prefix, nil, time)
         if oldest_list.length > 0
@@ -47,8 +50,10 @@ module OpenC3
             # bucket.delete_objects(bucket: ENV['OPENC3_LOGS_BUCKET'], keys: slice)
             slice.each do |item|
               bucket.delete_object(bucket: ENV['OPENC3_LOGS_BUCKET'], key: item)
+              # Audit record of each log file removed (AU-9): which object, under what retention
+              @logger.info("Cleanup deleted #{ENV['OPENC3_LOGS_BUCKET']}/#{item} (retain_time: #{retain_time}s)")
             end
-            @logger.debug("Cleanup deleted #{slice.length} log files")
+            @logger.info("Cleanup deleted #{slice.length} log files under #{prefix} older than #{time.utc.iso8601} (retain_time: #{retain_time}s, first: #{slice.first}, last: #{slice.last})")
             @delete_count += slice.length
             @metric.set(name: 'cleanup_delete_total', value: @delete_count, type: 'counter')
           end
