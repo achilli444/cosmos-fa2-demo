@@ -35,6 +35,15 @@ module OpenC3
         expect(auth.get_otp).to eq($openc3_mock_otp)
       end
 
+      it "uses a pre-issued session token as-is without exchanging it" do
+        session_token = AuthModel::SESSION_PREFIX + ('a' * 22)
+        ENV['OPENC3_API_PASSWORD'] = session_token
+        expect_any_instance_of(OpenC3Authentication).not_to receive(:_make_auth_request)
+        auth = OpenC3Authentication.new
+        expect(auth.token).to eq(session_token)
+        expect(auth.instance_variable_get(:@service)).to be false
+      end
+
       it "retries on Faraday::ConnectionFailed" do
         ENV['OPENC3_API_PASSWORD'] = 'test_password'
         call_count = 0

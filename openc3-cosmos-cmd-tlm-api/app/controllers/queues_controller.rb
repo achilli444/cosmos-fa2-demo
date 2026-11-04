@@ -12,9 +12,8 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/models/queue_model'
-require 'openc3/models/offline_access_model'
 require 'openc3/topics/decom_interface_topic'
-require 'openc3/utilities/authentication'
+require 'openc3/utilities/operator_token'
 require 'openc3/api/api'
 
 class QueuesController < ApplicationController
@@ -265,7 +264,11 @@ class QueuesController < ApplicationController
       command_data = model.remove_command(id)
       if command_data
         hazardous = false
-        token = get_token(username(), scope: params[:scope])
+        # Release runs under the releasing operator's own token so the command is
+        # authorized and attributed as that operator; the queueing operator is
+        # preserved separately via queue_username.
+        token = OpenC3::OperatorToken.for_request(request.headers['HTTP_AUTHORIZATION'])
+        OpenC3::Logger.info("Queue #{params[:name]} command released by #{username()} (queued by #{command_data['username']})", scope: params[:scope], user: username())
         begin
           # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
           validate = command_data.key?('validate') ? command_data['validate'] : true
@@ -344,23 +347,6 @@ class QueuesController < ApplicationController
     rescue StandardError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
-    end
-  end
-
-  def get_token(username, scope:)
-    if ENV['OPENC3_API_CLIENT'].nil?
-      ENV['OPENC3_API_PASSWORD'] ||= ENV.fetch('OPENC3_SERVICE_PASSWORD', nil)
-      return OpenC3::OpenC3Authentication.new().token
-    else
-      # Check for offline access token
-      model = nil
-      model = OpenC3::OfflineAccessModel.get_model(name: username, scope: scope) if username and username != ''
-      if model and model.offline_access_token
-        auth = OpenC3::OpenC3KeycloakAuthentication.new(ENV['OPENC3_KEYCLOAK_URL'])
-        return auth.get_token_from_refresh_token(model.offline_access_token)
-      else
-        return nil
-      end
     end
   end
 end

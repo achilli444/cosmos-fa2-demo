@@ -42,6 +42,12 @@ class ApplicationController < ActionController::API
     return username
   end
 
+  # The caller's own token, handed to processes spawned on their behalf so
+  # scripts run as the initiating operator rather than a service account
+  def operator_token()
+    request.headers['HTTP_AUTHORIZATION']
+  end
+
   # Authorize and rescue the possible exceptions
   # @return [Boolean] true if authorize successful
   def authorization(permission, target_name: nil)

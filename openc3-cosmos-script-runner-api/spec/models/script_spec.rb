@@ -198,10 +198,12 @@ RSpec.describe Script, type: :model do
   end
 
   describe "self.run" do
+    let(:operator_token) { "ses_operator_token" }
+
     it "spawns a running script" do
       allow(Script).to receive(:body).with("DEFAULT", "script.rb").and_return("puts 'Hello'")
       expect(RunningScript).to receive(:spawn).with(
-        "DEFAULT", "script.rb", nil, false, nil, "User Name", "username", nil, nil, nil
+        "DEFAULT", "script.rb", nil, false, nil, "User Name", "username", nil, nil, nil, token: nil
       ).and_return(12345)
 
       expect(Script.run("DEFAULT", "script.rb", nil, false, nil, "User Name", "username")).to be 12345
@@ -214,10 +216,19 @@ RSpec.describe Script, type: :model do
       expect(Script.run("DEFAULT", "missing.rb", nil, false, nil, "User Name", "username")).to be_nil
     end
 
+    it "passes the operator token through to RunningScript.spawn" do
+      allow(Script).to receive(:body).with("DEFAULT", "script.rb").and_return("puts 'Hello'")
+      expect(RunningScript).to receive(:spawn).with(
+        "DEFAULT", "script.rb", nil, false, nil, "User Name", "username", nil, nil, nil, token: operator_token
+      ).and_return(12345)
+
+      Script.run("DEFAULT", "script.rb", nil, false, nil, "User Name", "username", token: operator_token)
+    end
+
     it "passes python_venv through to RunningScript.spawn" do
       allow(Script).to receive(:body).with("DEFAULT", "script.py").and_return("print('hello')")
       expect(RunningScript).to receive(:spawn).with(
-        "DEFAULT", "script.py", nil, false, nil, "User Name", "username", nil, nil, "/gems/plugin_venvs/demo/.venv"
+        "DEFAULT", "script.py", nil, false, nil, "User Name", "username", nil, nil, "/gems/plugin_venvs/demo/.venv", token: nil
       )
 
       Script.run("DEFAULT", "script.py", nil, false, nil, "User Name", "username", nil, nil, "/gems/plugin_venvs/demo/.venv")
@@ -331,6 +342,8 @@ RSpec.describe Script, type: :model do
   end
 
   describe "self.process_suite" do
+    let(:operator_token) { "ses_operator_token" }
+
     # Helper method to set up common mocks for process_suite tests
     def setup_process_suite_mocks(language:, stdout_content: '{"suite":"data"}', stderr_content: "", exit_code: 0)
       extension = (language == "ruby") ? ".rb" : ".py"
@@ -381,7 +394,7 @@ RSpec.describe Script, type: :model do
       it "processes Ruby suite files" do
         setup_process_suite_mocks(language: "ruby")
 
-        stdout_result, stderr_result, success = Script.process_suite("suite.rb", "suite content", scope: "DEFAULT")
+        stdout_result, stderr_result, success = Script.process_suite("suite.rb", "suite content", scope: "DEFAULT", token: operator_token)
 
         expect(stdout_result).to eq '{"suite":"data"}'
         expect(stderr_result).to eq ""
@@ -391,7 +404,7 @@ RSpec.describe Script, type: :model do
       it "processes Python suite files" do
         setup_process_suite_mocks(language: "python")
 
-        stdout_result, stderr_result, success = Script.process_suite("suite.py", "suite content", scope: "DEFAULT")
+        stdout_result, stderr_result, success = Script.process_suite("suite.py", "suite content", scope: "DEFAULT", token: operator_token)
 
         expect(stdout_result).to eq '{"suite":"data"}'
         expect(stderr_result).to eq ""
@@ -409,7 +422,7 @@ RSpec.describe Script, type: :model do
         allow(File).to receive(:directory?).with(venv_dir).and_return(true)
         allow(Dir).to receive(:glob).with("#{venv_dir}/lib/python*/site-packages").and_return([site_packages])
 
-        Script.process_suite("INST/procedures/suite.py", "suite content", scope: "DEFAULT")
+        Script.process_suite("INST/procedures/suite.py", "suite content", scope: "DEFAULT", token: operator_token)
 
         expect(mocks[:process_env]['VIRTUAL_ENV']).to eq(venv_dir)
         expect(mocks[:process_env]['PATH']).to start_with("#{venv_dir}/bin:")
@@ -428,7 +441,7 @@ RSpec.describe Script, type: :model do
         expect(OpenC3::TargetModel).not_to receive(:get)
 
         Script.process_suite(
-          "__TEMP__/suite.py", "suite content", scope: "DEFAULT", python_venv: venv_name
+          "__TEMP__/suite.py", "suite content", scope: "DEFAULT", python_venv: venv_name, token: operator_token
         )
 
         expect(mocks[:process_env]['VIRTUAL_ENV']).to eq(venv_dir)
@@ -450,7 +463,7 @@ RSpec.describe Script, type: :model do
         # Setup process suite mocks
         mocks = setup_process_suite_mocks(language: "ruby")
 
-        stdout_result, stderr_result, success = Script.process_suite("suite.rb", "suite content", username: "user1", scope: "DEFAULT")
+        stdout_result, stderr_result, success = Script.process_suite("suite.rb", "suite content", username: "user1", scope: "DEFAULT", token: operator_token)
 
         expect(mocks[:process_env]["OPENC3_API_TOKEN"]).to eq "valid_token"
         expect(stdout_result).to eq '{"suite":"data"}'
@@ -470,19 +483,32 @@ RSpec.describe Script, type: :model do
         allow(OpenC3::OpenC3KeycloakAuthentication).to receive(:new).and_return(auth_double)
 
         expect do
-          Script.process_suite("suite.rb", "suite content", username: "user1", scope: "DEFAULT")
+          Script.process_suite("suite.rb", "suite content", username: "user1", scope: "DEFAULT", token: operator_token)
         end.to raise_error("offline_access token invalid for script")
       end
 
-      it "returns empty strings if service password isn't set for viewer users" do
+      it "runs suite analysis under the operator's own token in Core" do
+        allow(OpenC3::OfflineAccessModel).to receive(:get_model).and_return(nil)
+        mocks = setup_process_suite_mocks(language: "ruby")
+
+        stdout_result, _stderr_result, success = Script.process_suite("suite.rb", "suite content", username: "user1", scope: "DEFAULT", token: operator_token)
+
+        expect(mocks[:process_env]["OPENC3_API_PASSWORD"]).to eq operator_token
+        expect(mocks[:process_env]).not_to have_key("OPENC3_API_USER")
+        expect(mocks[:process_env]).not_to have_key("OPENC3_API_TOKEN")
+        expect(stdout_result).to eq '{"suite":"data"}'
+        expect(success).to be true
+      end
+
+      it "returns empty strings for viewers with no operator credential even when a service password exists" do
         # No offline access model
         allow(OpenC3::OfflineAccessModel).to receive(:get_model).and_return(nil)
+        mocks = setup_process_suite_mocks(language: "ruby")
 
-        # Remove service password
         original_env = ENV.to_hash
-        ENV.delete("OPENC3_SERVICE_PASSWORD")
+        ENV["OPENC3_SERVICE_PASSWORD"] = "service_password_must_not_be_used"
 
-        stdout_result, stderr_result, success = Script.process_suite("suite.rb", "suite content", username: "viewer", scope: "DEFAULT")
+        stdout_result, stderr_result, success = Script.process_suite("suite.rb", "suite content", username: "viewer", scope: "DEFAULT", token: nil)
 
         # Restore environment
         ENV.clear
@@ -491,6 +517,8 @@ RSpec.describe Script, type: :model do
         expect(stdout_result).to eq ""
         expect(stderr_result).to eq ""
         expect(success).to be false
+        expect(mocks[:process_env]).not_to have_key("OPENC3_API_PASSWORD")
+        expect(mocks[:process_env]).not_to have_key("OPENC3_API_USER")
       end
     end
   end

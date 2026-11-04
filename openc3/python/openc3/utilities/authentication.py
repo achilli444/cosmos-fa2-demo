@@ -10,6 +10,7 @@
 # if purchased from OpenC3, Inc.
 
 import json
+import re
 import threading
 import time
 from urllib.parse import urlencode
@@ -28,12 +29,22 @@ class OpenC3AuthenticationRetryableError(OpenC3AuthenticationError):
     pass
 
 
+# Matches a Core session token as issued by AuthModel.generate_session
+SESSION_TOKEN_REGEX = re.compile(r"^ses_[A-Za-z0-9_-]{22}$")
+
+
 # OpenC3 COSMOS Core authentication code
 class OpenC3Authentication:
     def __init__(self):
         password = OPENC3_API_PASSWORD
         if not password:
             raise OpenC3AuthenticationError("Authentication requires environment variable OPENC3_API_PASSWORD")
+        # A pre-issued session token (the initiating operator's own token handed
+        # to a spawned script) is used as-is; only passwords are exchanged.
+        if SESSION_TOKEN_REGEX.match(password):
+            self.service = False
+            self._token = password
+            return
         self.service = password == OPENC3_SERVICE_PASSWORD
         response = Session().post(
             self._generate_auth_url(),

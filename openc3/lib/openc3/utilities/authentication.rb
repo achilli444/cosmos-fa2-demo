@@ -19,6 +19,7 @@ require 'openc3/version'
 require 'openc3/io/json_drb'
 require 'faraday'
 require 'uri'
+require 'openc3/models/auth_model'
 
 module OpenC3
   # Basic exception for known errors
@@ -31,6 +32,13 @@ module OpenC3
       password = ENV.fetch('OPENC3_API_PASSWORD', nil)
       if password.nil?
         raise OpenC3AuthenticationError, "Authentication requires environment variable OPENC3_API_PASSWORD"
+      end
+      # A pre-issued session token (the initiating operator's own token handed
+      # to a spawned script) is used as-is; only passwords are exchanged.
+      if AuthModel.session_token?(password)
+        @service = false
+        @token = password
+        return
       end
       @service = password == ENV['OPENC3_SERVICE_PASSWORD']
       retry_faraday_request do
