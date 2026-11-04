@@ -20,6 +20,7 @@ import schedule
 
 from openc3.api import *
 from openc3.logs.stream_log_pair import StreamLogPair
+from openc3.utilities import link_encryption_policy
 from openc3.utilities.logger import Logger
 from openc3.utilities.secrets import Secrets
 
@@ -90,6 +91,14 @@ class Interface:
 
     # Should be implemented by subclass to return human readable connection string
     # which will be placed in log messages when connecting and during connection failures
+    # Apply the deployment link encryption policy (see openc3.utilities.link_encryption_policy).
+    # Interfaces call this from connect with whether their transport is encrypted.
+    # Returns True when the link is protected, raises PlaintextLinkError when policy refuses it.
+    def enforce_link_encryption_policy(self, transport=None, encrypted=False):
+        if transport is None:
+            transport = self.connection_string()
+        return link_encryption_policy.check(self, transport, encrypted=encrypted)
+
     def connection_string(self):
         return self.name
 

@@ -80,6 +80,11 @@ class MqttStream:
                 )
         elif self.ca_file:
             self.client.tls_set(ca_certs=self.ca_file.name)
+        if not (self.ssl or self.ca_file):
+            Logger.warn(
+                f"MqttStream: connecting to {self.hostname}:{self.port} without TLS; "
+                "topics and credentials are sent in plaintext"
+            )
 
         self.client.loop_start()
         # Connect doesn't fully establish the connection, it just sends the CONNECT packet

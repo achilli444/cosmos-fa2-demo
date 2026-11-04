@@ -17,6 +17,8 @@
 
 require 'spec_helper'
 require 'openc3/interfaces/tcpip_server_interface'
+require 'openc3/streams/tcpip_client_stream'
+require 'openc3/interfaces/protocols/burst_protocol'
 
 module OpenC3
   describe TcpipServerInterface do
@@ -218,6 +220,114 @@ module OpenC3
         expect(details['write_timeout']).to be_nil
         expect(details['read_timeout']).to eql(10.0)
       end
+    end
+  end
+end
+
+module OpenC3
+  describe TcpipServerInterface, "link encryption" do
+    before(:each) do
+      @saved = ENV['OPENC3_REQUIRE_ENCRYPTED_LINKS']
+    end
+
+    after(:each) do
+      if @saved
+        ENV['OPENC3_REQUIRE_ENCRYPTED_LINKS'] = @saved
+      else
+        ENV.delete('OPENC3_REQUIRE_ENCRYPTED_LINKS')
+      end
+    end
+
+    it "warns when accepting plaintext connections" do
+      ENV.delete('OPENC3_REQUIRE_ENCRYPTED_LINKS')
+      i = TcpipServerInterface.new('8891', '8891', '5', '5', 'burst')
+      allow(Logger).to receive(:warn)
+      expect(Logger).to receive(:warn).with(/plaintext link listening on 0.0.0.0:8891/)
+      i.connect
+      i.disconnect
+    end
+
+    it "refuses plaintext connections when OPENC3_REQUIRE_ENCRYPTED_LINKS is set" do
+      ENV['OPENC3_REQUIRE_ENCRYPTED_LINKS'] = 'true'
+      i = TcpipServerInterface.new('8892', '8892', '5', '5', 'burst')
+      expect { i.connect }.to raise_error(PlaintextLinkError)
+      expect(i.connected?).to be false
+    end
+
+    it "accepts an approved ALLOW_PLAINTEXT bypass" do
+      ENV['OPENC3_REQUIRE_ENCRYPTED_LINKS'] = 'true'
+      i = TcpipServerInterface.new('8893', '8893', '5', '5', 'burst')
+      i.set_option('ALLOW_PLAINTEXT', ['true'])
+      allow(Logger).to receive(:warn)
+      expect(Logger).to receive(:warn).with(/permitted by ALLOW_PLAINTEXT/)
+      i.connect
+      i.disconnect
+    end
+
+    it "serves TLS to clients when SSL_CERT and SSL_KEY are set" do
+      ENV['OPENC3_REQUIRE_ENCRYPTED_LINKS'] = 'true'
+      key = OpenSSL::PKey::RSA.new(2048)
+      cert = OpenSSL::X509::Certificate.new
+      cert.version = 2
+      cert.serial = 2
+      cert.subject = OpenSSL::X509::Name.parse("/CN=localhost")
+      cert.issuer = cert.subject
+      cert.public_key = key.public_key
+      cert.not_before = Time.now - 60
+      cert.not_after = Time.now + 3600
+      ef = OpenSSL::X509::ExtensionFactory.new(cert, cert)
+      cert.add_extension(ef.create_extension("subjectAltName", "DNS:localhost,IP:127.0.0.1"))
+      cert.add_extension(ef.create_extension("basicConstraints", "CA:TRUE", true))
+      cert.sign(key, OpenSSL::Digest.new('SHA256'))
+
+      i = TcpipServerInterface.new('8894', '8894', '5', '5', 'burst')
+      i.set_option('SSL_CERT', [cert.to_pem])
+      i.set_option('SSL_KEY', [key.to_pem])
+      expect(i.ssl?).to be true
+      expect(i.connection_string).to eql "listening on 0.0.0.0:8894 (R/W) (TLS)"
+      expect(i.details['options']).not_to have_key('SSL_KEY')
+      expect(Logger).not_to receive(:warn).with(/plaintext/)
+      i.connect
+      sleep 0.2
+
+      client = TcpipClientStream.new('localhost', 8894, 8894, 5.0, 5.0)
+      client.set_option('SSL_CA_FILE', [cert.to_pem])
+      client.set_option('SSL_HOSTNAME', ['localhost'])
+      client.connect
+      client.write("\x01\x02\x03")
+      sleep 0.2
+      packet = i.read
+      expect(packet.buffer).to eql "\x01\x02\x03"
+      expect(i.num_clients).to eql 1
+      client.disconnect
+      i.disconnect
+    end
+
+    it "rejects a plaintext client when TLS is configured" do
+      key = OpenSSL::PKey::RSA.new(2048)
+      cert = OpenSSL::X509::Certificate.new
+      cert.version = 2
+      cert.serial = 3
+      cert.subject = OpenSSL::X509::Name.parse("/CN=localhost")
+      cert.issuer = cert.subject
+      cert.public_key = key.public_key
+      cert.not_before = Time.now - 60
+      cert.not_after = Time.now + 3600
+      cert.sign(key, OpenSSL::Digest.new('SHA256'))
+
+      i = TcpipServerInterface.new('8895', '8895', '5', '5', 'burst')
+      i.set_option('SSL_CERT', [cert.to_pem])
+      i.set_option('SSL_KEY', [key.to_pem])
+      i.connect
+      sleep 0.2
+      expect(Logger).to receive(:error).with(/TLS handshake failed/)
+      client = TcpipClientStream.new('localhost', 8895, 8895, 5.0, 5.0)
+      client.connect
+      client.write("plaintext")
+      sleep 0.5
+      expect(i.num_clients).to eql 0
+      client.disconnect
+      i.disconnect
     end
   end
 end

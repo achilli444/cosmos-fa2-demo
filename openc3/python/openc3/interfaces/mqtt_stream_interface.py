@@ -59,7 +59,12 @@ class MqttStreamInterface(StreamInterface):
         return result
 
     # Creates a new {SerialStream} using the parameters passed in the constructor
+    # Whether the broker connection uses TLS (ssl flag or CA file given)
+    def ssl_enabled(self):
+        return bool(self.ssl or self.ca_file)
+
     def connect(self):
+        self.enforce_link_encryption_policy(self.connection_string(), encrypted=self.ssl_enabled())
         self.stream = MqttStream(
             self.hostname,
             self.port,

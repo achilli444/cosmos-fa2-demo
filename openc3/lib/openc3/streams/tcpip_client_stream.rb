@@ -85,6 +85,7 @@ module OpenC3
     def connect
       connect_nonblock(@write_socket, @write_addr) if @write_socket
       connect_nonblock(@read_socket, @read_addr) if @read_socket and @read_socket != @write_socket
+      start_tls(:client, @hostname)
       super()
     end
 

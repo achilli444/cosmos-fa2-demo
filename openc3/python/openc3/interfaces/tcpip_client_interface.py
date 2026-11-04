@@ -73,6 +73,7 @@ class TcpipClientInterface(StreamInterface):
     # Connects the {TcpipClientStream} by passing the
     # initialization parameters to the {TcpipClientStream}.
     def connect(self):
+        self.enforce_link_encryption_policy(self.connection_string(), encrypted=False)
         self.stream = TcpipClientStream(
             self.hostname,
             self.write_port,

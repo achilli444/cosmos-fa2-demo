@@ -41,14 +41,20 @@ module OpenC3
     end
 
     def connection_string
-      result = "#{@hostname}:#{@port} (ssl: #{@ssl})"
+      result = "#{@hostname}:#{@port} (ssl: #{ssl?})"
       result += " write topic: #{@write_topic}" if @write_topic
       result += " read topic: #{@read_topic}" if @read_topic
       return result
     end
 
-    # Creates a new {SerialStream} using the parameters passed in the constructor
+    # @return [Boolean] Whether the broker connection uses TLS (ssl flag, client cert or CA given)
+    def ssl?
+      !!(@ssl or (@cert and @key) or @ca_file)
+    end
+
+    # Creates a new {MqttStream} using the parameters passed in the constructor
     def connect
+      enforce_link_encryption_policy(connection_string(), encrypted: ssl?)
       @stream = MqttStream.new(@hostname, @port, @ssl, @write_topic, @read_topic, @ack_timeout)
       @stream.username = @username if @username
       @stream.password = @password if @password

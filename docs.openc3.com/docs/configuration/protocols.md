@@ -607,6 +607,32 @@ COSMOS supports implementing encryption at the protocol layer using OpenSSL. Thi
 For reading, the encryption protocol should be first so it decrypts the raw data before other protocols process it. For writing, protocols execute in reverse order, so the encryption protocol (listed first) will encrypt the data last, just before it's sent.
 :::
 
+### AEAD Protocol
+
+The AEAD protocol (Ruby) applies authenticated encryption (AES-GCM via the OpenSSL library the COSMOS containers are built with) to every byte written to and read from an interface. Each write becomes a self-delimiting record `[4 byte length][12 byte random nonce][ciphertext][16 byte tag]` so the protocol works on byte streams (TCP, serial) as well as message transports (MQTT, UDP). Records that fail authentication are dropped (or disconnect the interface) and logged. The key is never written in plugin.txt: it is read by name from the COSMOS Secrets store (Admin / Secrets). An interface that applies the AEAD protocol in every direction it uses satisfies the [link encryption policy](interfaces#allow_plaintext).
+
+:::info[AEAD Protocol Ordering]
+List the AEAD protocol first. For reads it then decrypts before delineation protocols run; for writes it encrypts last, after the packet is complete.
+:::
+
+| Parameter       | Description                                                                                          | Required | Default     |
+| --------------- | ---------------------------------------------------------------------------------------------------- | -------- | ----------- |
+| Key Secret Name | Name of the COSMOS secret holding the key (32 bytes for AES-256-GCM, 16 for AES-128-GCM; raw or hex) | Yes      |             |
+| Cipher          | AES-256-GCM or AES-128-GCM                                                                           | No       | AES-256-GCM |
+| Bad Strategy    | What to do with a record that fails authentication: ERROR = log and drop, DISCONNECT = disconnect    | No       | ERROR       |
+
+```cosmos
+INTERFACE ENCRYPTED_INT tcpip_client_interface.rb myhost.com 12345 12345 10.0 nil LENGTH 0 16 0 1 BIG_ENDIAN 0 nil true
+  PROTOCOL READ_WRITE AeadProtocol LINK_KEY AES-256-GCM ERROR
+  TARGET ENCRYPTED_TARGET
+```
+
+Source code for [aead_protocol.rb](https://github.com/OpenC3/cosmos/blob/main/openc3/lib/openc3/interfaces/protocols/aead_protocol.rb)
+
+:::warning[Key Rotation]
+NIST SP 800-38D limits a key used with random 96 bit nonces to 2^32 records. The protocol raises an error and must be given a new key once that count is reached on one connection.
+:::
+
 ### Creating an Encryption Protocol
 
 Below is an example of a custom encryption protocol using OpenSSL's AES-256-GCM cipher. This protocol encrypts outgoing data and decrypts incoming data.

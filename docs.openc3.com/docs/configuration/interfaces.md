@@ -122,6 +122,20 @@ INTERFACE INTERFACE_NAME tcpip_client_interface.rb host.docker.internal 8080 808
 </TabItem>
 </Tabs>
 
+#### ALLOW_PLAINTEXT
+
+Records an approved cryptographic bypass for an interface that must carry commands or telemetry over an unencrypted link. Every network interface (TCP/IP client and server, HTTP client and server, MQTT) applies the link encryption policy when it connects:
+
+- By default a plaintext link connects but logs a warning naming the interface and transport every time it connects.
+- When the environment variable `OPENC3_REQUIRE_ENCRYPTED_LINKS` is `true` in `.env`, a plaintext link is refused unless the interface sets `OPTION ALLOW_PLAINTEXT true`. The bypass is still logged as a warning so the approved exception is traceable.
+- A link counts as encrypted when the transport uses TLS (`SSL` options below, `https`, MQTT `ssl`) or when the [AEAD Protocol](protocols#aead-protocol) is applied to every direction the interface uses.
+
+```cosmos
+INTERFACE INTERFACE_NAME tcpip_client_interface.rb host.docker.internal 8080 8080 10.0 10.0
+  # Approved by the AO on 2026-01-01, see POA&M item 12
+  OPTION ALLOW_PLAINTEXT true
+```
+
 ### TCP/IP Client Interface
 
 The TCP/IP client interface connects to a TCP/IP socket to send commands and receive telemetry. This interface is used for targets which open a socket and wait for a connection. This is the most common type of interface.
@@ -160,6 +174,26 @@ INTERFACE INTERFACE_NAME tcpip_client_interface.rb host.docker.internal 8080 808
 ```
 </TabItem>
 </Tabs>
+
+#### SSL (TLS) Options
+
+The TCP/IP client (Ruby) can wrap its socket in TLS 1.2+ using the following options. The server certificate is always verified against `SSL_CA_FILE` (or the system trust store) unless `SSL_VERIFY false` is set, which is logged as a warning.
+
+| Option       | Description                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| SSL          | `true` to enable TLS                                                                            |
+| SSL_CA_FILE  | PEM certificate authority chain used to verify the server. Implies SSL.                         |
+| SSL_CERT     | PEM client certificate for mutual TLS. Implies SSL. Pass via SECRET to keep it out of plugin.txt |
+| SSL_KEY      | PEM private key matching SSL_CERT. Pass via SECRET                                              |
+| SSL_HOSTNAME | Hostname to verify in the server certificate. Default: the connect hostname                     |
+| SSL_VERIFY   | `false` disables server certificate verification (not recommended)                              |
+
+```cosmos
+INTERFACE INTERFACE_NAME tcpip_client_interface.rb host.docker.internal 8443 8443 10.0 10.0 LENGTH 0 16 0 1 BIG_ENDIAN 4 0xBA5EBA11
+  OPTION SSL true
+  SECRET FILE SSL_CA_FILE /etc/cosmos/ca.pem
+  OPTION SSL_HOSTNAME host.docker.internal
+```
 
 ### TCP/IP Server Interface
 
@@ -212,6 +246,22 @@ INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 10.0 # no buil
 </TabItem>
 </Tabs>
 
+#### SSL (TLS) Options
+
+The TCP/IP server (Ruby) terminates TLS 1.2+ for every accepted client when `SSL_CERT` and `SSL_KEY` are set. Setting `SSL_CA_FILE` additionally requires clients to present a certificate signed by that authority (mutual TLS). Clients that do not complete the TLS handshake are rejected and logged.
+
+| Option      | Description                                                                          |
+| ----------- | ------------------------------------------------------------------------------------ |
+| SSL_CERT    | PEM server certificate                                                               |
+| SSL_KEY     | PEM private key matching SSL_CERT. Pass via SECRET to keep it out of plugin.txt      |
+| SSL_CA_FILE | PEM certificate authority chain; when set clients must present a certificate (mTLS) |
+
+```cosmos
+INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8443 8443 10.0 nil BURST
+  SECRET FILE SSL_CERT /etc/cosmos/server.pem
+  SECRET FILE SSL_KEY /etc/cosmos/server-key.pem
+```
+
 ### UDP Interface
 
 The UDP interface uses UDP packets to send and receive telemetry from the target.
@@ -251,6 +301,8 @@ INTERFACE INTERFACE_NAME udp_interface.rb host.docker.internal 8080 8081 8082 ni
 ### HTTP Client Interface
 
 The HTTP client interface connects to a HTTP server to send commands and receive telemetry. This interface is commonly used with the [HttpAccessor](accessors#http-accessor) and [JsonAccessor](accessors#json-accessor). See the [openc3-cosmos-http-example](https://github.com/OpenC3/cosmos/tree/main/examples/openc3-cosmos-http-example) for more information.
+
+The Ruby HTTP client verifies server certificates (TLS 1.2+) when `https` is used and refuses redirects from `https` to `http`. Using `http` is a plaintext link subject to the [link encryption policy](#allow_plaintext).
 
 | Parameter                   | Description                                                                             | Required | Default    |
 | --------------------------- | --------------------------------------------------------------------------------------- | -------- | ---------- |
@@ -301,6 +353,22 @@ INTERFACE INTERFACE_NAME http_server_interface.rb 88
 ```
 </TabItem>
 </Tabs>
+
+#### SSL (TLS) Options
+
+The Ruby HTTP server serves HTTPS (TLS 1.2+) when `SSL_CERT` and `SSL_KEY` are set. Setting `SSL_CA_FILE` additionally requires clients to present a certificate signed by that authority (mutual TLS). Without these options the server is a plaintext link subject to the [link encryption policy](#allow_plaintext).
+
+| Option      | Description                                                                          |
+| ----------- | ------------------------------------------------------------------------------------ |
+| SSL_CERT    | PEM server certificate                                                               |
+| SSL_KEY     | PEM private key matching SSL_CERT. Pass via SECRET to keep it out of plugin.txt      |
+| SSL_CA_FILE | PEM certificate authority chain; when set clients must present a certificate (mTLS) |
+
+```cosmos
+INTERFACE INTERFACE_NAME http_server_interface.rb 8443
+  SECRET FILE SSL_CERT /etc/cosmos/server.pem
+  SECRET FILE SSL_KEY /etc/cosmos/server-key.pem
+```
 
 ### MQTT Interface
 

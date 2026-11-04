@@ -66,8 +66,16 @@ module OpenC3
         @client.ssl = true
         @client.ca_file = @ca_file.path
       end
+      unless ssl?
+        Logger.warn("MqttStream: connecting to #{@hostname}:#{@port} without TLS; topics and credentials are sent in plaintext")
+      end
       @client.connect
       @client.subscribe(@read_topic) if @read_topic
+    end
+
+    # @return [Boolean] Whether the broker connection uses TLS (ssl flag, client cert or CA given)
+    def ssl?
+      !!(@ssl or (@cert and @key) or @ca_file)
     end
 
     def connected?

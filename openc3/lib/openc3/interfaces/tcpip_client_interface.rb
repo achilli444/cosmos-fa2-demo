@@ -59,7 +59,7 @@ module OpenC3
     def connection_string
       # Probably most common is write == read so handle that
       if @write_port == @read_port
-        return "#{@hostname}:#{@write_port} (R/W)"
+        return "#{@hostname}:#{@write_port} (R/W)#{ssl_suffix()}"
       end
 
       result = ''
@@ -70,7 +70,16 @@ module OpenC3
         result += ' ' if result.length != 0
         result += "#{@hostname}:#{@read_port} (read)"
       end
-      return result
+      return result + ssl_suffix()
+    end
+
+    # @return [Boolean] Whether the stream will be wrapped in TLS (SSL options set)
+    def ssl?
+      @options.any? { |name, values| name == 'SSL' ? ConfigParser.handle_true_false(values[0]) == true : TcpipSocketStream::SSL_OPTIONS[1..-1].include?(name) }
+    end
+
+    def ssl_suffix
+      ssl?() ? " (TLS)" : ""
     end
 
     # Connects the {TcpipClientStream} by passing the
@@ -87,6 +96,7 @@ module OpenC3
       @options.each do |option_name, option_values|
         @stream.set_option(option_name, option_values)
       end
+      enforce_link_encryption_policy(connection_string(), encrypted: @stream.ssl?)
       super()
     end
 
@@ -97,6 +107,8 @@ module OpenC3
       result['read_port'] = @read_port
       result['write_timeout'] = @write_timeout
       result['read_timeout'] = @read_timeout
+      result['ssl'] = ssl?
+      result['options'] = result['options'].reject { |name, _| name == 'SSL_KEY' } if result['options']
       return result
     end
   end

@@ -18,6 +18,7 @@
 require 'openc3/api/api'
 require 'openc3/logs/stream_log_pair'
 require 'openc3/utilities/secrets'
+require 'openc3/utilities/link_encryption_policy'
 require 'rufus-scheduler'
 
 module OpenC3
@@ -179,6 +180,17 @@ module OpenC3
       @interfaces = []
       @secrets = Secrets.getClient
       @scheduler = nil
+    end
+
+    # Apply the deployment link encryption policy (see LinkEncryptionPolicy).
+    # Interfaces call this from connect with whether their transport is encrypted.
+    #
+    # @param transport [String] Human readable transport description for the log
+    # @param encrypted [Boolean] Whether the transport is encrypted (TLS)
+    # @return [Boolean] true when the link is protected (TLS or AeadProtocol)
+    # @raise [PlaintextLinkError] when policy refuses the plaintext link
+    def enforce_link_encryption_policy(transport = connection_string(), encrypted: false)
+      LinkEncryptionPolicy.protected_link?(self, transport, encrypted: encrypted)
     end
 
     # Should be implemented by subclass to return human readable connection string

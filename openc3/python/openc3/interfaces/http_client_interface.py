@@ -72,6 +72,7 @@ class HttpClientInterface(Interface):
         """
         Initializes an HTTP session and then calls the parent class's connect method.
         """
+        self.enforce_link_encryption_policy(self.url, encrypted=self.protocol == "https")
         self.http = requests.Session()
         super().connect()
 
