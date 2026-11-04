@@ -29,6 +29,7 @@ require 'openc3/utilities/store'
 require 'openc3/utilities/store_queued'
 require 'openc3/utilities/bucket_require'
 require 'openc3/utilities/python_venv'
+require 'openc3/utilities/operator_token'
 require 'openc3/models/offline_access_model'
 require 'openc3/models/environment_model'
 require 'openc3/models/script_engine_model'
@@ -433,7 +434,7 @@ class RunningScript
     self.class.message_log
   end
 
-  def self.spawn(scope, name, suite_runner = nil, disconnect = false, environment = nil, user_full_name = nil, username = nil, line_no = nil, end_line_no = nil, python_venv = nil)
+  def self.spawn(scope, name, suite_runner = nil, disconnect = false, environment = nil, user_full_name = nil, username = nil, line_no = nil, end_line_no = nil, python_venv = nil, token: nil)
     extension = File.extname(name).to_s.downcase
     script_engine = nil
     if extension == '.py'
@@ -477,9 +478,6 @@ class RunningScript
       process.cwd = script_cwd
 
       # Check for offline access token
-      model = nil
-      model = OpenC3::OfflineAccessModel.get_model(name: username, scope: scope) if username != 'Anonymous'
-
       # Load the global environment variables
       status_environment = {}
       values = OpenC3::EnvironmentModel.all(scope: scope).values
@@ -531,23 +529,10 @@ class RunningScript
       process.environment['OPENC3_SR_BUCKET_USERNAME'] = nil
       process.environment['OPENC3_SR_BUCKET_PASSWORD'] = nil
       process.environment['OPENC3_API_CLIENT'] = ENV.fetch('OPENC3_API_CLIENT', nil)
-      if model and model.offline_access_token
-        auth = OpenC3::OpenC3KeycloakAuthentication.new(ENV.fetch('OPENC3_KEYCLOAK_URL', nil))
-        valid_token = auth.get_token_from_refresh_token(model.offline_access_token)
-        if valid_token
-          process.environment['OPENC3_API_TOKEN'] = model.offline_access_token
-        else
-          model.offline_access_token = nil
-          model.update
-          raise "offline_access token invalid for script"
-        end
-      else
-        process.environment['OPENC3_API_USER'] = ENV.fetch('OPENC3_API_USER', nil)
-        if ENV['OPENC3_SERVICE_PASSWORD']
-          process.environment['OPENC3_API_PASSWORD'] = ENV.fetch('OPENC3_SERVICE_PASSWORD')
-        else
-          raise "No authentication available for script"
-        end
+      # The script runs as the initiating operator: their offline access token in
+      # Enterprise or their own request token in Core. No service-account fallback.
+      OpenC3::OperatorToken.script_environment(token, username: username, scope: scope).each do |key, value|
+        process.environment[key] = value
       end
       process.environment['GEM_HOME'] = ENV.fetch('GEM_HOME', nil)
 

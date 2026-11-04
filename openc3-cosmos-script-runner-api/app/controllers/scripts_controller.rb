@@ -111,7 +111,7 @@ class ScriptsController < ApplicationController
       }
       # Viewers without script_run still get the file contents, just no suite chrome.
       if suite_with_run_permission?(name, file)
-        results_suites, results_error, success = Script.process_suite(name, file, username: username(), scope: scope, python_venv: params[:pythonVenv])
+        results_suites, results_error, success = Script.process_suite(name, file, username: username(), scope: scope, python_venv: params[:pythonVenv], token: operator_token())
         results['suites'] = results_suites
         results['error'] = results_error
         results['success'] = success
@@ -206,7 +206,7 @@ class ScriptsController < ApplicationController
     end
     # The file is still saved above; only the suite chrome is omitted when the editor lacks script_run.
     if suite_with_run_permission?(name, params[:text])
-      results_suites, results_error, success = Script.process_suite(name, params[:text], username: username(), scope: scope, python_venv: params[:pythonVenv])
+      results_suites, results_error, success = Script.process_suite(name, params[:text], username: username(), scope: scope, python_venv: params[:pythonVenv], token: operator_token())
       results['suites'] = results_suites
       results['error'] = results_error
       results['success'] = success
@@ -247,7 +247,7 @@ class ScriptsController < ApplicationController
     disconnect = params[:disconnect] == 'disconnect'
     environment = params[:environment]
     python_venv = params[:pythonVenv]
-    running_script_id = Script.run(scope, name, suite_runner, disconnect, environment, user_full_name(), username(), line_no, end_line_no, python_venv)
+    running_script_id = Script.run(scope, name, suite_runner, disconnect, environment, user_full_name(), username(), line_no, end_line_no, python_venv, token: operator_token())
     if running_script_id
       OpenC3::Logger.info("Script started: #{name}", scope: scope, user: username())
       render plain: running_script_id.to_s

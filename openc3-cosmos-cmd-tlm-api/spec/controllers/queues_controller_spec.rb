@@ -15,8 +15,11 @@ require "rails_helper"
 require "openc3/models/queue_model"
 
 RSpec.describe QueuesController, type: :controller do
+  let(:operator_token) { "ses_operator_token" }
+
   before(:each) do
     mock_redis
+    request.headers['Authorization'] = operator_token
   end
 
   def generate_queue_hash
@@ -562,7 +565,7 @@ RSpec.describe QueuesController, type: :controller do
           timeout: nil,
           queue_username: "user1",
           scope: "DEFAULT",
-          token: anything
+          token: operator_token
         }
       )
 
@@ -592,7 +595,7 @@ RSpec.describe QueuesController, type: :controller do
           timeout: nil,
           queue_username: "user2",
           scope: "DEFAULT",
-          token: anything
+          token: operator_token
         }
       )
       id = "3.5"
@@ -659,7 +662,7 @@ RSpec.describe QueuesController, type: :controller do
           timeout: nil,
           queue_username: "user3",
           scope: "DEFAULT",
-          token: anything
+          token: operator_token
         }
       )
       id = 5
@@ -688,7 +691,7 @@ RSpec.describe QueuesController, type: :controller do
           timeout: 0,
           queue_username: "user4",
           scope: "DEFAULT",
-          token: anything
+          token: operator_token
         }
       )
       id = "2.7"
@@ -710,6 +713,58 @@ RSpec.describe QueuesController, type: :controller do
       expect(json["status"]).to eql("error")
       expect(json["message"]).to eql("Unexpected error")
       expect(json["type"]).to eql("StandardError")
+    end
+  end
+
+  describe "DELETE exec_command operator identity" do
+    let(:command_data) do
+      {
+        "username" => "user1",
+        "value" => "TEST COMMAND",
+        "timestamp" => 1000,
+        "id" => 1.0
+      }
+    end
+
+    before do
+      queue_model = double("QueueModel")
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+    end
+
+    it "releases under the caller's own token and never the service password" do
+      original_password = ENV.fetch('OPENC3_API_PASSWORD', nil)
+      expect(OpenC3::OpenC3Authentication).not_to receive(:new)
+      expect(controller).to receive(:cmd).with("TEST COMMAND", hash_including(queue_username: "user1", token: operator_token))
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+
+      expect(response).to have_http_status(:ok)
+      expect(ENV.fetch('OPENC3_API_PASSWORD', nil)).to eq(original_password)
+    end
+
+    it "logs the releasing operator alongside the queueing operator" do
+      allow(controller).to receive(:cmd)
+      allow(controller).to receive(:username).and_return("releaser")
+      expect(OpenC3::Logger).to receive(:info).with(
+        "Queue QUEUE1 command released by releaser (queued by user1)",
+        scope: "DEFAULT", user: "releaser"
+      )
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "refuses to release when the request carries no operator token" do
+      request.headers['Authorization'] = nil
+      expect(controller).not_to receive(:cmd)
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+
+      expect(response).to have_http_status(:internal_server_error)
+      json = JSON.parse(response.body)
+      expect(json["message"]).to match(/No operator token/)
     end
   end
 

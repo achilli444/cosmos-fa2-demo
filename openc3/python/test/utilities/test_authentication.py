@@ -68,6 +68,16 @@ class TestOpenC3Authentication(unittest.TestCase):
         self.assertEqual(auth.token(), "test_token_12345")
 
     @patch("openc3.utilities.authentication.Session")
+    @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "ses_" + "a" * 22)
+    def test_uses_pre_issued_session_token_without_exchange(self, mock_session_class):
+        """A session token handed to a spawned script is used as-is"""
+        auth = OpenC3Authentication()
+
+        mock_session_class.return_value.post.assert_not_called()
+        self.assertEqual(auth.token(), "ses_" + "a" * 22)
+        self.assertFalse(auth.service)
+
+    @patch("openc3.utilities.authentication.Session")
     @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "test_password")
     def test_raises_error_on_empty_token(self, mock_session_class):
         """Raises error if authentication returns empty token"""

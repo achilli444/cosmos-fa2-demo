@@ -83,7 +83,7 @@ class Script < OpenC3::TargetFile
                                  username: username, comment: comment)
   end
 
-  def self.process_suite(name, contents, new_process: true, username: nil, scope:, python_venv: nil)
+  def self.process_suite(name, contents, new_process: true, username: nil, scope:, python_venv: nil, token: nil)
     python = false
     python = true if File.extname(name) == '.py'
 
@@ -112,10 +112,6 @@ class Script < OpenC3::TargetFile
       end
       process.cwd = File.join(RAILS_ROOT, 'scripts')
 
-      # Check for offline access token
-      model = nil
-      model = OpenC3::OfflineAccessModel.get_model(name: username, scope: scope) if username and username != ''
-
       # Set proper secrets for running script
       process.environment['SECRET_KEY_BASE'] = nil
       process.environment['OPENC3_REDIS_USERNAME'] = ENV['OPENC3_SR_REDIS_USERNAME'] || 'OPENC3_SR_REDIS_USERNAME not set'
@@ -127,27 +123,16 @@ class Script < OpenC3::TargetFile
       process.environment['OPENC3_SR_BUCKET_USERNAME'] = nil
       process.environment['OPENC3_SR_BUCKET_PASSWORD'] = nil
       process.environment['OPENC3_API_CLIENT'] = ENV['OPENC3_API_CLIENT'] || 'api'
-      if model and model.offline_access_token
-        auth = OpenC3::OpenC3KeycloakAuthentication.new(ENV['OPENC3_KEYCLOAK_URL'])
-        valid_token = auth.get_token_from_refresh_token(model.offline_access_token)
-        if valid_token
-          process.environment['OPENC3_API_TOKEN'] = model.offline_access_token
-        else
-          model.offline_access_token = nil
-          model.update
-          raise "offline_access token invalid for script"
+      # Suite analysis executes the file, so it runs as the requesting operator
+      # (never the service account). A viewer without an offline access token
+      # can't run scripts, so return nothing and let Script Runner simply view
+      # the suite file without the Suite chrome.
+      begin
+        OpenC3::OperatorToken.script_environment(token, username: username, scope: scope).each do |key, value|
+          process.environment[key] = value
         end
-      else
-        process.environment['OPENC3_API_USER'] = ENV['OPENC3_API_USER'] || nil
-        if ENV['OPENC3_SERVICE_PASSWORD']
-          process.environment['OPENC3_API_PASSWORD'] = ENV['OPENC3_SERVICE_PASSWORD']
-        else
-          # The viewer user doesn't have an offline access token (because they can't run scripts)
-          # but they still want to be able to view suite files
-          # Since processing a suite file requires running it they won't get the Suite chrome
-          # so return nothing here and allow Script Runner to simply view the suite file
-          return '', '', false
-        end
+      rescue OpenC3::NoOperatorTokenError
+        return '', '', false
       end
       process.environment['GEM_HOME'] = ENV['GEM_HOME'] || '/gems'
       process.environment['PYTHONUSERBASE'] = ENV['PYTHONUSERBASE'] || OpenC3::PythonVenv::DEFAULT_PYTHONUSERBASE
@@ -248,13 +233,14 @@ class Script < OpenC3::TargetFile
     username = nil,
     line_no = nil,
     end_line_no = nil,
-    python_venv = nil
+    python_venv = nil,
+    token: nil
   )
     # Verify the script exists before spawning a run. Without this check a run
     # is started and the missing file only surfaces as a runtime error inside
     # the spawned process. Returning nil lets the caller return a 404.
     return nil unless Script.body(scope, name)
-    RunningScript.spawn(scope, name, suite_runner, disconnect, environment, user_full_name, username, line_no, end_line_no, python_venv)
+    RunningScript.spawn(scope, name, suite_runner, disconnect, environment, user_full_name, username, line_no, end_line_no, python_venv, token: token)
   end
 
   def self.instrumented(filename, text)

@@ -12,6 +12,7 @@ require "rails_helper"
 require "tempfile"
 
 RSpec.describe RunningScript, type: :model do
+  let(:operator_token) { "ses_operator_token" }
   let(:script_status) {
     OpenC3::ScriptStatusModel.new(
       name: "12345",
@@ -57,14 +58,14 @@ RSpec.describe RunningScript, type: :model do
     it "spawns a ruby script process" do
       expect(ChildProcess).to receive(:build).with("ruby", anything, "1", "DEFAULT")
 
-      result = RunningScript.spawn("DEFAULT", "script.rb")
+      result = RunningScript.spawn("DEFAULT", "script.rb", token: operator_token)
       expect(result).to eq(1)
     end
 
     it "spawns a python script process" do
       expect(ChildProcess).to receive(:build).with("/openc3/python/.venv/bin/python", anything, "1", "DEFAULT")
 
-      result = RunningScript.spawn("DEFAULT", "script.py")
+      result = RunningScript.spawn("DEFAULT", "script.py", token: operator_token)
       expect(result).to eq(1)
     end
 
@@ -87,7 +88,7 @@ RSpec.describe RunningScript, type: :model do
         )
       )
 
-      RunningScript.spawn("DEFAULT", "script.rb")
+      RunningScript.spawn("DEFAULT", "script.rb", token: operator_token)
     end
 
     it "uses custom username and user_full_name when provided" do
@@ -100,7 +101,7 @@ RSpec.describe RunningScript, type: :model do
         )
       )
 
-      RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser")
+      RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser", token: operator_token)
     end
 
     it "handles offline access token when username is provided" do
@@ -120,7 +121,7 @@ RSpec.describe RunningScript, type: :model do
       allow(process_double).to receive(:start)
       allow(ChildProcess).to receive(:build).and_return(process_double)
 
-      RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser")
+      RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser", token: operator_token)
 
       expect(process_env_double["OPENC3_API_TOKEN"]).to eq("valid_token")
     end
@@ -135,21 +136,38 @@ RSpec.describe RunningScript, type: :model do
       allow(OpenC3::OfflineAccessModel).to receive(:get_model).with(name: "testuser", scope: "DEFAULT").and_return(model_double)
 
       expect {
-        RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser")
+        RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser", token: operator_token)
       }.to raise_error("offline_access token invalid for script")
 
       # Verify the orphaned script status was cleaned up
       expect(OpenC3::ScriptStatusModel.count(scope: "DEFAULT", type: "running")).to eq(0)
     end
 
-    it "raises an error and cleans up script status if no authentication is available" do
-      # Ensure OPENC3_SERVICE_PASSWORD is not set so the fallback auth fails
-      allow(ENV).to receive(:[]).and_call_original
-      allow(ENV).to receive(:[]).with('OPENC3_SERVICE_PASSWORD').and_return(nil)
+    it "runs the script under the initiating operator's own token in Core" do
+      process_env_double = {}
+      process_double = double("process")
+      allow(process_double).to receive(:io).and_return(double("io", inherit!: nil))
+      allow(process_double).to receive(:cwd=)
+      allow(process_double).to receive(:environment).and_return(process_env_double)
+      allow(process_double).to receive(:detach=)
+      allow(process_double).to receive(:start)
+      allow(ChildProcess).to receive(:build).and_return(process_double)
+
+      RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser", token: operator_token)
+
+      expect(process_env_double["OPENC3_API_PASSWORD"]).to eq(operator_token)
+      expect(process_env_double["OPENC3_API_PASSWORD"]).not_to eq(ENV['OPENC3_SERVICE_PASSWORD'])
+      expect(process_env_double).not_to have_key("OPENC3_API_USER")
+      expect(process_env_double).not_to have_key("OPENC3_API_TOKEN")
+    end
+
+    it "raises an error and cleans up script status if no operator token is available" do
+      # The service password is set but must never be used as a fallback
+      ENV['OPENC3_SERVICE_PASSWORD'] = 'service_password_must_not_be_used'
 
       expect {
         RunningScript.spawn("DEFAULT", "script.rb")
-      }.to raise_error("No authentication available for script")
+      }.to raise_error(OpenC3::OpenC3AuthenticationError, "No operator token available for script")
 
       # Verify the orphaned script status was cleaned up
       expect(OpenC3::ScriptStatusModel.count(scope: "DEFAULT", type: "running")).to eq(0)
@@ -160,7 +178,7 @@ RSpec.describe RunningScript, type: :model do
       allow(FileUtils).to receive(:mkdir_p).and_raise(Errno::EACCES.new("Permission denied"))
 
       expect {
-        RunningScript.spawn("DEFAULT", "script.rb")
+        RunningScript.spawn("DEFAULT", "script.rb", token: operator_token)
       }.to raise_error(Errno::EACCES)
 
       # No script status should exist since it was never created
@@ -177,7 +195,7 @@ RSpec.describe RunningScript, type: :model do
       allow(ChildProcess).to receive(:build).and_return(failing_process)
 
       expect {
-        RunningScript.spawn("DEFAULT", "script.rb")
+        RunningScript.spawn("DEFAULT", "script.rb", token: operator_token)
       }.to raise_error("Failed to start process")
 
       # Verify the orphaned script status was cleaned up
@@ -205,7 +223,7 @@ RSpec.describe RunningScript, type: :model do
         allow(File).to receive(:directory?).and_call_original
         allow(File).to receive(:directory?).with(venv_dir).and_return(true)
 
-        RunningScript.spawn("DEFAULT", "INST/script.py")
+        RunningScript.spawn("DEFAULT", "INST/script.py", token: operator_token)
 
         env = @process_double.environment
         expect(env['VIRTUAL_ENV']).to eq(venv_dir)
@@ -221,7 +239,7 @@ RSpec.describe RunningScript, type: :model do
         allow(File).to receive(:directory?).and_call_original
         allow(File).to receive(:directory?).with(venv_dir).and_return(false)
 
-        RunningScript.spawn("DEFAULT", "INST/script.py")
+        RunningScript.spawn("DEFAULT", "INST/script.py", token: operator_token)
 
         env = @process_double.environment
         expect(env['VIRTUAL_ENV']).to eq('/openc3/python/.venv')
@@ -231,7 +249,7 @@ RSpec.describe RunningScript, type: :model do
       it "gracefully falls back to system venv when TargetModel.get raises an error" do
         allow(OpenC3::TargetModel).to receive(:get).and_raise(StandardError.new("Redis error"))
 
-        RunningScript.spawn("DEFAULT", "INST/script.py")
+        RunningScript.spawn("DEFAULT", "INST/script.py", token: operator_token)
 
         env = @process_double.environment
         expect(env['VIRTUAL_ENV']).to eq('/openc3/python/.venv')
@@ -243,7 +261,7 @@ RSpec.describe RunningScript, type: :model do
         allow(ENV).to receive(:fetch).and_call_original
         allow(ENV).to receive(:fetch).with('PYTHONPATH', nil).and_return('/custom/python/path')
 
-        RunningScript.spawn("DEFAULT", "INST/script.py")
+        RunningScript.spawn("DEFAULT", "INST/script.py", token: operator_token)
 
         env = @process_double.environment
         expect(env['PYTHONPATH']).to eq('/custom/python/path')
@@ -255,7 +273,7 @@ RSpec.describe RunningScript, type: :model do
         allow(File).to receive(:directory?).and_call_original
         allow(File).to receive(:directory?).with(venv_dir).and_return(true)
 
-        RunningScript.spawn("DEFAULT", "__TEMP__/temp_script.py", nil, false, nil, nil, nil, nil, nil, plugin_name)
+        RunningScript.spawn("DEFAULT", "__TEMP__/temp_script.py", nil, false, nil, nil, nil, nil, nil, plugin_name, token: operator_token)
 
         env = @process_double.environment
         expect(env['VIRTUAL_ENV']).to eq(venv_dir)
@@ -266,7 +284,7 @@ RSpec.describe RunningScript, type: :model do
       it "ignores a temp script python_venv from another scope" do
         allow(OpenC3::TargetModel).to receive(:get).with(name: "__TEMP__", scope: "DEFAULT").and_return(nil)
 
-        RunningScript.spawn("DEFAULT", "__TEMP__/temp_script.py", nil, false, nil, nil, nil, nil, nil, "OTHER__my-demo-plugin__0")
+        RunningScript.spawn("DEFAULT", "__TEMP__/temp_script.py", nil, false, nil, nil, nil, nil, nil, "OTHER__my-demo-plugin__0", token: operator_token)
 
         env = @process_double.environment
         expect(env['VIRTUAL_ENV']).to eq('/openc3/python/.venv')
@@ -275,7 +293,7 @@ RSpec.describe RunningScript, type: :model do
       it "falls back to system venv for temp scripts without python_venv" do
         allow(OpenC3::TargetModel).to receive(:get).with(name: "__TEMP__", scope: "DEFAULT").and_return(nil)
 
-        RunningScript.spawn("DEFAULT", "__TEMP__/temp_script.py")
+        RunningScript.spawn("DEFAULT", "__TEMP__/temp_script.py", token: operator_token)
 
         env = @process_double.environment
         expect(env['VIRTUAL_ENV']).to eq('/openc3/python/.venv')

@@ -39,7 +39,7 @@ class RunningScriptController < ApplicationController
         if authorized?('script_run', target_name: name.split('/')[0])
           file = Script.body(params[:scope], name)
           # Since this is a running script the suite should process successfully
-          results_suites, _results_error, _success = Script.process_suite(name, file, username: username(), scope: params[:scope])
+          results_suites, _results_error, _success = Script.process_suite(name, file, username: username(), scope: params[:scope], token: operator_token())
           running_script['suites'] = results_suites
         end
       end

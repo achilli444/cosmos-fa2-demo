@@ -60,6 +60,12 @@ class FakeVersionStore
 end
 
 RSpec.describe ScriptsController, type: :controller do
+  let(:operator_token) { "ses_operator_token" }
+
+  before(:each) do
+    request.headers['Authorization'] = operator_token
+  end
+
   # Install the fake version store so lifecycle transitions work in specs.
   def enable_lifecycle_store
     stub_const("VersionStore", FakeVersionStore)
@@ -192,7 +198,7 @@ RSpec.describe ScriptsController, type: :controller do
       suites_data = '{"suites":[]}'
       allow(Script).to receive(:create)
       expect(Script).to receive(:process_suite).with(
-        name, text, username: "anonymous", scope: "DEFAULT", python_venv: python_venv
+        name, text, username: "anonymous", scope: "DEFAULT", python_venv: python_venv, token: operator_token
       ).and_return([suites_data, "", true])
 
       post :create, params: {
@@ -329,13 +335,13 @@ RSpec.describe ScriptsController, type: :controller do
 
   describe "run" do
     it "returns an ok response" do
-      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.rb", nil, false, nil, "Anonymous", "anonymous", 1, nil, nil).and_return(1)
+      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.rb", nil, false, nil, "Anonymous", "anonymous", 1, nil, nil, token: operator_token).and_return(1)
       post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
       expect(response).to have_http_status(:ok)
     end
 
     it "returns a not found response with the script name when the script does not exist" do
-      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.rb", nil, false, nil, "Anonymous", "anonymous", 1, nil, nil).and_return(nil)
+      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.rb", nil, false, nil, "Anonymous", "anonymous", 1, nil, nil, token: operator_token).and_return(nil)
       post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
       expect(response).to have_http_status(:not_found)
       expect(response.body).to include("INST/procedures/test.rb")
@@ -377,7 +383,7 @@ RSpec.describe ScriptsController, type: :controller do
 
     it "passes a valid suiteRunner through to Script.run" do
       suite_runner = {"suite" => "MySuite", "group" => "MyGroup", "script" => "test_foo", "method" => "start"}
-      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.rb", suite_runner, false, nil, "Anonymous", "anonymous", 1, nil, nil).and_return(1)
+      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.rb", suite_runner, false, nil, "Anonymous", "anonymous", 1, nil, nil, token: operator_token).and_return(1)
       post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", suiteRunner: suite_runner}
       expect(response).to have_http_status(:ok)
     end
@@ -415,7 +421,7 @@ RSpec.describe ScriptsController, type: :controller do
     end
 
     it "passes pythonVenv parameter through to Script.run" do
-      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.py", nil, false, nil, "Anonymous", "anonymous", 1, nil, "/gems/plugin_venvs/demo/.venv").and_return(1)
+      expect(Script).to receive(:run).with("DEFAULT", "INST/procedures/test.py", nil, false, nil, "Anonymous", "anonymous", 1, nil, "/gems/plugin_venvs/demo/.venv", token: operator_token).and_return(1)
       post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.py", pythonVenv: "/gems/plugin_venvs/demo/.venv"}
       expect(response).to have_http_status(:ok)
     end
@@ -466,7 +472,7 @@ RSpec.describe ScriptsController, type: :controller do
       expect(Script).to receive(:locked?).with("DEFAULT", "INST/procedures/test.rb").and_return(false)
       expect(Script).to receive(:lock).with("DEFAULT", "INST/procedures/test.rb", "anonymous")
       expect(Script).to receive(:get_breakpoints).with("DEFAULT", "INST/procedures/test.rb").and_return(breakpoints)
-      expect(Script).to receive(:process_suite).with("INST/procedures/test.rb", script_content, username: "anonymous", scope: "DEFAULT", python_venv: nil).and_return([suites_data, nil, true])
+      expect(Script).to receive(:process_suite).with("INST/procedures/test.rb", script_content, username: "anonymous", scope: "DEFAULT", python_venv: nil, token: operator_token).and_return([suites_data, nil, true])
 
       get :body, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
 
@@ -486,7 +492,7 @@ RSpec.describe ScriptsController, type: :controller do
       expect(Script).to receive(:locked?).with("DEFAULT", "INST/procedures/test.py").and_return(false)
       expect(Script).to receive(:lock).with("DEFAULT", "INST/procedures/test.py", "anonymous")
       expect(Script).to receive(:get_breakpoints).with("DEFAULT", "INST/procedures/test.py").and_return(breakpoints)
-      expect(Script).to receive(:process_suite).with("INST/procedures/test.py", script_content, username: "anonymous", scope: "DEFAULT", python_venv: "DEFAULT__demo__0").and_return([suites_data, nil, true])
+      expect(Script).to receive(:process_suite).with("INST/procedures/test.py", script_content, username: "anonymous", scope: "DEFAULT", python_venv: "DEFAULT__demo__0", token: operator_token).and_return([suites_data, nil, true])
 
       get :body, params: {scope: "DEFAULT", name: "INST/procedures/test.py", pythonVenv: "DEFAULT__demo__0"}
 
