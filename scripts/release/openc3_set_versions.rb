@@ -237,6 +237,16 @@ python_files.each do |rel_path|
     file.write(mod_data)
   end
   puts "Updated: #{full_path}"
+
+  # Keep a committed Gemfile.lock in step with the pin above: the API images run
+  # bundler frozen, so a stale lock fails the build instead of re-resolving.
+  lock_path = "#{full_path}.lock"
+  if File.exist?(lock_path)
+    lock_data = File.read(lock_path)
+    lock_data.gsub!(/^(\s+openc3) \((= )?[^)\s]+\)/) { "#{$1} (#{$2}#{gem_version})" }
+    File.write(lock_path, lock_data)
+    puts "Updated: #{lock_path}"
+  end
 end
 
 # Replace "_Coming Soon_" markers with the actual release version. These mark

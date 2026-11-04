@@ -166,12 +166,33 @@ pnpm lint                     # ESLint, run from the openc3-cosmos-init/plugins/
 ### API Tests (Rails)
 
 The Rails APIs depend on the local `openc3` gem, which must be built first (see
-Ruby Tests above). Set `OPENC3_DEVEL` to the path of the local `openc3` gem so
-Bundler resolves it from source instead of trying to fetch it from RubyGems.
+Ruby Tests above).
+
+`openc3-cosmos-cmd-tlm-api` commits its `Gemfile.lock` and its Docker image
+installs with `BUNDLE_FROZEN=1`, so the lock must match the Gemfile exactly. The
+lock resolves `openc3` from the *installed* gem (the same way the
+`openc3-base` image does), so install the local gem before `bundle install`:
+
+```bash
+cd openc3 && gem build openc3.gemspec && gem install --local --no-document ./openc3-*.gem
+cd openc3-cosmos-cmd-tlm-api && BUNDLE_FROZEN=1 bundle install && bundle exec rspec
+```
+
+After changing `openc3-cosmos-cmd-tlm-api/Gemfile` (or bumping the `openc3`
+version), regenerate and commit the lock with the installed gem on the load path:
+
+```bash
+cd openc3-cosmos-cmd-tlm-api && bundle lock --add-platform ruby x86_64-linux aarch64-linux
+```
+
+Setting `OPENC3_DEVEL` for `openc3-cosmos-cmd-tlm-api` switches the Gemfile to a
+PATH source and makes Bundler rewrite `Gemfile.lock`; do not commit that change.
+
+`openc3-cosmos-script-runner-api` still resolves `openc3` from source via
+`OPENC3_DEVEL`:
 
 ```bash
 export OPENC3_DEVEL=../openc3
-cd openc3-cosmos-cmd-tlm-api && bundle install && bundle exec rspec
 cd openc3-cosmos-script-runner-api && bundle install && bundle exec rspec
 ```
 

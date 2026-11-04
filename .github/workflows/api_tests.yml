@@ -60,22 +60,24 @@ jobs:
         #   fetch-depth: 0 # all history for all branches and tags
       - name: Set up Ruby ${{ matrix.ruby-version }}
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
-        env:
-          OPENC3_DEVEL: ../openc3
         with:
           ruby-version: ${{ matrix.ruby-version }}
-          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+          # Bundler version comes from openc3-cosmos-cmd-tlm-api/Gemfile.lock.
+          # No bundler-cache here: the openc3 gem must be installed first.
           working-directory: openc3-cosmos-cmd-tlm-api
-      - name: Build OpenC3
-        run: bundle install; bundle exec rake build
+      - name: Build and install the OpenC3 gem
+        # Same gem the openc3-base image installs; the committed Gemfile.lock
+        # resolves openc3 from the installed gem, not a PATH source.
+        run: gem build openc3.gemspec && gem install --local --no-document ./openc3-*.gem
         working-directory: openc3
+      - name: Install cmd-tlm-api gems from the committed Gemfile.lock
+        run: bundle install --jobs 4
+        working-directory: openc3-cosmos-cmd-tlm-api
         env:
-          OPENC3_DEVEL: ${GITHUB_WORKSPACE}/openc3
+          BUNDLE_FROZEN: "1"
       - name: Run cmd-tlm-api tests
         run: bundle exec rspec
         working-directory: openc3-cosmos-cmd-tlm-api
-        env:
-          OPENC3_DEVEL: ../openc3
       - uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
         with:
           directory: openc3-cosmos-cmd-tlm-api/coverage

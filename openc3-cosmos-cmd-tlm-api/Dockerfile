@@ -12,9 +12,13 @@ COPY --chown=${IMAGE_USER}:${IMAGE_GROUP} ./ ./
 
 USER root
 
-ENV SKIP_DEV_GEMS=1
-RUN bundle config set --local without 'development test' && \
-    bundle install --quiet && \
+# Install exactly the versions in the committed Gemfile.lock and fail the build
+# on any Gemfile/lockfile drift instead of silently re-resolving. The openc3 gem
+# is the one already installed in the openc3-base image (do not set OPENC3_PATH
+# here; see the lockfile's rubygems source for openc3).
+ENV BUNDLE_FROZEN=1
+ENV BUNDLE_WITHOUT=development:test
+RUN bundle install --quiet && \
     rm -rf /usr/local/lib/ruby/gems/*/cache/* /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/*
 
 RUN ["chown", "openc3:openc3", "/src/Gemfile.lock"]
