@@ -23,6 +23,7 @@ services:
       args:
         ALPINE_VERSION: ${ALPINE_VERSION}
         ALPINE_BUILD: ${ALPINE_BUILD}
+        ALPINE_DIGEST: ${ALPINE_DIGEST}
         APK_URL: ${APK_URL}
         RUBYGEMS_URL: ${RUBYGEMS_URL}
         PYPI_URL: ${PYPI_URL}

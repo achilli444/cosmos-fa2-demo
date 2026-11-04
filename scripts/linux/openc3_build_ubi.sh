@@ -41,6 +41,7 @@ if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
   echo "  OPENC3_UBI_REGISTRY      - UBI registry URL"
   echo "  OPENC3_UBI_IMAGE         - UBI image name"
   echo "  OPENC3_UBI_TAG           - UBI image tag"
+  echo "  OPENC3_UBI_DIGEST        - UBI image digest pin, \"@sha256:<digest>\" (optional)"
   echo "  RUBYGEMS_URL             - RubyGems mirror URL (optional)"
   echo "  PYPI_URL                 - PyPI mirror URL (optional)"
   echo "  NPM_URL                  - NPM registry URL (optional)"
@@ -202,6 +203,7 @@ if should_build "openc3-ruby-ubi"; then
     --build-arg OPENC3_UBI_REGISTRY=$OPENC3_UBI_REGISTRY \
     --build-arg OPENC3_UBI_IMAGE=$OPENC3_UBI_IMAGE \
     --build-arg OPENC3_UBI_TAG=$OPENC3_UBI_TAG \
+    --build-arg OPENC3_UBI_DIGEST=$OPENC3_UBI_DIGEST \
     --build-arg RUBYGEMS_URL=$RUBYGEMS_URL \
     --build-arg PYPI_URL=$PYPI_URL \
     "${BUILD_FLAGS[@]}" \

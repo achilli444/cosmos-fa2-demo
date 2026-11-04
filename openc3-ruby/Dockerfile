@@ -2,9 +2,13 @@
 ARG OPENC3_DEPENDENCY_REGISTRY=docker.io
 ARG ALPINE_VERSION=3.23
 ARG ALPINE_BUILD=4
+# Multi-arch index digest of alpine:${ALPINE_VERSION}.${ALPINE_BUILD}. Docker pulls the digest,
+# not the tag, so update it whenever ALPINE_VERSION/ALPINE_BUILD change:
+#   docker buildx imagetools inspect docker.io/library/alpine:<version>.<build>
+ARG ALPINE_DIGEST=sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 
 # Should be loaded from ARG
-FROM ${OPENC3_DEPENDENCY_REGISTRY}/alpine:${ALPINE_VERSION}.${ALPINE_BUILD}
+FROM ${OPENC3_DEPENDENCY_REGISTRY}/alpine:${ALPINE_VERSION}.${ALPINE_BUILD}@${ALPINE_DIGEST}
 
 # An ARG declared before a FROM is outside of a build stage, so it can’t be
 # used in any instruction after a FROM. So we need to re-ARG ALPINE_VERSION

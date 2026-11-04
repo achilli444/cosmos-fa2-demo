@@ -1,9 +1,16 @@
 ARG OPENC3_REGISTRY=docker.io
 ARG OPENC3_NAMESPACE=openc3inc
-ARG OPENC3_TAG=latest
+# No default on purpose: openc3.sh build (compose-build.yaml), openc3_build_ubi.sh and
+# build_multi_arch.sh always pass OPENC3_TAG, and a bare `docker build` must fail
+# instead of silently pulling a mutable :latest base image.
+ARG OPENC3_TAG
 ARG OPENC3_IMAGE=openc3-base
+# Optional "@sha256:<digest>" pin for builds against a published base image. Left empty
+# for the in-repo build chain, where the base is built locally from the digest-pinned
+# alpine/UBI root in openc3-ruby/.
+ARG OPENC3_BASE_DIGEST=
 
-FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_IMAGE}:${OPENC3_TAG}
+FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_IMAGE}:${OPENC3_TAG}${OPENC3_BASE_DIGEST}
 
 WORKDIR /src/
 COPY Gemfile ./
