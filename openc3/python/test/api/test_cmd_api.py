@@ -50,6 +50,7 @@ from openc3.models.interface_status_model import InterfaceStatusModel
 from openc3.models.microservice_model import MicroserviceModel
 from openc3.packets.packet import Packet
 from openc3.top_level import HazardousError
+from openc3.utilities.authorization import ForbiddenError, authorize
 from test.test_helper import capture_io, mock_redis, setup_system
 
 
@@ -341,6 +342,71 @@ class TestCmdApi(unittest.TestCase):
                 func("INST CLEAR")
             except HazardousError:
                 self.fail(f"{name} raised HazardousError unexpectedly!")
+
+    def test_hazardous_check_bypass_requires_approve_hazardous(self):
+        for name in [
+            "cmd_no_hazardous_check",
+            "cmd_no_checks",
+            "cmd_raw_no_hazardous_check",
+            "cmd_raw_no_checks",
+        ]:
+            func = globals()[name]
+            with patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize:
+                func("INST CLEAR")
+                permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+                self.assertEqual(permissions, ["cmd", "approve_hazardous"], name)
+                self.assertEqual(mock_authorize.call_args_list[1].kwargs["target_name"], "INST")
+                self.assertEqual(mock_authorize.call_args_list[1].kwargs["packet_name"], "CLEAR")
+
+            # Hazardous parameter state
+            with patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize:
+                if "raw" in name:
+                    func("INST COLLECT with TYPE 1")
+                else:
+                    func("INST COLLECT with TYPE SPECIAL")
+                permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+                self.assertEqual(permissions, ["cmd", "approve_hazardous"], name)
+
+            # Non-hazardous commands only need cmd
+            with patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize:
+                func("INST ABORT")
+                if "raw" in name:
+                    func("INST COLLECT with TYPE 0")
+                else:
+                    func("INST COLLECT with TYPE NORMAL")
+                permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+                self.assertEqual(permissions, ["cmd", "cmd"], name)
+
+    def test_hazardous_check_bypass_is_not_sent_without_approve_hazardous(self):
+        def deny_approve(*args, **kwargs):
+            if kwargs.get("permission") == "approve_hazardous":
+                raise ForbiddenError("approve_hazardous required")
+            return authorize(*args, **kwargs)
+
+        for name in [
+            "cmd_no_hazardous_check",
+            "cmd_no_checks",
+            "cmd_raw_no_hazardous_check",
+            "cmd_raw_no_checks",
+        ]:
+            func = globals()[name]
+            with (
+                patch("openc3.api.cmd_api.authorize", side_effect=deny_approve),
+                patch("openc3.api.cmd_api.CommandTopic.send_command") as send_command,
+            ):
+                with self.assertRaisesRegex(ForbiddenError, "approve_hazardous required"):
+                    func("INST CLEAR")
+                send_command.assert_not_called()
+
+    def test_cmd_does_not_require_approve_hazardous(self):
+        for name in ["cmd", "cmd_no_range_check", "cmd_raw", "cmd_raw_no_range_check"]:
+            func = globals()[name]
+            with patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize:
+                func("INST ABORT")
+                with self.assertRaisesRegex(HazardousError, "Hazardous"):
+                    func("INST CLEAR")
+                permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+                self.assertNotIn("approve_hazardous", permissions, name)
 
     def test_cmd_warns_about_disabled_commands(self):
         for name in [
@@ -682,6 +748,10 @@ class TestCmdApi(unittest.TestCase):
     def test_get_cmd_hazardous_returns_whether_the_command_is_hazardous(self):
         self.assertTrue(get_cmd_hazardous("INST CLEAR"))
         self.assertTrue(get_cmd_hazardous("INST", "CLEAR"))
+
+    def test_get_cmd_hazardous_ignores_parameters_not_given(self):
+        self.assertFalse(get_cmd_hazardous("INST COLLECT with DURATION 5"))
+        self.assertFalse(get_cmd_hazardous("INST", "COLLECT", {"DURATION": 5}))
 
     def test_get_cmd_hazardous_raises_with_invalid_params(self):
         with self.assertRaisesRegex(RuntimeError, "Both Target Name and Command Name must be given"):

@@ -711,6 +711,100 @@ RSpec.describe QueuesController, type: :controller do
       expect(json["message"]).to eql("Unexpected error")
       expect(json["type"]).to eql("StandardError")
     end
+
+    context "hazardous commands" do
+      let(:command_data) do
+        {
+          "username" => "user1",
+          "target_name" => "INST",
+          "cmd_name" => "CLEAR",
+          "cmd_params" => "{}",
+          "timestamp" => 1000,
+          "id" => 2.0
+        }
+      end
+      let(:cmd_kwargs) do
+        { queue: false, validate: true, timeout: nil, queue_username: "user1", scope: "DEFAULT", token: anything }
+      end
+      let(:hazardous_error) do
+        error = HazardousError.new
+        error.target_name = "INST"
+        error.cmd_name = "CLEAR"
+        error.cmd_params = {}
+        error.hazardous_description = "Clears counters"
+        error.formatted = "INST CLEAR"
+        error
+      end
+      let(:queue_model) { double("QueueModel") }
+
+      before(:each) do
+        allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+        allow(queue_model).to receive(:remove_command).and_return(command_data)
+        allow(queue_model).to receive(:insert_command)
+        allow(controller).to receive(:cmd).with("INST", "CLEAR", {}, cmd_kwargs).and_raise(hazardous_error)
+      end
+
+      it "does not auto-retry a hazardous command and restores it to the queue" do
+        expect(controller).not_to receive(:cmd_no_hazardous_check)
+        expect(queue_model).to receive(:insert_command).with(id: 2.0, username: "user1", target_name: "INST", cmd_name: "CLEAR", cmd_params: {}, validate: nil, timeout: nil)
+        expect(OpenC3::Logger).to receive(:warn).with(/Hazardous command INST CLEAR in queue QUEUE1 not sent: operator confirmation required/, hash_including(scope: "DEFAULT"))
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+        expect(response).to have_http_status(:conflict)
+        json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+        expect(json["status"]).to eql("error")
+        expect(json["type"]).to eql("HazardousError")
+        expect(json["message"]).to match(/INST CLEAR requires confirmation: Clears counters/)
+        expect(json["hazardous_description"]).to eql("Clears counters")
+        expect(json["id"]).to eql(2.0)
+      end
+
+      it "restores a legacy format hazardous command to the queue" do
+        legacy = { "username" => "user1", "value" => "INST CLEAR", "timestamp" => 1000, "id" => 3.0 }
+        allow(queue_model).to receive(:remove_command).and_return(legacy)
+        allow(controller).to receive(:cmd).with("INST CLEAR", cmd_kwargs).and_raise(hazardous_error)
+        expect(controller).not_to receive(:cmd_no_hazardous_check)
+        expect(queue_model).to receive(:insert_command).with(id: 3.0, username: "user1", command: "INST CLEAR", validate: nil, timeout: nil)
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+        expect(response).to have_http_status(:conflict)
+      end
+
+      it "sends the hazardous command when the operator explicitly confirms" do
+        expect(controller).to receive(:authorization).with('cmd').and_call_original
+        expect(controller).to receive(:authorization).with('approve_hazardous').and_call_original
+        expect(controller).to receive(:cmd_no_hazardous_check).with("INST", "CLEAR", {}, cmd_kwargs)
+        expect(queue_model).not_to receive(:insert_command)
+        expect(OpenC3::Logger).to receive(:warn).with(/Hazardous command INST CLEAR in queue QUEUE1 confirmed and sent with hazardous check disabled/, hash_including(scope: "DEFAULT"))
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT", hazardous_confirmed: true}
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+        expect(json["cmd_name"]).to eql("CLEAR")
+      end
+
+      it "does not send a confirmed hazardous command without approve_hazardous" do
+        allow(controller).to receive(:authorize).and_call_original
+        allow(controller).to receive(:authorize).with(hash_including(permission: 'approve_hazardous')).and_raise(OpenC3::ForbiddenError, "approve_hazardous required")
+        expect(controller).not_to receive(:cmd)
+        expect(controller).not_to receive(:cmd_no_hazardous_check)
+        expect(queue_model).not_to receive(:remove_command)
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT", hazardous_confirmed: true}
+        expect(response).to have_http_status(:forbidden)
+        json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+        expect(json["message"]).to eql("approve_hazardous required")
+      end
+
+      it "does not require approve_hazardous for non-hazardous commands" do
+        allow(controller).to receive(:cmd).with("INST", "CLEAR", {}, cmd_kwargs)
+        expect(controller).not_to receive(:authorization).with('approve_hazardous')
+        expect(controller).to receive(:authorization).with('cmd').and_call_original
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+      end
+    end
   end
 
   describe "DELETE destroy" do

@@ -61,9 +61,13 @@ module OpenC3
       return _make_request(action: 'disable queue', verb: 'post', uri: "/openc3-api/queues/#{name}/disable", scope: scope)
     end
 
-    def queue_exec(name, id=nil, scope: $openc3_scope)
+    # Set hazardous_confirmed: true to explicitly confirm sending a HAZARDOUS
+    # command (requires the approve_hazardous permission). Without it a hazardous
+    # command is left in the queue and the request fails with the hazardous description.
+    def queue_exec(name, id=nil, hazardous_confirmed: false, scope: $openc3_scope)
       data = {}
       data['id'] = id if id
+      data['hazardous_confirmed'] = true if hazardous_confirmed
       return _make_request(action: 'exec command', verb: 'post', uri: "/openc3-api/queues/#{name}/exec_command", data: data, scope: scope)
     end
 
