@@ -38,7 +38,9 @@ class RedisController < ApplicationController
     else
       result = OpenC3::Store.instance(db_shard: db_shard).public_send(command, args[1..-1])
     end
-    OpenC3::Logger.info("Redis command executed (db_shard #{db_shard}): #{args} - with result #{result}", user: username())
+    # Argument values and results can hold secrets (e.g. HGETALL <scope>__openc3__secrets) so only log their shape
+    result_size = result.respond_to?(:length) ? result.length : nil
+    OpenC3::Logger.info("Redis command executed (db_shard #{db_shard}): #{command} #{args[1]} (#{args.length - 1} args) - result #{result.class}#{result_size ? " length #{result_size}" : ''}", user: username())
     render json: { :result => result }, status: :created
   end
 end

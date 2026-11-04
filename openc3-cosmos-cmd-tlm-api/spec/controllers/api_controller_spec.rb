@@ -64,6 +64,68 @@ RSpec.describe ApiController, type: :controller do
       expect(response.body).to eq(sample_response)
     end
 
+    describe "log redaction" do
+      before(:each) do
+        allow(@json_drb).to receive(:process_request).and_return([sample_response, nil])
+      end
+
+      # Rails consumes rack.input while parsing params in controller specs so supply the body directly
+      def post_api(body)
+        allow_any_instance_of(Rack::Request).to receive(:body).and_return(StringIO.new(body))
+        post :api
+      end
+
+      it "logs the method, id and non-sensitive params" do
+        expect(OpenC3::Logger).to receive(:info).with(a_string_including('"method":"tlm"', '"TEMP1"', '"id":7'), anything)
+        post_api('{"jsonrpc":"2.0","method":"tlm","params":["INST","HEALTH_STATUS","TEMP1"],"keyword_params":{"scope":"DEFAULT"},"id":7}')
+        expect(response).to have_http_status(:ok)
+      end
+
+      it "redacts set_offline_access tokens" do
+        expect(OpenC3::Logger).to receive(:info).with(a_string_including('set_offline_access', '[REDACTED]').and(satisfy { |m| !m.include?('REFRESH_TOKEN_VALUE') }), anything)
+        post_api('{"jsonrpc":"2.0","method":"set_offline_access","params":["REFRESH_TOKEN_VALUE"],"id":1}')
+        expect(response).to have_http_status(:ok)
+      end
+
+      it "redacts secret set_setting values but keeps ordinary ones" do
+        expect(OpenC3::Logger).to receive(:info).with(a_string_including('store_api_key', '[REDACTED]').and(satisfy { |m| !m.include?('STORE_KEY_VALUE') }), anything)
+        post_api('{"jsonrpc":"2.0","method":"set_setting","params":["store_api_key","STORE_KEY_VALUE"],"id":1}')
+
+        expect(OpenC3::Logger).to receive(:info).with(a_string_including('"theme"', '"dark"'), anything)
+        post_api('{"jsonrpc":"2.0","method":"set_setting","params":["theme","dark"],"id":2}')
+      end
+
+      it "redacts secret set_setting keyword params" do
+        expect(OpenC3::Logger).to receive(:info).with(satisfy { |m| !m.include?('STORE_KEY_VALUE') }, anything)
+        post_api('{"jsonrpc":"2.0","method":"set_setting","params":[],"keyword_params":{"name":"store_api_key","data":"STORE_KEY_VALUE","scope":"DEFAULT"},"id":1}')
+      end
+
+      it "redacts sensitive keyword params such as the session token" do
+        expect(OpenC3::Logger).to receive(:info).with(satisfy { |m| !m.include?('SESSION_TOKEN') }, anything)
+        post_api('{"jsonrpc":"2.0","method":"tlm","params":["INST","HEALTH_STATUS","TEMP1"],"keyword_params":{"token":"SESSION_TOKEN","scope":"DEFAULT"},"id":1}')
+      end
+
+      it "redacts the Authorization and Cookie headers from the debug header dump" do
+        request.env["RAW_POST_DATA"] = sample_request
+        request.env["HTTP_AUTHORIZATION"] = "SESSION_TOKEN"
+        request.env["HTTP_COOKIE"] = "session=COOKIE_VALUE"
+        expect(OpenC3::Logger).to receive(:debug).with(a_string_including('HTTP_AUTHORIZATION', '[REDACTED]').and(satisfy { |m| !m.include?('SESSION_TOKEN') and !m.include?('COOKIE_VALUE') }), anything)
+        post :api
+      end
+
+      it "redacts the request body attached to the tracing span" do
+        span = double("span")
+        allow(OpenC3).to receive(:in_span).and_yield(span)
+        expect(span).to receive(:add_attributes).with({ "request_data" => satisfy { |m| !m.include?('REFRESH_TOKEN_VALUE') } })
+        post_api('{"jsonrpc":"2.0","method":"set_offline_access","params":["REFRESH_TOKEN_VALUE"],"id":1}')
+      end
+
+      it "pattern redacts bodies that are not valid JSON-RPC" do
+        expect(OpenC3::Logger).to receive(:info).with(a_string_including('password=[REDACTED]', 'user=bob'), anything)
+        post_api('password=hunter2&user=bob')
+      end
+    end
+
     it "handles authentication errors" do
       request.env["RAW_POST_DATA"] = sample_request
 

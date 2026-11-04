@@ -77,6 +77,63 @@ module OpenC3
       $stdout = STDOUT
     end
 
+    describe "sensitive_key?" do
+      it "flags credential style names" do
+        %w(password PASSWD passphrase store_api_key apiKey secret refresh_token access_token HTTP_AUTHORIZATION HTTP_COOKIE credentials private_key signing_key).each do |key|
+          expect(Logger.sensitive_key?(key)).to be(true), "expected #{key} to be sensitive"
+        end
+      end
+
+      it "does not flag ordinary names" do
+        %w(username theme keyboard news_feed scope grant_type client_id).each do |key|
+          expect(Logger.sensitive_key?(key)).to be(false), "expected #{key} not to be sensitive"
+        end
+      end
+    end
+
+    describe "redact" do
+      it "redacts hash values stored under sensitive keys recursively" do
+        result = Logger.redact({ 'store_api_key' => 'abc', 'theme' => 'dark', 'nested' => { 'password' => 'pw', 'ok' => 1 }, 'list' => [{ 'token' => 't' }] })
+        expect(result).to eql({ 'store_api_key' => '[REDACTED]', 'theme' => 'dark', 'nested' => { 'password' => '[REDACTED]', 'ok' => 1 }, 'list' => [{ 'token' => '[REDACTED]' }] })
+      end
+
+      it "does not modify the original hash" do
+        data = { 'password' => 'pw' }
+        Logger.redact(data)
+        expect(data['password']).to eql 'pw'
+      end
+
+      it "redacts JSON strings" do
+        json = '{"access_token":"AT","expires_in":600,"refresh_token":"RT","id_token":"IDT"}'
+        result = JSON.parse(Logger.redact(json))
+        expect(result).to eql({ 'access_token' => '[REDACTED]', 'expires_in' => 600, 'refresh_token' => '[REDACTED]', 'id_token' => '[REDACTED]' })
+      end
+
+      it "redacts form encoded strings" do
+        result = Logger.redact("username=bob&password=hunter2&client_id=api&refresh_token=RT1")
+        expect(result).to eql "username=bob&password=[REDACTED]&client_id=api&refresh_token=[REDACTED]"
+      end
+
+      it "redacts Ruby inspect output" do
+        result = Logger.redact({ 'username' => 'bob', 'password' => 'hunter2', 'grant_type' => 'password' }.inspect)
+        expect(result).not_to include('hunter2')
+        expect(result).to match(/"password"\s*=>\s*"\[REDACTED\]"/)
+        expect(result).to match(/"grant_type"\s*=>\s*"password"/)
+      end
+
+      it "redacts bearer tokens" do
+        expect(Logger.redact("Authorization: Bearer eyJabc.def-ghi")).to eql "Authorization: [REDACTED]"
+        expect(Logger.redact("Bearer eyJabc.def-ghi")).to eql "Bearer [REDACTED]"
+      end
+
+      it "leaves non-sensitive values untouched" do
+        expect(Logger.redact("plain message")).to eql "plain message"
+        expect(Logger.redact("not json {bad")).to eql "not json {bad"
+        expect(Logger.redact(5)).to eql 5
+        expect(Logger.redact(nil)).to be_nil
+      end
+    end
+
     describe "debug" do
       it "prints if level is DEBUG or higher" do
         test_output(Logger::DEBUG, 'debug')

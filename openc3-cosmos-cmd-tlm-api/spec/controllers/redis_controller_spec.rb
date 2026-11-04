@@ -44,6 +44,22 @@ RSpec.describe RedisController, type: :controller do
       expect(json["result"]).to eq("OK")
     end
 
+    it "logs the command and key but not argument values or results" do
+      expect_any_instance_of(OpenC3::Store).to receive(:method_missing).with(:HGETALL, ["DEFAULT__openc3__secrets"]).and_return({"API_KEY" => "SECRET_VALUE"})
+      expect(OpenC3::Logger).to receive(:info).with(a_string_including('HGETALL DEFAULT__openc3__secrets', 'Hash length 1').and(satisfy { |m| !m.include?('SECRET_VALUE') }), anything)
+      request.content_type = "text/plain"
+      post :execute_raw, body: "HGETALL DEFAULT__openc3__secrets", params: {scope: "DEFAULT"}
+      expect(response).to have_http_status(:created)
+    end
+
+    it "does not log values written with SET" do
+      expect_any_instance_of(OpenC3::Store).to receive(:method_missing).with(:SET, ["token", "SECRET_VALUE"]).and_return("OK")
+      expect(OpenC3::Logger).to receive(:info).with(satisfy { |m| !m.include?('SECRET_VALUE') }, anything)
+      request.content_type = "text/plain"
+      post :execute_raw, body: "SET token SECRET_VALUE", params: {scope: "DEFAULT"}
+      expect(response).to have_http_status(:created)
+    end
+
     it "requires admin access" do
       request.content_type = "text/plain"
       post :execute_raw, body: "GET key"

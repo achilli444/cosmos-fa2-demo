@@ -114,7 +114,7 @@ module OpenC3
             auth.token
           }.to raise_error(OpenC3AuthenticationError) do |error|
             # Error message should contain obfuscated password (works with both Ruby 3.2 and 3.3+ inspect formats)
-            expect(error.message).to match(/"password"\s*=>\s*"\*\*\*"/)
+            expect(error.message).to match(/"password"\s*=>\s*"\[REDACTED\]"/)
             # Error message should NOT contain actual password
             expect(error.message).not_to include('testpassword')
           end
@@ -157,7 +157,7 @@ module OpenC3
           allow(JsonDRb).to receive(:debug?).and_return(true)
         end
 
-        it "shows actual password in error messages when debug is enabled" do
+        it "still obfuscates the password in STDOUT logs when debug is enabled" do
           stdout = StringIO.new('', 'r+')
           saved_stdout = $stdout
           $stdout = stdout
@@ -173,8 +173,10 @@ module OpenC3
             OpenC3.disable_warnings { Object.const_set(:STDOUT, saved_stdout_const) }
           end
 
-          # In debug mode, STDOUT should contain the actual password (works with both Ruby 3.2 and 3.3+ inspect formats)
-          expect(stdout.string).to match(/"password"\s*=>\s*"testpassword"/)
+          # Debug mode prints the request but credentials stay redacted (works with both Ruby 3.2 and 3.3+ inspect formats)
+          expect(stdout.string).to match(/"password"\s*=>\s*"\[REDACTED\]"/)
+          expect(stdout.string).not_to include('testpassword')
+          expect(stdout.string).to match(/"username"\s*=>\s*"testuser"/)
         end
       end
 
@@ -193,13 +195,13 @@ module OpenC3
             auth.token
           }.to raise_error(OpenC3AuthenticationError) do |error|
             # Refresh token should be obfuscated (works with both Ruby 3.2 and 3.3+ inspect formats)
-            expect(error.message).to match(/"refresh_token"\s*=>\s*"\*\*\*"/)
+            expect(error.message).to match(/"refresh_token"\s*=>\s*"\[REDACTED\]"/)
             # Error message should NOT contain actual refresh token
             expect(error.message).not_to include('test_refresh_token')
           end
         end
 
-        it "shows actual refresh_token when debug is enabled" do
+        it "still obfuscates the refresh_token when debug is enabled" do
           allow(JsonDRb).to receive(:debug?).and_return(true)
 
           stdout = StringIO.new('', 'r+')
@@ -217,8 +219,65 @@ module OpenC3
             OpenC3.disable_warnings { Object.const_set(:STDOUT, saved_stdout_const) }
           end
 
-          # In debug mode, STDOUT should contain the actual refresh token (works with both Ruby 3.2 and 3.3+ inspect formats)
-          expect(stdout.string).to match(/"refresh_token"\s*=>\s*"test_refresh_token"/)
+          # Debug mode prints the request but the refresh token stays redacted (works with both Ruby 3.2 and 3.3+ inspect formats)
+          expect(stdout.string).to match(/"refresh_token"\s*=>\s*"\[REDACTED\]"/)
+          expect(stdout.string).not_to include('test_refresh_token')
+        end
+      end
+
+      context "token response" do
+        let(:auth) { OpenC3KeycloakAuthentication.new(test_url) }
+        let(:token_response) do
+          instance_double(Faraday::Response,
+            status: 200,
+            headers: {},
+            body: JSON.generate({
+              "access_token" => "ACCESS_TOKEN_VALUE",
+              "expires_in" => 600,
+              "refresh_expires_in" => 1800,
+              "refresh_token" => "REFRESH_TOKEN_VALUE",
+              "id_token" => "ID_TOKEN_VALUE",
+              "token_type" => "bearer"
+            })
+          )
+        end
+
+        before(:each) do
+          allow(mock_http).to receive(:post).and_return(token_response)
+          allow(JsonDRb).to receive(:debug?).and_return(true)
+        end
+
+        it "redacts access, refresh and id tokens from the debug STDOUT log" do
+          stdout = StringIO.new('', 'r+')
+          saved_stdout = $stdout
+          $stdout = stdout
+          saved_stdout_const = Object.const_get(:STDOUT)
+          OpenC3.disable_warnings { Object.const_set(:STDOUT, stdout) }
+
+          begin
+            expect(auth.token).to eql 'Bearer ACCESS_TOKEN_VALUE'
+          ensure
+            $stdout = saved_stdout
+            OpenC3.disable_warnings { Object.const_set(:STDOUT, saved_stdout_const) }
+          end
+
+          expect(stdout.string).to include('response status: 200')
+          expect(stdout.string).to include('"expires_in":600')
+          expect(stdout.string).not_to include('ACCESS_TOKEN_VALUE')
+          expect(stdout.string).not_to include('REFRESH_TOKEN_VALUE')
+          expect(stdout.string).not_to include('ID_TOKEN_VALUE')
+        end
+
+        it "redacts tokens from failed response error messages" do
+          allow(JsonDRb).to receive(:debug?).and_return(false)
+          failed = instance_double(Faraday::Response, status: 400, headers: {}, body: '{"error":"invalid_grant","refresh_token":"LEAKED_TOKEN"}')
+          allow(mock_http).to receive(:post).and_return(failed)
+          expect {
+            auth.token
+          }.to raise_error(OpenC3AuthenticationError) do |error|
+            expect(error.message).to include('invalid_grant')
+            expect(error.message).not_to include('LEAKED_TOKEN')
+          end
         end
       end
     end

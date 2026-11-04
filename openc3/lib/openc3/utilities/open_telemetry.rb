@@ -48,6 +48,15 @@ module OpenC3
     end
   end
 
+  OTEL_DB_STATEMENT_SETTINGS = %w(obfuscate omit include).freeze
+
+  def self.redis_db_statement_setting
+    setting = ENV['OPENC3_OTEL_DB_STATEMENT'].to_s.downcase
+    return setting.to_sym if OTEL_DB_STATEMENT_SETTINGS.include?(setting)
+
+    :obfuscate
+  end
+
   def self.setup_open_telemetry(service_name, support_rails = false)
     if ENV['OTEL_EXPORTER_OTLP_ENDPOINT']
       split_services = ENV['OPENC3_OTEL'].to_s.split(',')
@@ -75,11 +84,11 @@ module OpenC3
             c.use('OpenTelemetry::Instrumentation::ActionPack', { enable_recognize_route: true })
           end
           c.use 'OpenTelemetry::Instrumentation::Redis', {
-            # The obfuscation of arguments in the db.statement attribute is enabled by default.
-            # To include the full query, set db_statement to :include.
-            # To obfuscate, set db_statement to :obfuscate.
-            # To omit the attribute, set db_statement to :omit.
-            db_statement: :include,
+            # Redis holds command packets, tokens and secrets so arguments in the
+            # db.statement span attribute are obfuscated by default. Set
+            # OPENC3_OTEL_DB_STATEMENT to 'include' (full query, debugging only)
+            # or 'omit' (drop the attribute) to override.
+            db_statement: redis_db_statement_setting,
           }
           c.use 'OpenTelemetry::Instrumentation::Faraday'
           c.use 'OpenTelemetry::Instrumentation::AwsSdk'

@@ -67,6 +67,14 @@ module OpenC3
     ALERT = 'alert'
     EPHEMERAL = 'ephemeral'
 
+    # Placeholder substituted for secret values by redact
+    REDACTED = '[REDACTED]'
+    # Hash keys / setting names / form fields whose values must never be logged
+    SENSITIVE_KEY_PATTERN = /pass(word|wd|phrase)|secret|token|api_?key|credential|private_key|authorization|cookie|_key\z/i
+    # Inline "key: value", "key => value", "key=value" (JSON, Ruby inspect, form-encoded)
+    SENSITIVE_PAIR_PATTERN = /(["']?)(\w*(?:pass(?:word|wd|phrase)|secret|token|api_?key|credential|private_key|authorization|cookie)\w*)\1(\s*(?:=>|=|:)\s*)(["']?)((?:bearer\s+)?[^"'&\s,}\]]*)\4/i
+    BEARER_PATTERN = /(bearer\s+)[A-Za-z0-9\-._~+\/]+=*/i
+
     # @param level [Integer] The initial logging level
     def initialize(level = Logger::INFO)
       @stdout = true
@@ -189,6 +197,45 @@ module OpenC3
 
     def self.build_log_data(log_level, message, user: nil, type: nil, url: nil, other: nil)
       self.instance.build_log_data(log_level, message, user: user, type: type, url: url, other: other)
+    end
+
+    # @param key [String, Symbol] Hash key, setting name or form field name
+    # @return [Boolean] Whether values stored under this key are secrets
+    def self.sensitive_key?(key)
+      !!(key.to_s =~ SENSITIVE_KEY_PATTERN)
+    end
+
+    # Returns a copy of value safe to write to a log message. Hash values stored
+    # under a sensitive key are replaced with REDACTED (recursively). Strings
+    # are parsed as JSON when possible and otherwise scrubbed of inline
+    # key/value pairs and bearer tokens. All other objects are returned as is.
+    def self.redact(value)
+      case value
+      when Hash
+        value.each_with_object({}) do |(key, val), result|
+          result[key] = sensitive_key?(key) ? REDACTED : redact(val)
+        end
+      when Array
+        value.map { |val| redact(val) }
+      when String
+        redact_string(value)
+      else
+        value
+      end
+    end
+
+    def self.redact_string(string)
+      stripped = string.strip
+      if stripped.start_with?('{', '[')
+        begin
+          parsed = JSON.parse(stripped, allow_nan: true)
+          return JSON.generate(redact(parsed), allow_nan: true) if parsed.is_a?(Hash) or parsed.is_a?(Array)
+        rescue StandardError
+          # Not JSON (or not encodable), fall through to pattern based redaction
+        end
+      end
+      redacted = string.gsub(SENSITIVE_PAIR_PATTERN) { "#{$1}#{$2}#{$1}#{$3}#{$4}#{REDACTED}#{$4}" }
+      redacted.gsub(BEARER_PATTERN) { "#{$1}#{REDACTED}" }
     end
 
     protected
