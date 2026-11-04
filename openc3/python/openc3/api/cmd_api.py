@@ -33,6 +33,7 @@ from openc3.topics.topic import Topic
 from openc3.utilities.authorization import authorize
 from openc3.utilities.cmd_log import _build_cmd_output_string
 from openc3.utilities.extract import extract_fields_from_cmd_text
+from openc3.utilities.logger import Logger
 from openc3.utilities.store import Store
 
 
@@ -572,6 +573,16 @@ def _extract_target_command_parameter_names(method_name, *args):
     return (target_name, command_name, parameter_name)
 
 
+def _cmd_bypassed_checks(range_check, hazardous_check):
+    """Returns the names of the safety checks a command variant skips, e.g. ["range check"]"""
+    bypassed = []
+    if not range_check:
+        bypassed.append("range check")
+    if not hazardous_check:
+        bypassed.append("hazardous check")
+    return bypassed
+
+
 def _cmd_implementation(
     method_name,
     *args,
@@ -602,13 +613,26 @@ def _cmd_implementation(
     target_name = target_name.upper()
     cmd_name = cmd_name.upper()
     cmd_params = {k.upper(): v for k, v in cmd_params.items()}
+    # Raw commands skip parameter conversions and require cmd_raw (same as send_raw)
+    permission = "cmd_raw" if raw else "cmd"
     user = authorize(
-        permission="cmd",
+        permission=permission,
         target_name=target_name,
         packet_name=cmd_name,
         scope=scope,
         manual=manual,
     )
+    bypassed_checks = _cmd_bypassed_checks(range_check, hazardous_check)
+    if bypassed_checks:
+        # Skipping the hazardous or range check is a higher risk transaction than
+        # ordinary commanding so it requires a distinct, elevated permission
+        authorize(
+            permission="cmd_no_checks",
+            target_name=target_name,
+            packet_name=cmd_name,
+            scope=scope,
+            manual=manual,
+        )
     queue_username = kwargs.get("queue_username")
     if not user:
         user = {}
@@ -675,6 +699,12 @@ def _cmd_implementation(
         validate = kwargs["validate"]
 
     username = user["username"] if user and user["username"] else "anonymous"
+    if bypassed_checks:
+        Logger.warn(
+            f"{method_name}: {username} bypassed {' and '.join(bypassed_checks)} for {target_name} {cmd_name}",
+            scope=scope,
+            user=user,
+        )
     command = {
         "target_name": target_name,
         "cmd_name": cmd_name,

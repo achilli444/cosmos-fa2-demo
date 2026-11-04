@@ -448,6 +448,14 @@ module OpenC3
       return [target_name, command_name, parameter_name]
     end
 
+    # Returns the names of the safety checks a command variant skips, e.g. ["range check"]
+    def _cmd_bypassed_checks(range_check:, hazardous_check:)
+      bypassed = []
+      bypassed << 'range check' unless range_check
+      bypassed << 'hazardous check' unless hazardous_check
+      bypassed
+    end
+
     # NOTE: When adding new keywords to this method, make sure to update script/commands.rb
     def _cmd_implementation(method_name, *args, range_check:, hazardous_check:, raw:, timeout: nil, log_message: nil, manual: false, validate: true, queue: nil,
                             queue_username: nil, scope: $openc3_scope, token: $openc3_token, **kwargs)
@@ -481,7 +489,15 @@ module OpenC3
       target_name = target_name.upcase
       cmd_name = cmd_name.upcase
       cmd_params = cmd_params.transform_keys(&:upcase)
-      user = authorize(permission: 'cmd', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      # Raw commands skip parameter conversions and require cmd_raw (same as send_raw)
+      permission = raw ? 'cmd_raw' : 'cmd'
+      user = authorize(permission: permission, target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      bypassed_checks = _cmd_bypassed_checks(range_check: range_check, hazardous_check: hazardous_check)
+      unless bypassed_checks.empty?
+        # Skipping the hazardous or range check is a higher risk transaction than
+        # ordinary commanding so it requires a distinct, elevated permission
+        authorize(permission: 'cmd_no_checks', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      end
       if user.nil?
         user = {}
         user['username'] = ENV.fetch('OPENC3_MICROSERVICE_NAME', nil)
@@ -521,6 +537,9 @@ module OpenC3
       end
       cmd_string = _build_cmd_output_string(method_name, target_name, cmd_name, cmd_params, packet)
       username = user && user['username'] ? user['username'] : 'anonymous'
+      unless bypassed_checks.empty?
+        Logger.warn("#{method_name}: #{username} bypassed #{bypassed_checks.join(' and ')} for #{target_name} #{cmd_name}", scope: scope, user: user)
+      end
       command = {
         'target_name' => target_name,
         'cmd_name' => cmd_name,

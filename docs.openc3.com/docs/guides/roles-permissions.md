@@ -132,8 +132,9 @@ The **Runner** role allows users to execute commands and scripts but cannot crea
 ### Command Permissions
 
 - **cmd_info** - View command definitions and parameters
-- **cmd_raw** - Send raw binary commands
+- **cmd_raw** - Send raw binary commands (`cmd_raw` and its variants, `send_raw`)
 - **cmd** - Send commands to targets
+- **cmd_no_checks** - Bypass hazardous and/or range checks when sending commands (`cmd_no_hazardous_check`, `cmd_no_range_check`, `cmd_no_checks` and the `cmd_raw` variants). Required in addition to `cmd` or `cmd_raw`; grant only to roles that must send unchecked commands. Every bypass is logged as a warning.
 
 ### Script Permissions
 

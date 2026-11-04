@@ -11,6 +11,7 @@
 
 import contextlib
 import struct
+import sys
 import threading
 import time
 import unittest
@@ -50,6 +51,7 @@ from openc3.models.interface_status_model import InterfaceStatusModel
 from openc3.models.microservice_model import MicroserviceModel
 from openc3.packets.packet import Packet
 from openc3.top_level import HazardousError
+from openc3.utilities.authorization import AuthError
 from test.test_helper import capture_io, mock_redis, setup_system
 
 
@@ -113,6 +115,54 @@ class TestCmdApi(unittest.TestCase):
     def tearDown(self):
         self.icht.graceful_kill()
         self.thread.join()
+
+    def _authorize_permissions(self, authorize, method, cmd_string):
+        authorize.reset_mock()
+        getattr(sys.modules["openc3.api.cmd_api"], method)(cmd_string)
+        calls = [call.kwargs for call in authorize.call_args_list]
+        for kwargs in calls:
+            self.assertEqual(kwargs["target_name"], "INST")
+            self.assertEqual(kwargs["packet_name"], "COLLECT")
+        return [kwargs["permission"] for kwargs in calls]
+
+    @patch("openc3.api.cmd_api.authorize", return_value=None)
+    def test_cmd_requires_cmd_permission_only(self, authorize):
+        self.assertEqual(self._authorize_permissions(authorize, "cmd", "INST COLLECT with TYPE NORMAL"), ["cmd"])
+
+    @patch("openc3.api.cmd_api.authorize", return_value=None)
+    def test_cmd_raw_requires_cmd_raw_permission_only(self, authorize):
+        self.assertEqual(self._authorize_permissions(authorize, "cmd_raw", "INST COLLECT with TYPE 0"), ["cmd_raw"])
+
+    @patch("openc3.api.cmd_api.authorize", return_value=None)
+    def test_bypass_variants_require_cmd_no_checks_permission(self, authorize):
+        for method in ["cmd_no_range_check", "cmd_no_hazardous_check", "cmd_no_checks"]:
+            permissions = self._authorize_permissions(authorize, method, "INST COLLECT with TYPE NORMAL")
+            self.assertEqual(permissions, ["cmd", "cmd_no_checks"], method)
+        for method in ["cmd_raw_no_range_check", "cmd_raw_no_hazardous_check", "cmd_raw_no_checks"]:
+            permissions = self._authorize_permissions(authorize, method, "INST COLLECT with TYPE 0")
+            self.assertEqual(permissions, ["cmd_raw", "cmd_no_checks"], method)
+
+    @patch("openc3.api.cmd_api.authorize")
+    def test_bypass_command_not_sent_when_cmd_no_checks_denied(self, authorize):
+        def deny_bypass(permission, **kwargs):
+            if permission == "cmd_no_checks":
+                raise AuthError("forbidden")
+            return None
+
+        authorize.side_effect = deny_bypass
+        with patch("openc3.api.cmd_api.CommandTopic.send_command") as send_command:
+            with self.assertRaises(AuthError):
+                cmd_no_hazardous_check("INST CLEAR")
+            send_command.assert_not_called()
+
+    @patch("openc3.api.cmd_api.authorize", return_value={"username": "operator"})
+    def test_bypass_logs_a_warning(self, authorize):
+        for stdout in capture_io():
+            cmd_no_checks("INST COLLECT with TYPE NORMAL, DURATION 5")
+            self.assertIn(
+                "cmd_no_checks: operator bypassed range check and hazardous check for INST COLLECT",
+                stdout.getvalue(),
+            )
 
     def test_cmd_complains_about_unknown_targets_commands_and_parameters(self):
         with self.assertRaisesRegex(RuntimeError, "does not exist"):
@@ -471,15 +521,16 @@ class TestCmdApi(unittest.TestCase):
 
             for stdout in capture_io():
                 func("INST ABORT", log_message=False)
+                # The bypass audit warning is never suppressed, only the command log line
                 self.assertNotIn(
-                    "INST ABORT",
+                    f'{name}("INST ABORT")',
                     stdout.getvalue(),
                 )
 
             for stdout in capture_io():
                 func("INST SETPARAMS")  # This has DISABLE_MESSAGES applied
                 self.assertNotIn(
-                    "INST SETPARAMS",
+                    f'{name}("INST SETPARAMS")',
                     stdout.getvalue(),
                 )
 
@@ -501,7 +552,7 @@ class TestCmdApi(unittest.TestCase):
             for stdout in capture_io():
                 func("INST ASCIICMD with STRING 'NOOP'")  # This has DISABLE_MESSAGES applied
                 self.assertNotIn(
-                    "INST ASCIICMD",
+                    f'{name}("INST ASCIICMD',
                     stdout.getvalue(),
                 )
 
