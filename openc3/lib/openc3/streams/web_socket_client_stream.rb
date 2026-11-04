@@ -19,6 +19,7 @@ require 'uri'
 module OpenC3
   class WebSocketClientStream < TcpipClientStream
     attr_accessor :headers
+    attr_reader :ssl_context
 
     # @param url [String] The host to connect to
     # @param write_timeout [Float] Seconds to wait before aborting writes
@@ -29,21 +30,17 @@ module OpenC3
     def initialize(url, write_timeout, read_timeout, connect_timeout = 5.0)
       @url = url
       @uri = URI.parse @url
-      port = ((@uri.scheme == 'wss' or @uri.scheme == 'https') ? 443 : 80)
+      @ssl = ['https', 'wss'].include?(@uri.scheme)
+      port = (@ssl ? 443 : 80)
       port = @uri.port if @uri.port
       super(@uri.host, port, port, write_timeout, read_timeout, connect_timeout)
-      if ['https', 'wss'].include? @uri.scheme
-        socket = ::OpenSSL::SSL::SSLSocket.new(@write_socket)
-        socket.sync_close = true
-        socket.hostname = @uri.host
-        @write_socket = socket
-        @read_socket = socket
-      end
+      @ssl_context = build_ssl_context() if @ssl
       @headers = {}
     end
 
     def connect
       super()
+      start_tls() if @ssl
       @handshake = ::WebSocket::Handshake::Client.new(:url => @url, :headers => @headers)
       @frame = ::WebSocket::Frame::Incoming::Client.new
       @handshaked = false
@@ -90,6 +87,55 @@ module OpenC3
     def write(data, type: :text)
       frame = ::WebSocket::Frame::Outgoing::Client.new(:data => data, :type => type, :version => @handshake.version)
       super(frame.to_s)
+    end
+
+    protected
+
+    # The server certificate must chain to a CA in the system store
+    # (SSL_CERT_FILE / SSL_CERT_DIR are honored, see cacert.pem in compose.yaml)
+    # and must match the hostname in the URL.
+    def build_ssl_context
+      context = ::OpenSSL::SSL::SSLContext.new
+      context.min_version = ::OpenSSL::SSL::TLS1_2_VERSION
+      context.verify_mode = ::OpenSSL::SSL::VERIFY_PEER
+      context.verify_hostname = true
+      store = ::OpenSSL::X509::Store.new
+      store.set_default_paths
+      context.cert_store = store
+      context
+    end
+
+    # Wrap the connected TCP socket in TLS and verify the server before any
+    # application data (handshake headers, token, telemetry) is sent.
+    def start_tls
+      socket = ::OpenSSL::SSL::SSLSocket.new(@write_socket, @ssl_context)
+      socket.sync_close = true
+      socket.hostname = @uri.host
+      begin
+        ssl_connect_nonblock(socket)
+        socket.post_connection_check(@uri.host)
+      rescue => e
+        OpenC3.close_socket(socket)
+        @connected = false
+        raise e
+      end
+      @write_socket = socket
+      @read_socket = socket
+    end
+
+    def ssl_connect_nonblock(socket)
+      loop do
+        case socket.connect_nonblock(exception: false)
+        when :wait_readable
+          socket.to_io.wait_readable(@connect_timeout) or raise "Connect timeout"
+        when :wait_writable
+          socket.to_io.wait_writable(@connect_timeout) or raise "Connect timeout"
+        else
+          return
+        end
+      end
+    rescue IOError, Errno::ENOTSOCK
+      raise "Connect canceled"
     end
   end
 end
