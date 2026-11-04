@@ -32,6 +32,8 @@ class ScriptsController < ApplicationController
   SUITE_REGEX = /^\s*class\s+\w+\s+<\s+(Cosmos::|OpenC3::)?(Suite|TestSuite)/
   PYTHON_SUITE_REGEX = /^\s*class\s+\w+\s*\(\s*(Suite|TestSuite)\s*\)/
   MAX_LIFECYCLE_COMMENT_LENGTH = 1000
+  # Sentinel returned by lifecycle_state when the version store cannot answer.
+  LIFECYCLE_UNKNOWN = :unknown
 
   # These are also enforced in OpenC3::SuiteRunner.validate_identifiers.
   # Suite / Group are class names (Ruby '::' or Python '.' qualified),
@@ -188,9 +190,15 @@ class ScriptsController < ApplicationController
     scope, name = sanitize_params([:scope, :name], :allow_forward_slash => true)
     return unless scope
     return unless authorize_overlay_write(name)
-    if lifecycle_enabled?() and lifecycle_state(scope, name) == 'approved'
-      render json: { status: 'error', message: 'Script is approved and cannot be modified. Move it back to review to edit.' }, status: :forbidden
-      return
+    if lifecycle_enabled?()
+      case lifecycle_state(scope, name)
+      when LIFECYCLE_UNKNOWN
+        refuse_unknown_lifecycle('create', scope, name)
+        return
+      when 'approved'
+        render json: { status: 'error', message: 'Script is approved and cannot be modified. Move it back to review to edit.' }, status: :forbidden
+        return
+      end
     end
     args = params.permit(:text, breakpoints: [])
     args[:scope] = scope
@@ -229,8 +237,20 @@ class ScriptsController < ApplicationController
     return unless authorization('script_run', target_name: target_name)
     # Users with only the script_run (runner) permission may only run
     # approved scripts. Users who can edit may run any lifecycle state.
-    if lifecycle_enabled?() and (state = lifecycle_state(scope, name)) and state != 'approved' and !authorization('script_edit')
-      return
+    if lifecycle_enabled?()
+      state = lifecycle_state(scope, name)
+      if state == LIFECYCLE_UNKNOWN
+        # Approval cannot be verified so runners are refused (fail closed).
+        # Editors may run any state anyway; record that the gate was not
+        # evaluated so the run is attributable in the security log.
+        unless authorized?('script_edit')
+          refuse_unknown_lifecycle('run', scope, name)
+          return
+        end
+        OpenC3::Logger.warn("Script lifecycle state unknown; run of #{name} allowed for user #{username()} via script_edit", scope: scope, user: username())
+      elsif state != 'approved'
+        return unless authorization('script_edit')
+      end
     end
     # TODO 7.0: Should suiteRunner be snake case?
     suite_runner = params[:suiteRunner] ? params[:suiteRunner].as_json() : nil
@@ -281,9 +301,15 @@ class ScriptsController < ApplicationController
     scope, name = sanitize_params([:scope, :name], :allow_forward_slash => true)
     return unless scope
     return unless authorize_overlay_write(name)
-    if lifecycle_enabled?() and lifecycle_state(scope, name) == 'approved'
-      render json: { status: 'error', message: 'Script is approved and cannot be deleted. Move it back to review to delete.' }, status: :forbidden
-      return
+    if lifecycle_enabled?()
+      case lifecycle_state(scope, name)
+      when LIFECYCLE_UNKNOWN
+        refuse_unknown_lifecycle('destroy', scope, name)
+        return
+      when 'approved'
+        render json: { status: 'error', message: 'Script is approved and cannot be deleted. Move it back to review to delete.' }, status: :forbidden
+        return
+      end
     end
     Script.destroy(scope, name)
     # Enterprise-only: record the deletion in git history.
@@ -411,15 +437,22 @@ class ScriptsController < ApplicationController
   end
 
   # Current lifecycle state for the create/run/destroy gates. The lookup hits
-  # git (VersionStore); a transient backend error must not 500 the hottest
-  # paths (especially run), so we log and fail OPEN by returning nil. Every
-  # gate treats nil as "no restriction" (nil != 'approved', nil is falsey), so
-  # an outage never blocks work — approval enforcement resumes once git heals.
+  # git (VersionStore). When the store errors (or returns no state) the
+  # approval status cannot be determined, so LIFECYCLE_UNKNOWN is returned and
+  # the gates fail CLOSED via refuse_unknown_lifecycle rather than treating the
+  # script as unrestricted.
   def lifecycle_state(scope, name)
-    Script.lifecycle(scope, name)['state']
+    Script.lifecycle(scope, name)['state'] || LIFECYCLE_UNKNOWN
   rescue => e
     log_error(e)
-    nil
+    LIFECYCLE_UNKNOWN
+  end
+
+  # Fail closed: refuse the operation with 503 and emit a WARN security event
+  # naming the user and script whenever an approval gate could not be evaluated.
+  def refuse_unknown_lifecycle(action, scope, name)
+    OpenC3::Logger.warn("Script lifecycle state unknown; #{action} of #{name} refused for user #{username()}", scope: scope, user: username())
+    render json: { status: 'error', message: "Script lifecycle state could not be determined; #{action} refused. Retry once the version store is available." }, status: :service_unavailable
   end
 
 end
