@@ -26,14 +26,7 @@ module OpenC3
 
     def run
       Dir.chdir @work_dir
-      begin
-        if @config["cmd"][0] != 'ruby'
-          # Try to make sure the cmd is executable
-          FileUtils.chmod 0777, @config["cmd"][0]
-        end
-      rescue Exception
-        # Its ok if this fails
-      end
+      ensure_cmd_executable(@config["cmd"][0])
 
       # Fortify: Process Control
       # This is dangerous! However, plugins need to be able to run whatever they want.
@@ -42,6 +35,18 @@ module OpenC3
       # footprint is much smaller. In Core you're in the same container
       # as all the other plugins.
       exec(*@config["cmd"])
+    end
+
+    private
+
+    # Make sure a plugin-supplied command file is executable (owner rwx, others rx)
+    # without making it writable by every other user in the container.
+    def ensure_cmd_executable(cmd)
+      return if cmd.nil? or cmd == 'ruby' or !File.file?(cmd)
+
+      FileUtils.chmod(0755, cmd)
+    rescue SystemCallError => e
+      @logger.warn("Plugin microservice #{@name} could not make #{cmd} executable (#{e.class}: #{e.message})", scope: @scope)
     end
   end
 end
