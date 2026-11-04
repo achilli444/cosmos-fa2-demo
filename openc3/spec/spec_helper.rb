@@ -71,6 +71,8 @@ ENV['OPENC3_TOOLS_BUCKET'] = 'tools'
 ENV['OPENC3_CONFIG_BUCKET'] = 'config'
 # Set some usernames / passwords
 ENV['OPENC3_API_PASSWORD'] = 'password'
+# Every spec re-hashes the password in mock_redis; use the floor to keep the suite fast
+ENV['OPENC3_PBKDF2_ITERATIONS'] = '10000'
 ENV['OPENC3_SERVICE_PASSWORD'] = 'openc3service'
 ENV['OPENC3_REDIS_USERNAME'] = 'openc3'
 ENV['OPENC3_REDIS_PASSWORD'] = 'openc3password'

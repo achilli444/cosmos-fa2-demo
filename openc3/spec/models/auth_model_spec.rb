@@ -136,6 +136,66 @@ module OpenC3
         expect(AuthModel.verify(token)).to eq(false)
       end
 
+      it "stores new passwords as salted PBKDF2-HMAC-SHA-256" do
+        pw_hash = @redis.get(PW_HASH_PRIMARY_KEY)
+        expect(pw_hash).to start_with(AuthModel::PBKDF2_PREFIX)
+        _, _, iterations, salt, key = pw_hash.split('$')
+        expect(iterations.to_i).to be >= AuthModel::PBKDF2_MIN_ITERATIONS
+        expect(Base64.strict_decode64(salt).bytesize).to eq(AuthModel::PBKDF2_SALT_LENGTH)
+        expect(Base64.strict_decode64(key).bytesize).to eq(AuthModel::PBKDF2_KEY_LENGTH)
+
+        # Same password, different salt, different hash
+        other = AuthModel.hash_password(AUTH_INITIAL_PASSWORD)
+        expect(other).not_to eq(pw_hash)
+        expect(AuthModel.password_matches?(AUTH_INITIAL_PASSWORD, other)).to eq(true)
+        expect(AuthModel.password_matches?('badpassword', other)).to eq(false)
+      end
+
+      it "clamps the configured PBKDF2 iteration count to the minimum" do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with('OPENC3_PBKDF2_ITERATIONS', nil).and_return('5')
+        expect(AuthModel.pbkdf2_iterations).to eq(AuthModel::PBKDF2_MIN_ITERATIONS)
+        allow(ENV).to receive(:fetch).with('OPENC3_PBKDF2_ITERATIONS', nil).and_return(nil)
+        expect(AuthModel.pbkdf2_iterations).to eq(AuthModel::PBKDF2_DEFAULT_ITERATIONS)
+        allow(ENV).to receive(:fetch).with('OPENC3_PBKDF2_ITERATIONS', nil).and_return('1000000')
+        expect(AuthModel.pbkdf2_iterations).to eq(1_000_000)
+      end
+
+      it "verifies a legacy argon2 hash and migrates it to PBKDF2 on the next successful login" do
+        require 'argon2'
+        legacy = Argon2::Password.create(AUTH_INITIAL_PASSWORD, profile: :unsafe_cheapest)
+        @redis.set(PW_HASH_PRIMARY_KEY, legacy)
+
+        # A failed attempt must not touch the stored hash
+        expect(AuthModel.verify_no_service('badpassword', mode: :password)).to eq(false)
+        expect(@redis.get(PW_HASH_PRIMARY_KEY)).to eq(legacy)
+
+        expect(AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :password)).to eq(true)
+        migrated = @redis.get(PW_HASH_PRIMARY_KEY)
+        expect(migrated).to start_with(AuthModel::PBKDF2_PREFIX)
+
+        # From here on argon2 is never consulted again
+        expect(Argon2::Password).not_to receive(:verify_password)
+        expect(AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :password)).to eq(true)
+        expect(AuthModel.verify_no_service('badpassword', mode: :password)).to eq(false)
+        expect(@redis.get(PW_HASH_PRIMARY_KEY)).to eq(migrated)
+      end
+
+      it "rejects a malformed PBKDF2 hash without raising" do
+        @redis.set(PW_HASH_PRIMARY_KEY, "#{AuthModel::PBKDF2_PREFIX}600000$not-base64!$nope")
+        expect(AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :password)).to eq(false)
+        @redis.set(PW_HASH_PRIMARY_KEY, "#{AuthModel::PBKDF2_PREFIX}600000$abc")
+        expect(AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :password)).to eq(false)
+      end
+
+      it "generates session tokens from the OpenSSL random number generator" do
+        expect(OpenSSL::Random).to receive(:random_bytes).with(AuthModel::SESSION_TOKEN_BYTES).and_call_original
+        expect(SecureRandom).not_to receive(:urlsafe_base64)
+        token = AuthModel.generate_session
+        expect(AuthModel.session_token?(token)).to eq(true)
+        expect(AuthModel.verify(token)).to eq(true)
+      end
+
       it "raises when stored password hash is SHA256" do
         @redis.set(PW_HASH_PRIMARY_KEY, Digest::SHA256.hexdigest(AUTH_INITIAL_PASSWORD))
         expect{ AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :any) }.to \
