@@ -21,6 +21,7 @@ from openc3.io.json_drb_object import JsonDRbObject
 from openc3.utilities.authentication import (
     OpenC3Authentication,
     OpenC3KeycloakAuthentication,
+    verify_credential_transport,
 )
 
 
@@ -37,7 +38,9 @@ class ApiServerProxy:
             else:
                 hostname = "openc3-cosmos-cmd-tlm-api"
 
-        return f"{OPENC3_API_SCHEMA}://{hostname}:{OPENC3_API_PORT}"
+        return verify_credential_transport(
+            f"{OPENC3_API_SCHEMA}://{hostname}:{OPENC3_API_PORT}", setting="OPENC3_API_SCHEMA"
+        )
 
     def generate_timeout(self):
         """pull openc3-cosmos-cmd-tlm-api timeout from environment variables"""
@@ -104,7 +107,9 @@ class ScriptServerProxy:
                 hostname = "127.0.0.1"
             else:
                 hostname = "openc3-cosmos-script-runner-api"
-        return f"{OPENC3_SCRIPT_API_SCHEMA}://{hostname}:{OPENC3_SCRIPT_API_PORT}"
+        return verify_credential_transport(
+            f"{OPENC3_SCRIPT_API_SCHEMA}://{hostname}:{OPENC3_SCRIPT_API_PORT}", setting="OPENC3_SCRIPT_API_SCHEMA"
+        )
 
     def generate_timeout(self):
         """pull openc3-cosmos-script-runner-api timeout from environment variables"""

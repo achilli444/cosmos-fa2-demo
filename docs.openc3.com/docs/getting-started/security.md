@@ -76,6 +76,17 @@ Between any external network and the private network containing the host compute
 
 Exposing COSMOS directly to the public internet is not recommended. While the system itself is secure, there is no built-in denial of service (DOS) protection, and an adversary could overwhelm the system with requests.
 
+### API Client Transport
+
+The Ruby and Python API clients (scripts, microservices, the CLI, `openc3-cosmos-script-runner-api`) send the API password or a bearer token on every request. They default `OPENC3_API_SCHEMA`, `OPENC3_SCRIPT_API_SCHEMA` and `OPENC3_KEYCLOAK_URL` to `https` and refuse to send credentials over cleartext `http` / `ws`, raising `OpenC3AuthenticationError`.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENC3_API_SCHEMA` / `OPENC3_SCRIPT_API_SCHEMA` | `https` | Schema the clients use to reach the cmd-tlm and script-runner APIs. The stock `compose.yaml` sets both to `http` because the API containers do not terminate TLS inside the Docker network (Traefik does, at the edge). |
+| `OPENC3_ALLOW_INSECURE_AUTH` | _(unset)_ | When set (e.g. `1`), credentials may be sent over `http` / `ws`; a warning is logged once per process. The stock `compose.yaml` sets it for the private Docker network. `OPENC3_DEVEL` implies it for local development. |
+
+To require TLS end to end, serve TLS from the API containers, set both schemas to `https` and set `OPENC3_ALLOW_INSECURE_AUTH=0` in the host environment, `.env.local` or `compose.override.yaml`.
+
 ## Runtime Secrets in Docker
 
 There are two ways to pass runtime secrets into containers: environment variables and mounted files.

@@ -98,7 +98,7 @@ def get_env_bool(key: str, default: bool = False) -> bool:
     return value.lower() in ("true", "1", "yes", "on")
 
 
-OPENC3_API_SCHEMA = os.environ.get(_openc3_api_schema, "http")
+OPENC3_API_SCHEMA = os.environ.get(_openc3_api_schema) or "https"
 OPENC3_API_HOSTNAME = os.environ.get(_openc3_api_hostname, "openc3-cosmos-cmd-tlm-api")
 try:
     OPENC3_API_PORT = int(os.environ.get(_openc3_api_port))
@@ -115,7 +115,7 @@ try:
 except TypeError:
     OPENC3_API_READ_TIMEOUT = None
 
-OPENC3_SCRIPT_API_SCHEMA = os.environ.get(_openc3_script_api_schema, "http")
+OPENC3_SCRIPT_API_SCHEMA = os.environ.get(_openc3_script_api_schema) or "https"
 OPENC3_SCRIPT_API_HOSTNAME = os.environ.get(_openc3_script_api_hostname, "openc3-cosmos-script-runner-api")
 try:
     OPENC3_SCRIPT_API_PORT = int(os.environ.get(_openc3_script_api_port))
@@ -163,7 +163,7 @@ OPENC3_API_USER = os.environ.get(_openc3_api_user)
 OPENC3_API_CLIENT = os.environ.get(_openc3_api_client, "api")
 OPENC3_API_TOKEN = os.environ.get(_openc3_api_token)
 OPENC3_KEYCLOAK_REALM = os.environ.get(_openc3_keycloak_realm, "openc3")
-OPENC3_KEYCLOAK_URL = os.environ.get(_openc3_keycloak_url, "http://openc3-keycloak/auth")
+OPENC3_KEYCLOAK_URL = os.environ.get(_openc3_keycloak_url, "https://openc3-keycloak/auth")
 
 # User agent used by all
 _openc3_default_user_agent = [

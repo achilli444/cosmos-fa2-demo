@@ -32,7 +32,7 @@ module OpenC3
     # Build a cable URL from the standard OPENC3 environment variable quartet:
     # <prefix>_SCHEMA, <prefix>_HOSTNAME, <prefix>_CABLE_PORT, <prefix>_PORT
     def self.cable_url(env_prefix:, default_hostname:, default_port:, path:)
-      schema = ENV.fetch("#{env_prefix}_SCHEMA", 'http')
+      schema = OpenC3.api_schema("#{env_prefix}_SCHEMA")
       # Normalize to the websocket schemes (mirrors the Python client). The
       # websocket gem accepts http/https too, but ws/wss is what the URL
       # actually is and Python's websockets library rejects anything else.
@@ -175,6 +175,8 @@ module OpenC3
     # Connect to the websocket with authorization in query params
     def connect
       disconnect()
+      # The token travels in the subscribe identifier, so the cable must be encrypted
+      OpenC3.verify_credential_transport(@url, setting: 'OPENC3_API_SCHEMA / OPENC3_SCRIPT_API_SCHEMA') if @authentication
       final_url = @url + "?scope=#{@scope}"
       @stream = WebSocketClientStream.new(final_url, @write_timeout, @read_timeout, @connect_timeout)
       @stream.headers = {

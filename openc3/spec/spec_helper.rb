@@ -429,3 +429,31 @@ end
 # #    end
 # #  end
 # end
+
+module OpenC3
+  # Set the given environment variables for the duration of the block,
+  # restoring the previous values (including "not set") afterwards.
+  # A nil value means "ensure this variable is unset".
+  def self.spec_with_env(vars)
+    saved = {}
+    begin
+      vars.each do |key, value|
+        saved[key] = ENV.fetch(key, :__unset__)
+        if value.nil?
+          ENV.delete(key)
+        else
+          ENV[key] = value
+        end
+      end
+      yield
+    ensure
+      saved.each do |key, value|
+        if value == :__unset__
+          ENV.delete(key)
+        else
+          ENV[key] = value
+        end
+      end
+    end
+  end
+end

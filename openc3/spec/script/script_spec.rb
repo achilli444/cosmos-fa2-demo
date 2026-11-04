@@ -20,6 +20,62 @@ require 'openc3/script'
 require 'tempfile'
 
 module OpenC3
+  describe ServerProxy do
+    let(:cleared) do
+      { 'OPENC3_API_SCHEMA' => nil, 'OPENC3_API_HOSTNAME' => nil, 'OPENC3_API_PORT' => nil,
+        'OPENC3_DEVEL' => nil, 'OPENC3_ALLOW_INSECURE_AUTH' => nil }
+    end
+
+    before(:each) { OpenC3.reset_cleartext_auth_warning }
+
+    it "defaults the cmd-tlm-api url to https" do
+      OpenC3.spec_with_env(cleared) do
+        expect(ServerProxy.allocate.generate_url).to eq('https://openc3-cosmos-cmd-tlm-api:2901')
+      end
+    end
+
+    it "refuses http without OPENC3_ALLOW_INSECURE_AUTH" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_API_SCHEMA' => 'http')) do
+        expect { ServerProxy.allocate.generate_url }.to raise_error(OpenC3AuthenticationError, /cleartext http.*OPENC3_API_SCHEMA/)
+      end
+    end
+
+    it "allows http with OPENC3_ALLOW_INSECURE_AUTH and warns" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_API_SCHEMA' => 'http', 'OPENC3_ALLOW_INSECURE_AUTH' => 'true')) do
+        expect(Logger).to receive(:warn).with(/cleartext http/).once
+        expect(ServerProxy.allocate.generate_url).to eq('http://openc3-cosmos-cmd-tlm-api:2901')
+      end
+    end
+  end
+
+  describe ScriptServerProxy do
+    let(:cleared) do
+      { 'OPENC3_SCRIPT_API_SCHEMA' => nil, 'OPENC3_SCRIPT_API_HOSTNAME' => nil, 'OPENC3_SCRIPT_API_PORT' => nil,
+        'OPENC3_DEVEL' => nil, 'OPENC3_ALLOW_INSECURE_AUTH' => nil }
+    end
+
+    before(:each) { OpenC3.reset_cleartext_auth_warning }
+
+    it "defaults the script-runner-api url to https" do
+      OpenC3.spec_with_env(cleared) do
+        expect(ScriptServerProxy.allocate.generate_url).to eq('https://openc3-cosmos-script-runner-api:2902')
+      end
+    end
+
+    it "refuses http without OPENC3_ALLOW_INSECURE_AUTH" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_SCRIPT_API_SCHEMA' => 'http')) do
+        expect { ScriptServerProxy.allocate.generate_url }.to raise_error(OpenC3AuthenticationError, /cleartext http.*OPENC3_SCRIPT_API_SCHEMA/)
+      end
+    end
+
+    it "uses localhost over http with OPENC3_DEVEL" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_SCRIPT_API_SCHEMA' => 'http', 'OPENC3_DEVEL' => '../openc3')) do
+        allow(Logger).to receive(:warn)
+        expect(ScriptServerProxy.allocate.generate_url).to eq('http://127.0.0.1:2902')
+      end
+    end
+  end
+
   describe Script do
     describe "disconnect" do
       before(:each) do
