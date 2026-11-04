@@ -1262,6 +1262,13 @@ module OpenC3
         allow(Aws::S3::Client).to receive(:new).and_return(@s3)
         allow(@s3).to receive(:head_bucket)
         allow(@s3).to receive(:delete_bucket)
+        @saved_env = ENV.to_h.slice('OPENC3_CLOUD', 'OPENC3_NO_S3_CHECKSUM')
+      end
+
+      after(:each) do
+        ENV.delete('OPENC3_NO_S3_CHECKSUM')
+        ENV.delete('OPENC3_CLOUD')
+        @saved_env.each { |k, v| ENV[k] = v }
       end
 
       it "adds new commands" do

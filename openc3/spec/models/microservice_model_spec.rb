@@ -240,7 +240,8 @@ module OpenC3
           body: anything,
           cache_control: nil,
           content_type: nil,
-          metadata: nil
+          metadata: nil,
+          checksum_algorithm: "SHA256"
         )
 
         model = MicroserviceModel.new(folder_name: folder, name: name, scope: scope, plugin: 'PLUGIN')
