@@ -211,8 +211,12 @@ class AuthController < ApplicationController
       end
       return limited
     rescue StandardError => error
-      OpenC3::Logger.error("Redis error checking #{type} rate limit: #{error.message}")
-      return false
+      # Fail closed: if the counter can't be read the limit can't be enforced,
+      # so refuse the attempt (429) rather than let an ephemeral store outage
+      # turn into unlimited password guessing (NIST 800-53 AC-7). Password
+      # verification uses the primary Store, which may be a separate instance.
+      OpenC3::Logger.error("Redis error checking #{type} rate limit, rejecting attempt: #{error.message}")
+      return true
     end
   end
 

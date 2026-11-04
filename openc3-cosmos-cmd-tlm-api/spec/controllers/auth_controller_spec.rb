@@ -282,6 +282,29 @@ RSpec.describe AuthController, :type => :controller do
       expect(response).to have_http_status(:ok)
     end
 
+    it "fails closed when the bad attempt counter can't be read" do
+      post :set, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+
+      allow(OpenC3::Logger).to receive(:error)
+      # Store methods are delegated to redis via method_missing, so stub that
+      # for GET only to simulate the ephemeral store being unreachable
+      store = OpenC3::EphemeralStore.instance
+      allow(store).to receive(:method_missing).and_call_original
+      allow(store).to receive(:method_missing).with(:get, anything).and_raise(Redis::CannotConnectError, 'connection refused')
+      expect(OpenC3::AuthModel).not_to receive(:verify_no_service)
+      post :verify, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:too_many_requests)
+      expect(OpenC3::Logger).to have_received(:error).with(/Redis error checking user rate limit, rejecting attempt: connection refused/)
+
+      post :verify_service, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:too_many_requests)
+      expect(OpenC3::Logger).to have_received(:error).with(/Redis error checking service rate limit/)
+
+      post :set, params: { old_password: 'PASSWORD', password: 'NEWPASSWORD' }
+      expect(response).to have_http_status(:too_many_requests)
+    end
+
     it "rate limits based on X-Forwarded-For when behind a proxy" do
       post :set, params: { password: 'PASSWORD' }
       expect(response).to have_http_status(:ok)
