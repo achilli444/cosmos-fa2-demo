@@ -105,6 +105,61 @@ RSpec.describe AuthController, :type => :controller do
     end
   end
 
+  describe "roles" do
+    before(:each) do
+      $openc3_authorize = true
+    end
+
+    after(:each) do
+      $openc3_authorize = false
+    end
+
+    it "requires an admin session to set another role's password" do
+      post :set, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+      admin_token = response.body
+
+      # No session at all
+      post :set, params: { role: 'operator', password: 'OPERATOR1', scope: 'DEFAULT' }
+      expect(response).to have_http_status(:unauthorized)
+      expect(OpenC3::AuthModel.set?(OpenC3::AuthModel.role_key('operator'))).to be false
+
+      request.headers['Authorization'] = admin_token
+      post :set, params: { role: 'operator', password: 'OPERATOR1', scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.set?(OpenC3::AuthModel.role_key('operator'))).to be true
+
+      # Logging in with the operator password yields an operator session
+      request.headers['Authorization'] = nil
+      post :verify, params: { password: 'OPERATOR1' }
+      expect(response).to have_http_status(:ok)
+      operator_token = response.body
+      expect(OpenC3::AuthModel.role(operator_token)).to eql 'operator'
+      expect(OpenC3::AuthModel.role(admin_token)).to eql 'admin'
+
+      # An operator may not set the viewer password
+      request.headers['Authorization'] = operator_token
+      post :set, params: { role: 'viewer', password: 'VIEWER123', scope: 'DEFAULT' }
+      expect(response).to have_http_status(:forbidden)
+      expect(OpenC3::AuthModel.set?(OpenC3::AuthModel.role_key('viewer'))).to be false
+    end
+
+    it "rejects unknown roles and the admin role" do
+      post :set, params: { password: 'PASSWORD' }
+      request.headers['Authorization'] = response.body
+      post :set, params: { role: 'superuser', password: 'SUPER1234', scope: 'DEFAULT' }
+      expect(response).to have_http_status(:error)
+      json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+      expect(json["message"]).to eql "invalid role 'superuser'"
+    end
+
+    it "issues service sessions with the service role" do
+      post :verify_service, params: { password: 'openc3service' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.role(response.body)).to eql 'service'
+    end
+  end
+
   describe "rate limiting" do
     # Actually testing that rate limiting is enforced is done in Playwright
     # because the bad attempt counters in the controller are shared across

@@ -39,8 +39,9 @@ class AuthController < ApplicationController
     end
 
     begin
-      if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
-        render :plain => OpenC3::AuthModel.generate_session()
+      role = OpenC3::AuthModel.password_role(params[:password])
+      if role
+        render :plain => OpenC3::AuthModel.generate_session(role: role)
       else
         record_user_bad_attempt
         head :unauthorized
@@ -59,7 +60,7 @@ class AuthController < ApplicationController
 
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
-        render :plain => OpenC3::AuthModel.generate_session()
+        render :plain => OpenC3::AuthModel.generate_session(role: OpenC3::AuthModel::SERVICE_ROLE)
       else
         record_service_bad_attempt
         head :unauthorized
@@ -83,10 +84,21 @@ class AuthController < ApplicationController
     end
 
     begin
-      # Set throws an exception if it fails for any reason
-      OpenC3::AuthModel.set(params[:password], params[:old_password])
-      OpenC3::Logger.info("Password changed", user: username())
-      render :plain => OpenC3::AuthModel.generate_session()
+      role = params[:role]
+      if role.present? and role != OpenC3::AuthModel::ADMIN_ROLE
+        # Only an admin may set the password of another role.
+        # authorization returns false (and renders) when denied
+        user = authorization('admin')
+        return if user == false
+        OpenC3::AuthModel.set_role_password(role, params[:password])
+        OpenC3::Logger.info("#{role} password changed", user: username())
+        head :ok
+      else
+        # Set throws an exception if it fails for any reason
+        OpenC3::AuthModel.set(params[:password], params[:old_password])
+        OpenC3::Logger.info("Password changed", user: username())
+        render :plain => OpenC3::AuthModel.generate_session()
+      end
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt

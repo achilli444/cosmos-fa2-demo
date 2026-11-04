@@ -113,6 +113,33 @@ The `OPENC3_SERVICE_PASSWORD` is a backend service account password that allows 
 
 Note: In COSMOS Enterprise with Keycloak, user offline access tokens can be used instead when available, but the service password serves as a fallback for automated operations.
 
+### Core Roles and Permissions
+
+COSMOS Core authorizes every API call (`OpenC3::Authorization#authorize`) against the role bound to the caller's session token. A session only carries the role of the password that created it, so holding a valid token no longer grants every permission.
+
+| Role       | Credential                                    | Permissions                                                                                                   |
+| ---------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `admin`    | The password created at first login           | All permissions, including `admin` (plugins, settings, enable/disable commands) and `superadmin`               |
+| `operator` | Optional password set by an admin             | `system`, `system_set`, `tlm`, `tlm_set`, `cmd_info`, `cmd_raw`, `cmd`, `script_view`, `script_edit`, `script_run` |
+| `viewer`   | Optional password set by an admin             | `system`, `tlm`, `cmd_info`, `script_view` (read-only)                                                        |
+| `service`  | `OPENC3_SERVICE_PASSWORD` (internal services) | Same as `operator`; it can never administer the system                                                        |
+
+A request whose role lacks the required permission is rejected with HTTP 403 (`OpenC3::ForbiddenError`); a request without a valid session or service password is rejected with HTTP 401 (`OpenC3::AuthError`). The role names match the Enterprise built-in roles, except that the Core `admin` also keeps the operator permissions because it is the only credential that exists until others are set.
+
+Only an admin session may set the `operator` and `viewer` passwords, which must differ from every other role password. Setting a role's password terminates that role's existing sessions:
+
+```bash
+curl -X POST "http://localhost:2900/openc3-api/auth/set?scope=DEFAULT" \
+  -H "Authorization: <admin session token>" \
+  -d "role=operator" -d "password=<operator password>"
+```
+
+Users then log in with the role's password on the normal login page and receive a session bound to that role. Sessions created before roles existed are treated as `admin` sessions.
+
+#### Target Scoping
+
+A role can be limited to specific targets with an environment variable named `OPENC3_<ROLE>_TARGETS` (comma separated, case insensitive) on the `openc3-cosmos-cmd-tlm-api` and `openc3-cosmos-script-runner-api` services. For example `OPENC3_OPERATOR_TARGETS=INST,INST2` lets operators command and view only `INST` and `INST2`; requests naming any other target are rejected with HTTP 403. Unset variables leave the role unrestricted. Requests that do not name a target (for example listing targets) are governed by the permission check alone.
+
 ### Rails Application Secret
 
 | Variable          | Description                                                     |
