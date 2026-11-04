@@ -396,4 +396,99 @@ RSpec.describe PluginsController, type: :controller do
       expect(response).to have_http_status(:unauthorized)
     end
   end
+
+  describe "check_localhost_reachability" do
+    before(:each) do
+      setting = {"name" => "store_api_key", "data" => "super-secret-store-key"}
+      allow(OpenC3::SettingModel).to receive(:get).with(name: "store_api_key", scope: "DEFAULT").and_return(setting)
+    end
+
+    def with_local_http_server(status_line)
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+      requests = []
+      thread = Thread.new do
+        client = server.accept
+        request = +""
+        while (line = client.gets) && line != "\r\n"
+          request << line
+        end
+        requests << request
+        client.write("HTTP/1.1 #{status_line}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        client.close
+      end
+      yield port, requests
+      thread.join(2)
+    ensure
+      server.close
+    end
+
+    it "returns non-localhost urls untouched without probing" do
+      expect(Net::HTTP).not_to receive(:start)
+      url = "https://store.openc3.com/gems/test-1.0.0.gem"
+      expect(controller.check_localhost_reachability(url, 7)).to eq(url)
+    end
+
+    it "probes localhost without sending the store API key" do
+      with_local_http_server("200 OK") do |port, requests|
+        url = "http://127.0.0.1:#{port}/gems/test-1.0.0.gem"
+        expect(controller.check_localhost_reachability(url, 7)).to eq(url)
+        expect(requests.length).to eq(1)
+        expect(requests.first).to match(%r{\AGET /api/v1.2/cosmos_plugins/7 HTTP/1.1})
+        expect(requests.first).not_to match(/authorization/i)
+        expect(requests.first).not_to include("super-secret-store-key")
+      end
+    end
+
+    it "treats an unauthenticated 401 as reachable" do
+      with_local_http_server("401 Unauthorized") do |port, requests|
+        url = "http://localhost:#{port}/gems/test-1.0.0.gem"
+        expect(controller.check_localhost_reachability(url, 7)).to eq(url)
+        expect(requests.first).not_to match(/authorization/i)
+      end
+    end
+
+    it "uses TLS when the gem url is https" do
+      response = double("response", code: "200")
+      expect(Net::HTTP).to receive(:start).with("localhost", 8443, use_ssl: true) do |&block|
+        http = double("http")
+        expect(http).to receive(:request) do |req|
+          expect(req["Authorization"]).to be_nil
+          expect(req.path).to eq("/api/v1.2/cosmos_plugins/7")
+          response
+        end
+        block.call(http)
+      end
+      url = "https://localhost:8443/gems/test-1.0.0.gem"
+      expect(controller.check_localhost_reachability(url, 7)).to eq(url)
+    end
+
+    it "falls back to host.docker.internal when localhost is unreachable" do
+      response = double("response", code: "200")
+      expect(Net::HTTP).to receive(:start).with("localhost", 3000, use_ssl: false).and_raise(Errno::ECONNREFUSED)
+      expect(Net::HTTP).to receive(:start).with("host.docker.internal", 3000, use_ssl: false) do |&block|
+        http = double("http")
+        expect(http).to receive(:request) do |req|
+          expect(req["Authorization"]).to be_nil
+          response
+        end
+        block.call(http)
+      end
+      url = "http://localhost:3000/gems/test-1.0.0.gem"
+      expect(controller.check_localhost_reachability(url, 7)).to eq("http://host.docker.internal:3000/gems/test-1.0.0.gem")
+    end
+
+    it "returns nil when neither host is reachable" do
+      allow(Net::HTTP).to receive(:start).and_raise(Errno::ECONNREFUSED)
+      expect(controller.check_localhost_reachability("http://localhost:3000/gems/test-1.0.0.gem", 7)).to be_nil
+    end
+
+    it "does not treat a 404 as reachable" do
+      with_local_http_server("404 Not Found") do |port, _requests|
+        allow(Net::HTTP).to receive(:start).and_call_original
+        allow(Net::HTTP).to receive(:start).with("host.docker.internal", port, use_ssl: false).and_raise(Errno::ECONNREFUSED)
+        expect(controller.check_localhost_reachability("http://127.0.0.1:#{port}/gems/test-1.0.0.gem", 7)).to be_nil
+      end
+    end
+  end
 end
