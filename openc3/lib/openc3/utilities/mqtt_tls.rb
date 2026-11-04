@@ -18,8 +18,6 @@ module OpenC3
   # text held in memory. Nothing is written to disk, so the client private key
   # never lands in the shared temp directory.
   module MqttTls
-    PEM_CERTIFICATE = /-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/m
-
     # @param client [MQTT::Client]
     # @param cert [String, nil] PEM client certificate
     # @param key [String, nil] PEM client private key
@@ -33,13 +31,18 @@ module OpenC3
       if ca_file
         client.ssl = true
         store = OpenSSL::X509::Store.new
-        certs = ca_file.scan(PEM_CERTIFICATE)
-        raise "CA_FILE does not contain a PEM certificate" if certs.empty?
-
-        certs.each { |pem| store.add_cert(OpenSSL::X509::Certificate.new(pem)) }
+        ca_certificates(ca_file).each { |ca_cert| store.add_cert(ca_cert) }
         client.ssl_context.cert_store = store
         client.ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER
       end
+    end
+
+    # Parses every certificate in a PEM bundle without regex scanning the text
+    # (OpenSSL walks the bundle linearly).
+    def self.ca_certificates(ca_file)
+      OpenSSL::X509::Certificate.load(ca_file)
+    rescue OpenSSL::X509::CertificateError => e
+      raise "CA_FILE does not contain a PEM certificate: #{e.message}"
     end
   end
 end
