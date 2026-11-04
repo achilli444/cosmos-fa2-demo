@@ -255,6 +255,11 @@ class QueuesController < ApplicationController
 
   def exec_command
     return unless authorization('cmd')
+    # Releasing a hazardous command without its confirmation is a privileged function
+    # which requires a distinct permission in addition to 'cmd'
+    hazardous_confirmed = ActiveModel::Type::Boolean.new.cast(params[:hazardous_confirmed]) ? true : false
+    return if hazardous_confirmed and !authorization('cmd_no_hazardous_check')
+
     begin
       model = @model_class.get_model(name: params[:name], scope: params[:scope])
       if model.nil?
@@ -264,12 +269,12 @@ class QueuesController < ApplicationController
       id = params[:id]&.to_f
       command_data = model.remove_command(id)
       if command_data
-        hazardous = false
         token = get_token(username(), scope: params[:scope])
         begin
           # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
           validate = command_data.key?('validate') ? command_data['validate'] : true
           timeout = command_data['timeout'] # Default is nil which means use system default timeout
+          cmd_params = nil
           if command_data['target_name'] && command_data['cmd_name']
             # New format: use 3-parameter cmd() method
             if command_data['cmd_params']
@@ -277,27 +282,38 @@ class QueuesController < ApplicationController
             else
               cmd_params = {}
             end
-            if hazardous
-              cmd_no_hazardous_check(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            else
-              cmd(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            end
+            cmd_args = [command_data['target_name'], command_data['cmd_name'], cmd_params]
+            cmd_string = "#{command_data['target_name']} #{command_data['cmd_name']} #{cmd_params}"
           elsif command_data['value']
             # Legacy format: use single string parameter
-            if hazardous
-              cmd_no_hazardous_check(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            else
-              cmd(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            end
+            cmd_args = [command_data['value']]
+            cmd_string = command_data['value']
           else
             log_error("Invalid command format in queue: #{command_data}")
             render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
             return
           end
+          cmd_kwargs = { queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token }
+          if hazardous_confirmed
+            OpenC3::Logger.info(
+              "Hazardous command released from queue #{params[:name]} without hazardous check: #{cmd_string} (queued by #{command_data['username']})",
+              scope: params[:scope],
+              user: username()
+            )
+            cmd_no_hazardous_check(*cmd_args, **cmd_kwargs)
+          else
+            cmd(*cmd_args, **cmd_kwargs)
+          end
         rescue HazardousError => e
-          # Rescue hazardous error and retry with cmd_no_hazardous_check
-          hazardous = true
-          retry
+          # Put the command back where it was so it can be executed again once confirmed
+          restore_queued_command(model, command_data, cmd_params)
+          render json: {
+            status: 'hazardous',
+            message: "Hazardous command requires confirmation: #{e.hazardous_description}. Execute again with hazardous_confirmed set to send it.",
+            type: e.class.to_s,
+            command: command_data
+          }, status: :conflict
+          return
         rescue StandardError => e
           log_error(e)
           render json: { status: 'error', message: "Failed to execute command: #{e.message}", type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
@@ -329,6 +345,14 @@ class QueuesController < ApplicationController
   end
 
   private
+
+  def restore_queued_command(model, command_data, cmd_params)
+    model.insert_command(id: command_data['id'], username: command_data['username'], command: command_data['value'],
+                         target_name: command_data['target_name'], cmd_name: command_data['cmd_name'], cmd_params: cmd_params,
+                         validate: command_data['validate'], timeout: command_data['timeout'])
+  rescue StandardError => e
+    log_error(e)
+  end
 
   def change_state(params, state)
     return unless authorization('cmd')

@@ -76,34 +76,30 @@ class RouterTopic(Topic):
                             Topic.write_ack(topic, result, msg_id, db_shard=db_shard)
 
     @classmethod
-    def route_command(cls, packet, target_names, scope=OPENC3_SCOPE):
+    def route_command(cls, packet, target_names, username=None, hazardous_check=True, scope=OPENC3_SCOPE):
+        """Route a command received by a router to the target command topic.
+
+        username is the service identity of the router (recorded as the command's username) and
+        hazardous_check tells the interface whether to reject hazardous commands."""
+        msg_hash = {
+            "cmd_buffer": bytes(packet.buffer_no_copy()),
+            "hazardous_check": "TRUE" if hazardous_check else "FALSE",
+        }
+        if username:
+            msg_hash["username"] = username
         if packet.identified():
             topic = f"{{{scope}__CMD}}TARGET__{packet.target_name}"
-            Topic.write_topic(
-                topic,
-                {
-                    "target_name": packet.target_name,
-                    "cmd_name": packet.packet_name,
-                    "cmd_buffer": bytes(packet.buffer_no_copy()),
-                },
-                "*",
-                100,
-            )
+            msg_hash["target_name"] = packet.target_name
+            msg_hash["cmd_name"] = packet.packet_name
+            Topic.write_topic(topic, msg_hash, "*", 100)
         elif len(target_names) == 1:
             topic = f"{{{scope}__CMD}}TARGET__{target_names[0]}"
             target_name = "UNKNOWN"
             if packet.target_name is not None:
                 target_name = packet.target_name
-            Topic.write_topic(
-                topic,
-                {
-                    "target_name": target_name,
-                    "cmd_name": "UNKNOWN",
-                    "cmd_buffer": bytes(packet.buffer_no_copy()),
-                },
-                "*",
-                100,
-            )
+            msg_hash["target_name"] = target_name
+            msg_hash["cmd_name"] = "UNKNOWN"
+            Topic.write_topic(topic, msg_hash, "*", 100)
         else:
             target_name = "UNKNOWN"
             if packet.target_name is not None:

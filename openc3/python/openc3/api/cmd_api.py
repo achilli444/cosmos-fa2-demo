@@ -609,6 +609,24 @@ def _cmd_implementation(
         scope=scope,
         manual=manual,
     )
+    # Bypassing range or hazardous checks is a privileged function so it requires a distinct
+    # permission in addition to 'cmd' (see docs/guides/roles-permissions)
+    if not range_check:
+        authorize(
+            permission="cmd_no_range_check",
+            target_name=target_name,
+            packet_name=cmd_name,
+            scope=scope,
+            manual=manual,
+        )
+    if not hazardous_check:
+        authorize(
+            permission="cmd_no_hazardous_check",
+            target_name=target_name,
+            packet_name=cmd_name,
+            scope=scope,
+            manual=manual,
+        )
     queue_username = kwargs.get("queue_username")
     if not user:
         user = {}

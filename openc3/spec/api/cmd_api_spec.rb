@@ -203,6 +203,39 @@ module OpenC3
           expect { @api.send(method, "INST DISABLED") }.to raise_error(DisabledError, "INST DISABLED is Disabled")
         end
 
+        it "requires a distinct permission to bypass range or hazardous checks" do
+          permissions = []
+          allow(@api).to receive(:authorize).and_wrap_original do |m, **kwargs|
+            permissions << kwargs[:permission]
+            m.call(**kwargs)
+          end
+          @api.send(method, "INST", "ABORT")
+          expect(permissions).to include('cmd')
+          if method.include?('no_checks') or method.include?('no_range')
+            expect(permissions).to include('cmd_no_range_check')
+          else
+            expect(permissions).not_to include('cmd_no_range_check')
+          end
+          if method.include?('no_checks') or method.include?('no_hazard')
+            expect(permissions).to include('cmd_no_hazardous_check')
+          else
+            expect(permissions).not_to include('cmd_no_hazardous_check')
+          end
+        end
+
+        it "does not send the command when the bypass permission is denied" do
+          allow(@api).to receive(:authorize).and_wrap_original do |m, **kwargs|
+            raise ForbiddenError.new("#{kwargs[:permission]} denied") if kwargs[:permission] != 'cmd'
+            m.call(**kwargs)
+          end
+          if method.include?('no_checks') or method.include?('no_range') or method.include?('no_hazard')
+            expect(CommandTopic).not_to receive(:send_command)
+            expect { @api.send(method, "INST", "ABORT") }.to raise_error(ForbiddenError, /denied/)
+          else
+            expect { @api.send(method, "INST", "ABORT") }.not_to raise_error
+          end
+        end
+
         it "times out if the interface does not process the command" do
           expect { @api.send(method, "INST", "ABORT", timeout: true) }.to raise_error("Invalid timeout parameter: true. Must be numeric.")
           expect { @api.send(method, "INST", "ABORT", timeout: false) }.to raise_error("Invalid timeout parameter: false. Must be numeric.")

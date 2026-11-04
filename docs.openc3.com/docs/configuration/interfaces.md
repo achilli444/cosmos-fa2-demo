@@ -179,6 +179,31 @@ INTERFACE INTERFACE_NAME tcpip_client_interface.rb host.docker.internal 8080 808
 </TabItem>
 </Tabs>
 
+#### ALLOW_HAZARDOUS
+
+Routers only. Commands received by a router are forwarded to the target with the router's microservice name recorded as the username. Because there is no interactive user to confirm them, hazardous commands received by a router are rejected and logged by default. Set this option to TRUE to allow a specific router to forward hazardous commands (they are still subject to [critical commanding](/docs/configuration/command#critical-commanding-enterprise) if enabled).
+
+<Tabs groupId="script-language">
+<TabItem value="python" label="Python">
+
+```cosmos
+ROUTER INST_ROUTER openc3/interfaces/tcpip_server_interface.py 2950 2950 10.0 None BURST
+  ROUTE INST_INT
+  OPTION ALLOW_HAZARDOUS TRUE
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```cosmos
+ROUTER INST_ROUTER tcpip_server_interface.rb 2950 2950 10.0 nil BURST
+  ROUTE INST_INT
+  OPTION ALLOW_HAZARDOUS TRUE
+```
+
+</TabItem>
+</Tabs>
+
 ### TCP/IP Client Interface
 
 The TCP/IP client interface connects to a TCP/IP socket to send commands and receive telemetry. This interface is used for targets which open a socket and wait for a connection. This is the most common type of interface.

@@ -320,6 +320,42 @@ class TestCmdApi(unittest.TestCase):
             except HazardousError:
                 self.fail(f"{name} raised HazardousError unexpectedly!")
 
+    def test_cmd_requires_a_distinct_permission_to_bypass_range_or_hazardous_checks(self):
+        expected = {
+            cmd: set(),
+            cmd_raw: set(),
+            cmd_no_range_check: {"cmd_no_range_check"},
+            cmd_raw_no_range_check: {"cmd_no_range_check"},
+            cmd_no_hazardous_check: {"cmd_no_hazardous_check"},
+            cmd_raw_no_hazardous_check: {"cmd_no_hazardous_check"},
+            cmd_no_checks: {"cmd_no_range_check", "cmd_no_hazardous_check"},
+            cmd_raw_no_checks: {"cmd_no_range_check", "cmd_no_hazardous_check"},
+        }
+        for method, bypass_permissions in expected.items():
+            with patch("openc3.api.cmd_api.authorize") as mock_authorize:
+                mock_authorize.return_value = {"username": "operator"}
+                method("INST", "ABORT")
+                permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+                self.assertEqual(permissions[0], "cmd", method.__name__)
+                self.assertEqual(set(permissions[1:]), bypass_permissions, method.__name__)
+
+    def test_cmd_does_not_send_when_the_bypass_permission_is_denied(self):
+        from openc3.utilities.authorization import authorize as real_authorize
+
+        def deny_bypass(permission=None, **kwargs):
+            if permission != "cmd":
+                raise RuntimeError(f"{permission} denied")
+            return real_authorize(permission=permission, **kwargs)
+
+        for method in [cmd_no_range_check, cmd_no_hazardous_check, cmd_no_checks, cmd_raw_no_checks]:
+            with (
+                patch("openc3.api.cmd_api.authorize", side_effect=deny_bypass),
+                patch("openc3.api.cmd_api.CommandTopic.send_command") as mock_send,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "denied"):
+                    method("INST", "ABORT")
+                mock_send.assert_not_called()
+
     def test_cmd_warns_about_hazardous_commands(self):
         for name in [
             "cmd",

@@ -298,6 +298,9 @@ class InterfaceCmdHandlerThread:
             hazardous_check = ConfigParser.handle_true_false(msg_hash.get(b"hazardous_check", b"TRUE").decode())
         elif msg_hash.get(b"cmd_buffer") is not None:
             cmd_buffer = msg_hash.get(b"cmd_buffer")
+            # Routers stamp hazardous_check so the hazardous commands they forward are rejected
+            if msg_hash.get(b"hazardous_check") is not None:
+                hazardous_check = ConfigParser.handle_true_false(msg_hash[b"hazardous_check"].decode())
 
         try:
             try:
@@ -350,6 +353,13 @@ class InterfaceCmdHandlerThread:
             # Return back the error, description, and the formatted command
             # This allows the error handler to simply re-send the command
             if hazardous_check and hazardous and not release_critical:
+                if cmd_buffer is not None:
+                    # Raw (router) commands have no interactive user to confirm so log the rejection
+                    self.logger.warn(
+                        f"{self.interface.name}: Hazardous command {command.target_name} {command.packet_name} rejected: {hazardous_description}",
+                        user=command.extra["username"],
+                        scope=self.scope,
+                    )
                 return f"HazardousError\n{hazardous_description}\n{command.extra['cmd_string']}"
 
             if self.critical_commanding is not None and self.critical_commanding != "OFF" and not release_critical:

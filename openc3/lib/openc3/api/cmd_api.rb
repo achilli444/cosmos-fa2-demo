@@ -482,6 +482,14 @@ module OpenC3
       cmd_name = cmd_name.upcase
       cmd_params = cmd_params.transform_keys(&:upcase)
       user = authorize(permission: 'cmd', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      # Bypassing range or hazardous checks is a privileged function so it requires a distinct
+      # permission in addition to 'cmd' (see docs/guides/roles-permissions)
+      unless range_check
+        authorize(permission: 'cmd_no_range_check', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      end
+      unless hazardous_check
+        authorize(permission: 'cmd_no_hazardous_check', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      end
       if user.nil?
         user = {}
         user['username'] = ENV.fetch('OPENC3_MICROSERVICE_NAME', nil)

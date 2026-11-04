@@ -61,4 +61,6 @@ The Command is the command as sent via [`cmd_no_hazarous_check`](/docs/guides/sc
 
 The Actions column allows you to remove and execute a command (play button), edit a command (pencil button), or delete a command from the queue (trash button).
 
+Executing a hazardous command from the queue requires confirmation. The `exec_command` API returns HTTP 409 with the hazardous description and leaves the command in the queue; executing it again with `hazardous_confirmed` set (see [`queue_exec`](/docs/guides/scripting-api#queue_exec)) sends it via `cmd_no_hazardous_check`, which requires the `cmd_no_hazardous_check` [permission](/docs/guides/roles-permissions) in addition to `cmd`. The confirmation is logged with the executing and queuing users.
+
 You can download the list of commands as a CSV file by clicking the Download button next to the Search box.

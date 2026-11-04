@@ -242,6 +242,56 @@ class TestRouterMicroservice(unittest.TestCase):
                 found = True
         self.assertTrue(found)
 
+    def _routed_messages(self):
+        messages = []
+        for _, _, msg_hash, _ in Topic.read_topics(["{DEFAULT__CMD}TARGET__INST"]):
+            messages.append(msg_hash)
+        return messages
+
+    def test_handle_packet_stamps_the_router_identity_and_hazardous_check(self):
+        im = RouterMicroservice("DEFAULT__ROUTER__TEST_INT")
+        self._run(im)
+        im.interface.cmd_target_enabled["INST"] = True
+
+        command = System.commands.build_cmd("INST", "ABORT")
+        Topic.update_topic_offsets(["{DEFAULT__CMD}TARGET__INST"])
+        im.handle_packet(command)
+
+        messages = self._routed_messages()
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0][b"cmd_name"].decode(), "ABORT")
+        self.assertEqual(messages[0][b"username"].decode(), "DEFAULT__ROUTER__TEST_INT")
+        self.assertEqual(messages[0][b"hazardous_check"].decode(), "TRUE")
+
+    def test_handle_packet_rejects_hazardous_commands_by_default(self):
+        im = RouterMicroservice("DEFAULT__ROUTER__TEST_INT")
+        self._run(im)
+        im.interface.cmd_target_enabled["INST"] = True
+
+        command = System.commands.build_cmd("INST", "CLEAR")
+        Topic.update_topic_offsets(["{DEFAULT__CMD}TARGET__INST"])
+        for stdout in capture_io():
+            im.handle_packet(command)
+            self.assertIn("Hazardous command INST CLEAR rejected", stdout.getvalue())
+
+        self.assertEqual(self._routed_messages(), [])
+
+    def test_handle_packet_forwards_hazardous_commands_when_allow_hazardous_is_set(self):
+        im = RouterMicroservice("DEFAULT__ROUTER__TEST_INT")
+        self._run(im)
+        im.interface.cmd_target_enabled["INST"] = True
+        im.interface.options["ALLOW_HAZARDOUS"] = ["TRUE"]
+
+        command = System.commands.build_cmd("INST", "CLEAR")
+        Topic.update_topic_offsets(["{DEFAULT__CMD}TARGET__INST"])
+        im.handle_packet(command)
+
+        messages = self._routed_messages()
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0][b"cmd_name"].decode(), "CLEAR")
+        self.assertEqual(messages[0][b"username"].decode(), "DEFAULT__ROUTER__TEST_INT")
+        self.assertEqual(messages[0][b"hazardous_check"].decode(), "FALSE")
+
     def test_router_directive_disconnect_and_unknown(self):
         im = RouterMicroservice("DEFAULT__ROUTER__TEST_INT")
         self._run(im)

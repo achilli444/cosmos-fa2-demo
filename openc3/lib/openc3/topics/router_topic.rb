@@ -78,13 +78,18 @@ module OpenC3
       end
     end
 
-    def self.route_command(packet, target_names, scope:)
+    # Route a command received by a router to the target command topic
+    # @param username [String] Service identity of the router (recorded as the command's username)
+    # @param hazardous_check [Boolean] Whether the interface should reject hazardous commands
+    def self.route_command(packet, target_names, username: nil, hazardous_check: true, scope:)
+      msg_hash = { 'cmd_buffer' => packet.buffer(false), 'hazardous_check' => hazardous_check.to_s }
+      msg_hash['username'] = username if username
       if packet.identified?
         topic = "{#{scope}__CMD}TARGET__#{packet.target_name}"
-        Topic.write_topic(topic, { 'target_name' => packet.target_name, 'cmd_name' => packet.packet_name, 'cmd_buffer' => packet.buffer(false) }, '*', 100)
+        Topic.write_topic(topic, msg_hash.merge('target_name' => packet.target_name, 'cmd_name' => packet.packet_name), '*', 100)
       elsif target_names.length == 1
         topic = "{#{scope}__CMD}TARGET__#{target_names[0]}"
-        Topic.write_topic(topic, { 'target_name' => packet.target_name ? packet.target_name : 'UNKNOWN', 'cmd_name' => 'UNKNOWN', 'cmd_buffer' => packet.buffer(false) }, '*', 100)
+        Topic.write_topic(topic, msg_hash.merge('target_name' => packet.target_name ? packet.target_name : 'UNKNOWN', 'cmd_name' => 'UNKNOWN'), '*', 100)
       else
         raise "No route for command: #{packet.target_name ? packet.target_name : 'UNKNOWN'} #{packet.packet_name ? packet.packet_name : 'UNKNOWN'}"
       end
