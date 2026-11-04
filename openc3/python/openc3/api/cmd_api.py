@@ -241,9 +241,10 @@ def disable_cmd(*args, scope=OPENC3_SCOPE, manual=False):
 # @param data [String] The raw binary data
 def send_raw(interface_name, data, scope=OPENC3_SCOPE, manual=False):
     interface_name = interface_name.upper()
-    authorize(permission="cmd_raw", interface_name=interface_name, scope=scope, manual=manual)
+    # Capture the user so the raw transmission is attributable downstream
+    user = authorize(permission="cmd_raw", interface_name=interface_name, scope=scope, manual=manual)
     get_interface(interface_name, scope=scope)  # Check to make sure the interface exists
-    InterfaceTopic.write_raw(interface_name, data, scope=scope)
+    InterfaceTopic.write_raw(interface_name, data, scope=scope, username=_username_from_user(user))
 
 
 # Returns the raw buffer from the most recent specified command packet.
@@ -572,6 +573,15 @@ def _extract_target_command_parameter_names(method_name, *args):
     return (target_name, command_name, parameter_name)
 
 
+# Resolve the username to attribute a command to. Internal callers (no token,
+# e.g. microservices) are attributed to OPENC3_MICROSERVICE_NAME, otherwise 'anonymous'.
+def _username_from_user(user):
+    if not user:
+        user = {}
+        user["username"] = os.environ.get("OPENC3_MICROSERVICE_NAME")
+    return user["username"] if user.get("username") else "anonymous"
+
+
 def _cmd_implementation(
     method_name,
     *args,
@@ -673,7 +683,7 @@ def _cmd_implementation(
             raise RuntimeError(f"Invalid validate parameter: {kwargs['validate']}. Must be True or False.")
         validate = kwargs["validate"]
 
-    username = user["username"] if user and user["username"] else "anonymous"
+    username = _username_from_user(user)
     command = {
         "target_name": target_name,
         "cmd_name": cmd_name,

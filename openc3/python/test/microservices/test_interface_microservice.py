@@ -557,6 +557,33 @@ class TestInterfaceMicroservice(unittest.TestCase):
         result = handler.process_cmd(topic, msg_id, full_msg_hash, None)
         self.assertIsNone(result)
 
+    def test_write_raw_attributes_the_unknown_packet_to_the_requesting_user(self):
+        im = InterfaceMicroservice("DEFAULT__INTERFACE__INST_INT")
+        thread = threading.Thread(target=im.run)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(im.shutdown)
+        time.sleep(0.1)
+
+        handler = im.handler_thread
+        topic = "{DEFAULT__CMD}INTERFACE__INST_INT"
+        msg_id = f"{int(time.time() * 1000)}-0"
+
+        with patch("openc3.microservices.interface_microservice.CommandTopic.write_packet") as write_packet:
+            result = handler.process_cmd(topic, msg_id, {b"raw": b"\x00\x01\x02\x03", b"username": b"test_user"}, None)
+        self.assertEqual(result, "SUCCESS")
+        command = write_packet.call_args[0][0]
+        self.assertEqual(command.target_name, "UNKNOWN")
+        self.assertEqual(command.packet_name, "UNKNOWN")
+        self.assertEqual(command.buffer, b"\x00\x01\x02\x03")
+        self.assertEqual(command.extra["username"], "test_user")
+
+        # A raw write without a username is still recorded, attributed to anonymous
+        with patch("openc3.microservices.interface_microservice.CommandTopic.write_packet") as write_packet:
+            result = handler.process_cmd(topic, msg_id, {b"raw": b"\x00\x01\x02\x03"}, None)
+        self.assertEqual(result, "SUCCESS")
+        self.assertEqual(write_packet.call_args[0][0].extra["username"], "anonymous")
+
     def test_supports_optimize_throughput_option_for_backward_compatibility(self):
         # Update the model to use OPTIMIZE_THROUGHPUT option (legacy name)
         model = InterfaceModel(

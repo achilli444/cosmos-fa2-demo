@@ -133,8 +133,13 @@ module OpenC3
                   command = command.clone
                   command.buffer = msg_hash['raw']
                   command.received_time = Time.now
+                  # Attribute the raw transmission to the requesting user like a normal command
+                  username = msg_hash['username'].to_s
+                  username = 'anonymous' if username.empty?
+                  command.extra ||= {}
+                  command.extra['username'] = username
                   CommandTopic.write_packet(command, scope: @scope)
-                  @logger.info("write_raw sent #{msg_hash['raw'].length} bytes to #{@interface.name}", scope: @scope)
+                  @logger.info("write_raw sent #{msg_hash['raw'].length} bytes to #{@interface.name}", user: username, scope: @scope)
                   @interface.write_raw(msg_hash['raw'])
                 rescue => e
                   @logger.error "#{@interface.name}: write_raw: #{e.formatted}"

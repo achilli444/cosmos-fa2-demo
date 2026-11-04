@@ -77,7 +77,9 @@ module OpenC3
       end
     end
 
-    def self.write_raw(interface_name, data, timeout: nil, scope:)
+    # Write raw bytes to an interface. The username is carried with the request so the
+    # resulting UNKNOWN command packet and log message are attributable to the operator.
+    def self.write_raw(interface_name, data, username: nil, timeout: nil, scope:)
       interface_name = interface_name.upcase
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
 
@@ -85,7 +87,7 @@ module OpenC3
       ack_topic = "{#{scope}__ACKCMD}INTERFACE__#{interface_name}"
       Topic.update_topic_offsets([ack_topic], db_shard: db_shard)
 
-      cmd_id = Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'raw' => data }, '*', 100, db_shard: db_shard)
+      cmd_id = Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'raw' => data, 'username' => username.to_s }, '*', 100, db_shard: db_shard)
       time = Time.now
       while (Time.now - time) < timeout
         Topic.read_topics([ack_topic], db_shard: db_shard) do |_topic, _msg_id, msg_hash, _redis|

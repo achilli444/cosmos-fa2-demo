@@ -374,10 +374,28 @@ module OpenC3
         expect(@interface_data).to eql "\x00\x01\x02\x03"
       end
 
-      it "sends raw data to an interface" do
+      it "passes the requesting user with the raw data" do
+        expect(InterfaceTopic).to receive(:write_raw).with("INST_INT", "\x00\x01\x02\x03", username: 'anonymous', scope: 'DEFAULT')
+        @api.send_raw("inst_int", "\x00\x01\x02\x03")
+      end
+
+      it "includes the username in the interface command topic message" do
+        allow(Topic).to receive(:write_topic).and_call_original
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'raw' => "\x00\x01\x02\x03", 'username' => 'anonymous' }, '*', 100, db_shard: 0).and_call_original
         @api.send_raw("inst_int", "\x00\x01\x02\x03")
         sleep 0.001
         expect(@interface_data).to eql "\x00\x01\x02\x03"
+      end
+
+      it "requires cmd_raw authority even when the interface has no command targets" do
+        model = InterfaceModel.new(name: "EMPTY_INT", scope: "DEFAULT", target_names: [], cmd_target_names: [], tlm_target_names: [], config_params: ["interface.rb"])
+        model.create
+        model = InterfaceStatusModel.new(name: "EMPTY_INT", scope: "DEFAULT", state: "ACTIVE")
+        model.create
+        allow(@api).to receive(:authorize).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd_raw', interface_name: 'EMPTY_INT')).and_raise(AuthError.new("Token is invalid"))
+        expect(InterfaceTopic).not_to receive(:write_raw)
+        expect { @api.send_raw("EMPTY_INT", "\x00\x01\x02\x03") }.to raise_error(AuthError, "Token is invalid")
       end
     end
 

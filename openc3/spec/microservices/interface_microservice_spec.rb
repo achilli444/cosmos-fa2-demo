@@ -280,6 +280,34 @@ module OpenC3
         sleep 0.01
         im.shutdown
       end
+
+      it "attributes a raw write to the requesting user" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        all = InterfaceStatusModel.all(scope: "DEFAULT")
+        expect(all["INST_INT"]["state"]).to eql("ATTEMPTING")
+
+        expect(CommandTopic).to receive(:write_packet) do |command, scope|
+          expect(command.target_name).to eql("UNKNOWN")
+          expect(command.packet_name).to eql("UNKNOWN")
+          expect(command.buffer).to eql("\x00\x01\x02\x03")
+          expect(command.extra['username']).to eql("anonymous")
+          expect(scope).to eql({ :scope => "DEFAULT" })
+        end
+        capture_io do |stdout|
+          Thread.new { im.run }
+          sleep 0.01
+          all = InterfaceStatusModel.all(scope: "DEFAULT")
+          expect(all["INST_INT"]["state"]).to eql "CONNECTED"
+
+          @api.send_raw("INST_INT", "\x00\x01\x02\x03")
+          sleep 0.01
+          # The log line carries the user so the raw transmission is attributable
+          log_line = stdout.string.lines.find { |line| line.include?("write_raw sent 4 bytes to INST_INT") }
+          expect(log_line).to_not be_nil
+          expect(JSON.parse(log_line)['user']).to eql "anonymous"
+        end
+        im.shutdown
+      end
     end
 
     describe "connect" do
