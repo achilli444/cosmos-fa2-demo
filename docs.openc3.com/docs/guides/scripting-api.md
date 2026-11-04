@@ -2509,13 +2509,13 @@ queue_disable('TEST')
 
 <span class="badge badge--secondary since-heading">Since 6.8.0</span>
 
-Removes a command from the queue and executes it.
+Removes a command from the queue and executes it. A hazardous command is not sent unless `confirm_hazardous` is true: the server leaves it in the queue and raises an error containing the hazardous description so the operator can acknowledge it. Confirmations are logged with the user who executed the command.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Syntax">
 
 ```python
-queue_exec('<Queue Name>', '<Optional Index>')
+queue_exec('<Queue Name>', '<Optional Index>', confirm_hazardous=False)
 ```
 
 </TabItem>
@@ -2523,16 +2523,17 @@ queue_exec('<Queue Name>', '<Optional Index>')
 <TabItem value="ruby" label="Ruby Syntax">
 
 ```ruby
-queue_exec('<Queue Name>', '<Optional Index>')
+queue_exec('<Queue Name>', '<Optional Index>', confirm_hazardous: false)
 ```
 
 </TabItem>
 </Tabs>
 
-| Parameter  | Description                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------- |
-| Queue Name | Case sensitive name of the queue                                                                                |
-| Index      | Remove and execute at the specified index. If the index is not given the first command is removed and executed. |
+| Parameter         | Description                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Queue Name        | Case sensitive name of the queue                                                                                              |
+| Index             | Remove and execute at the specified index. If the index is not given the first command is removed and executed.               |
+| confirm_hazardous | Named parameter to acknowledge and send a hazardous command. Default is false, which refuses hazardous commands (HTTP 409). |
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Example">
@@ -2540,6 +2541,7 @@ queue_exec('<Queue Name>', '<Optional Index>')
 ```python
 queue_exec('TEST') # Removes and executes the first command in the queue
 queue_exec('TEST', index=5) # Removes and executes the command at index 5
+queue_exec('TEST', confirm_hazardous=True) # Acknowledges the hazard and sends a hazardous command
 ```
 
 </TabItem>
@@ -2549,6 +2551,7 @@ queue_exec('TEST', index=5) # Removes and executes the command at index 5
 ```ruby
 queue_exec('TEST') # Removes and executes the first command in the queue
 queue_exec('TEST', index: 5) # Removes and executes the command at index 5
+queue_exec('TEST', confirm_hazardous: true) # Acknowledges the hazard and sends a hazardous command
 ```
 
 </TabItem>
