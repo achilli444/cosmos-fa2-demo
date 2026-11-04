@@ -18,6 +18,9 @@
 require 'openc3/utilities/open_telemetry'
 
 class ApiController < ApplicationController
+  # Every JSON-RPC call is already logged with the user in #api below
+  skip_after_action :audit_log
+
   def ping
     render plain: 'OK'
   end

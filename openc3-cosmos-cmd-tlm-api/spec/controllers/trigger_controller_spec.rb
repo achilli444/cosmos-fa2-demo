@@ -124,6 +124,16 @@ RSpec.describe TriggerController, type: :controller do
   end
 
   describe "POST create" do
+    it "writes a user-attributed audit record" do
+      allow(OpenC3::Logger).to receive(:info)
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous POST \S+ trigger#create group=#{GROUP} scope=DEFAULT => success \(201\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      post :create, params: generate_trigger_hash.merge({scope: "DEFAULT"})
+      expect(response).to have_http_status(:created)
+    end
+
     it "returns a json hash of name and status code 201" do
       hash = generate_trigger_hash
       post :create, params: hash.merge({scope: "DEFAULT"})
@@ -368,6 +378,18 @@ RSpec.describe TriggerController, type: :controller do
   end
 
   describe "DELETE destroy" do
+    it "writes a user-attributed audit record" do
+      allow(OpenC3::Logger).to receive(:info)
+      post :create, params: generate_trigger_hash.merge({scope: "DEFAULT"})
+      expect(response).to have_http_status(:created)
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous DELETE \S+ trigger#destroy name=TRIG1 group=#{GROUP} scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      delete :destroy, params: {scope: "DEFAULT", name: "TRIG1", group: GROUP}
+      expect(response).to have_http_status(:success)
+    end
+
     it "returns a json hash of name and status code 404 if not found" do
       delete :destroy, params: {scope: "DEFAULT", name: "NOPE", group: GROUP}
       expect(response).to have_http_status(:not_found)

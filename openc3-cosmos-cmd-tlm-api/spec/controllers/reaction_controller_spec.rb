@@ -100,6 +100,39 @@ RSpec.describe ReactionController, type: :controller do
   end
 
   describe "POST create preserves action fields" do
+    it "writes a user-attributed audit record" do
+      generate_trigger
+      allow(OpenC3::Logger).to receive(:info)
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous POST \S+ reaction#create scope=DEFAULT => success \(201\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      post :create, params: generate_reaction_hash.merge({"scope" => "DEFAULT"})
+      expect(response).to have_http_status(:created)
+    end
+
+    it "writes user-attributed audit records for execute and destroy" do
+      generate_trigger
+      allow(OpenC3::Logger).to receive(:info)
+      post :create, params: generate_reaction_hash.merge({"scope" => "DEFAULT"})
+      expect(response).to have_http_status(:created)
+      name = JSON.parse(response.body, allow_nan: true, create_additions: true)["name"]
+
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous POST \S+ reaction#execute name=#{name} scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      post :execute, params: {scope: "DEFAULT", name: name}
+      expect(response).to have_http_status(:ok)
+
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous DELETE \S+ reaction#destroy name=#{name} scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      delete :destroy, params: {scope: "DEFAULT", name: name}
+      expect(response).to have_http_status(:ok)
+    end
+
     it "preserves the severity value on a notify action" do
       generate_trigger
       hash = generate_reaction_hash(

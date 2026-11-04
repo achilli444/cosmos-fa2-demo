@@ -16,11 +16,87 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/utilities/authorization'
+require 'openc3/utilities/logger'
 
 class ApplicationController < ActionController::API
   include OpenC3::Authorization
 
+  # Central audit record for every state-changing request (anything other than
+  # GET / HEAD / OPTIONS). Each record carries the acting user, the controller
+  # action, the resource identifiers, the scope and the outcome so that plugin,
+  # scope, target, trigger and reaction changes are attributable from the
+  # openc3_log_messages stream even when the controller itself logs nothing.
+  # Controllers that already log every request with the user (ApiController)
+  # opt out with skip_after_action :audit_log.
+  after_action :audit_log, if: :audit_request?
+
+  AUDIT_RESOURCE_PARAMS = %w(id name group key target screen notebook object_id new_name)
+  AUDIT_VALUE_MAX_LENGTH = 200
+  AUDIT_SCOPE_REGEX = /\A[A-Za-z0-9_-]+\z/
+
   private
+
+  def audit_request?
+    !(request.get? || request.head? || request.options?)
+  end
+
+  def audit_log
+    user = audit_user()
+    status = response.status
+    outcome = audit_outcome(status)
+    resource = audit_resource()
+    scope = audit_scope()
+    message = "Audit: #{user} #{request.method} #{request.path} #{controller_path}##{action_name}"
+    message += " #{resource}" unless resource.empty?
+    message += " scope=#{scope} => #{outcome} (#{status})"
+    other = {
+      audit_controller: controller_path,
+      audit_action: action_name,
+      audit_method: request.method,
+      audit_path: request.path,
+      audit_resource: resource,
+      audit_status: status,
+      audit_outcome: outcome,
+    }
+    OpenC3::Logger.info(message, scope: scope, user: user, type: OpenC3::Logger::LOG, other: other)
+  rescue StandardError => e
+    # The audit record must never break the response
+    log_error(e)
+  end
+
+  def audit_user
+    username()
+  rescue StandardError
+    'unknown'
+  end
+
+  def audit_outcome(status)
+    if status < 400
+      'success'
+    elsif status == 401 || status == 403
+      'denied'
+    else
+      'failure'
+    end
+  end
+
+  # Only identifiers are recorded, never request bodies (passwords, secrets, plugin
+  # variables and file contents must not land in the log stream)
+  def audit_resource
+    request.params.slice(*AUDIT_RESOURCE_PARAMS).map do |key, value|
+      value = value.to_s
+      value = "#{value[0, AUDIT_VALUE_MAX_LENGTH]}..." if value.length > AUDIT_VALUE_MAX_LENGTH
+      "#{key}=#{value}"
+    end.join(' ')
+  end
+
+  # Scope is only used to pick the log topic so reject anything but a plain name
+  def audit_scope
+    scope = params[:scope].to_s
+    return scope if scope.match?(AUDIT_SCOPE_REGEX)
+
+    'DEFAULT'
+  end
 
   def user_full_name()
     # For user_info see openc3/utilities/authorization and

@@ -37,4 +37,17 @@ RSpec.describe TargetsController, :type => :controller do
       expect(ret['message']).to eql('Invalid scope: ../DEFAULT')
     end
   end
+
+  describe "delete_modified" do
+    it "writes a user-attributed audit record on success" do
+      allow(OpenC3::TargetModel).to receive(:delete_modified).with('INST', scope: 'DEFAULT')
+      allow(OpenC3::Logger).to receive(:info)
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous POST \S+ targets#delete_modified id=INST scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: 'DEFAULT', user: 'anonymous')
+      )
+      post :delete_modified, params: { scope: 'DEFAULT', id: 'INST' }
+      expect(response).to have_http_status(:ok)
+    end
+  end
 end
