@@ -47,6 +47,7 @@ class Auth {
   setTokens() {}
   clearTokens() {
     delete localStorage.openc3Token
+    delete localStorage.openc3Username
   }
   // Navigating to login is idempotent: a page load with no token calls
   // updateToken once per request, and each of those would otherwise schedule
@@ -71,7 +72,8 @@ class Auth {
     location.reload()
   }
   user() {
-    return { name: 'Anonymous' }
+    // Core records the username the session was issued to at login
+    return { name: localStorage.openc3Username || 'Anonymous' }
   }
   userroles() {
     return ['admin']

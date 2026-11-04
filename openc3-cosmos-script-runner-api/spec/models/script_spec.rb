@@ -474,12 +474,27 @@ RSpec.describe Script, type: :model do
         end.to raise_error("offline_access token invalid for script")
       end
 
-      it "returns empty strings if service password isn't set for viewer users" do
+      it "runs Core analysis under a short-lived token bound to the requesting user and revokes it" do
+        setup_process_suite_mocks(language: "ruby")
+        allow(OpenC3::OfflineAccessModel).to receive(:get_model).and_return(nil)
+        expect(OpenC3::AuthModel).to receive(:generate_service_token)
+          .with(hash_including(username: "alice", ttl: Script::SUITE_ANALYSIS_TOKEN_TTL))
+          .and_return("svc_test_token")
+        expect(OpenC3::AuthModel).to receive(:terminate).with("svc_test_token")
+
+        stdout_result, _stderr_result, success = Script.process_suite("suite.rb", "suite content", username: "alice", scope: "DEFAULT")
+
+        expect(stdout_result).to eq '{"suite":"data"}'
+        expect(success).to be true
+      end
+
+      it "returns empty strings for Enterprise viewer users with no offline access token" do
         # No offline access model
         allow(OpenC3::OfflineAccessModel).to receive(:get_model).and_return(nil)
 
-        # Remove service password
+        # Enterprise, and the shared service password is no longer a fallback
         original_env = ENV.to_hash
+        ENV["OPENC3_API_CLIENT"] = "api"
         ENV.delete("OPENC3_SERVICE_PASSWORD")
 
         stdout_result, stderr_result, success = Script.process_suite("suite.rb", "suite content", username: "viewer", scope: "DEFAULT")

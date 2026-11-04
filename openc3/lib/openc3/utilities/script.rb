@@ -19,6 +19,7 @@ require 'tempfile'
 require 'openc3/utilities/target_file'
 require 'openc3/utilities/python_venv'
 require 'openc3/utilities/running_script'
+require 'openc3/models/auth_model'
 require 'openc3/script/suite'
 require 'openc3/script/suite_runner'
 require 'openc3/tools/test_runner/test'
@@ -83,7 +84,11 @@ class Script < OpenC3::TargetFile
                                  username: username, comment: comment)
   end
 
+  # Suite analysis is a bounded 10s run; its token should not outlive it by much
+  SUITE_ANALYSIS_TOKEN_TTL = 300
+
   def self.process_suite(name, contents, new_process: true, username: nil, scope:, python_venv: nil)
+    suite_token = nil
     python = false
     python = true if File.extname(name) == '.py'
 
@@ -137,17 +142,22 @@ class Script < OpenC3::TargetFile
           model.update
           raise "offline_access token invalid for script"
         end
+      elsif ENV['OPENC3_API_CLIENT']
+        # The viewer user doesn't have an offline access token (because they can't run scripts)
+        # but they still want to be able to view suite files
+        # Since processing a suite file requires running it they won't get the Suite chrome
+        # so return nothing here and allow Script Runner to simply view the suite file
+        return '', '', false
       else
-        process.environment['OPENC3_API_USER'] = ENV['OPENC3_API_USER'] || nil
-        if ENV['OPENC3_SERVICE_PASSWORD']
-          process.environment['OPENC3_API_PASSWORD'] = ENV['OPENC3_SERVICE_PASSWORD']
-        else
-          # The viewer user doesn't have an offline access token (because they can't run scripts)
-          # but they still want to be able to view suite files
-          # Since processing a suite file requires running it they won't get the Suite chrome
-          # so return nothing here and allow Script Runner to simply view the suite file
-          return '', '', false
-        end
+        # Core: analysis executes user code, so it runs as the requesting user
+        # with a token that only lives as long as the analysis itself
+        process.environment['OPENC3_API_USER'] = nil
+        suite_token = OpenC3::AuthModel.generate_service_token(
+          username: (username.nil? or username.empty?) ? OpenC3::AuthModel::ANONYMOUS_USERNAME : username,
+          purpose: "suite:#{scope}/#{name}",
+          ttl: SUITE_ANALYSIS_TOKEN_TTL
+        )
+        process.environment['OPENC3_API_PASSWORD'] = suite_token
       end
       process.environment['GEM_HOME'] = ENV['GEM_HOME'] || '/gems'
       process.environment['PYTHONUSERBASE'] = ENV['PYTHONUSERBASE'] || OpenC3::PythonVenv::DEFAULT_PYTHONUSERBASE
@@ -196,6 +206,7 @@ class Script < OpenC3::TargetFile
       stderr.close
       stderr.unlink
       success = process.exit_code == 0 if success
+      OpenC3::AuthModel.terminate(suite_token) if suite_token
     else
       require temp.path
       stdout_results = OpenC3::SuiteRunner.build_suites.as_json().to_json(allow_nan: true)

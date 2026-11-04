@@ -130,16 +130,18 @@ The `OPENC3_SR_BUCKET_*` credentials create a separate VersityGW user with limit
 
 ### Service Authentication
 
-| Variable                  | Default Value   | Description                                              |
-| ------------------------- | --------------- | -------------------------------------------------------- |
-| `OPENC3_SERVICE_PASSWORD` | `openc3service` | Service account password for internal API authentication |
+| Variable                     | Default Value | Description                                                                     |
+| ---------------------------- | ------------- | ------------------------------------------------------------------------------- |
+| `OPENC3_SERVICE_PASSWORD`    | _(unset)_     | Optional static service credential for external non-interactive callers         |
+| `OPENC3_SERVICE_TOKEN_TTL`   | `86400`       | Idle lifetime (seconds) of the per-run service tokens issued to scripts         |
 
-The `OPENC3_SERVICE_PASSWORD` is a backend service account password that allows internal COSMOS services to authenticate with the APIs without requiring a frontend user's credentials. It is used in the following contexts:
+COSMOS Core no longer runs anything under a shared service account. Every action is tied to the person who requested it:
 
-**COSMOS Core:**
+- **Script Runner**: When a user starts a script, Script Runner mints a short-lived service token (`svc_...`) bound to that user and hands it to the script process. The script authenticates to cmd-tlm-api with that token, so every command it sends is attributed to the user who pressed Start. The token is revoked when the script exits and expires on its own after `OPENC3_SERVICE_TOKEN_TTL` seconds without use.
+- **Suite analysis**: Analyzing a suite file executes user code, so it runs with a token bound to the requesting user that is revoked as soon as the analysis finishes (and expires after 5 minutes regardless).
+- **Command Queues**: Executing a queued command runs under the token of the user who pressed Execute; the command log records both the user who queued it and the user who executed it.
 
-- **Script Runner**: When spawning user scripts, the script process uses this password to authenticate with the COSMOS APIs (cmd-tlm-api) to send commands, retrieve telemetry, etc.
-- **Command Queues**: When executing queued commands, the queues controller uses this password for API authentication.
+`OPENC3_SERVICE_PASSWORD` remains available for external automation that cannot use a user session. If you set it, choose a unique value in `.env.local`: the historic default `openc3service` is refused at runtime, and the comparison is constant time. Clients present it to `/openc3-api/auth/verify_service` exactly as before.
 
 **COSMOS Enterprise (additional uses):**
 
@@ -283,9 +285,9 @@ OPENC3_BUCKET_PASSWORD=yournewpassword
 OPENC3_SR_BUCKET_PASSWORD=yournewsrpassword
 ```
 
-### Changing the Service Password
+### Setting the Service Password
 
-Add the value to `.env.local`:
+Only needed for external automation. Add a unique value to `.env.local` (the default `openc3service` is rejected):
 
 ```
 OPENC3_SERVICE_PASSWORD=yournewservicepassword
@@ -349,7 +351,7 @@ It's important to understand the distinction:
 - **Backend credentials** (this document): Service-to-service authentication between COSMOS containers. Users never enter these passwords directly.
 
 - **Frontend credentials**: User accounts for accessing COSMOS through a web browser.
-  - **COSMOS Core**: Uses password-based authentication. The first user who connects sets the password that all users share.
+  - **COSMOS Core**: Uses individual username/password accounts stored in Redis (Argon2 hashes). The first user who connects creates the first account (the default username is `admin`); that user can then create additional accounts by entering a new username and password on the login page while logged in. Each session token records the account it was issued to, which is what appears as the user on commands, scripts and audit log entries. Deployments upgraded from a single shared password keep working: the shared password becomes the `admin` account's password.
   - **COSMOS Enterprise**: Uses Keycloak for authentication with individual user accounts, roles, and permissions.
 
 The frontend password you set when first accessing COSMOS at `http://localhost:2900` is stored in Redis and is completely separate from the backend service credentials documented here.

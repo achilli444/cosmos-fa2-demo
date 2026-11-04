@@ -33,6 +33,7 @@ require 'openc3/models/offline_access_model'
 require 'openc3/models/environment_model'
 require 'openc3/models/script_engine_model'
 require 'openc3/models/script_status_model'
+require 'openc3/models/auth_model'
 require 'fileutils'
 
 if not defined? RAILS_ROOT
@@ -541,13 +542,19 @@ class RunningScript
           model.update
           raise "offline_access token invalid for script"
         end
+      elsif ENV['OPENC3_API_CLIENT']
+        # Enterprise user without an offline access token: there is no identity
+        # to run as, and the shared service account is not an acceptable substitute
+        raise "No authentication available for script"
       else
-        process.environment['OPENC3_API_USER'] = ENV.fetch('OPENC3_API_USER', nil)
-        if ENV['OPENC3_SERVICE_PASSWORD']
-          process.environment['OPENC3_API_PASSWORD'] = ENV.fetch('OPENC3_SERVICE_PASSWORD')
-        else
-          raise "No authentication available for script"
-        end
+        # Core: mint a short-lived token bound to the user who pressed Start so
+        # the script authenticates as them (not as a shared service account)
+        # and never sees a long-lived secret. run_script revokes it at exit.
+        process.environment['OPENC3_API_USER'] = nil
+        process.environment['OPENC3_API_PASSWORD'] = OpenC3::AuthModel.generate_service_token(
+          username: (username.nil? or username.empty?) ? OpenC3::AuthModel::ANONYMOUS_USERNAME : username,
+          purpose: "script:#{scope}/#{name}"
+        )
       end
       process.environment['GEM_HOME'] = ENV.fetch('GEM_HOME', nil)
 

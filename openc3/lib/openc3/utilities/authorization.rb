@@ -31,9 +31,12 @@ rescue LoadError
     module Authorization
       ANONYMOUS_USER = "anonymous"
 
+      # Mint a one-time token bound to the same identity as the caller's session
+      # so the identity survives into whatever the OTP is used for.
       def self.generate_otp(user)
-        raise AuthError.new("Invalid OTP user") unless user == ANONYMOUS_USER
-        return OpenC3::AuthModel.generate_session(otp: true)
+        username = user.is_a?(Hash) ? user['username'] : user
+        raise AuthError.new("Invalid OTP user") if username.nil? or username.to_s.empty?
+        return OpenC3::AuthModel.generate_session(otp: true, username: username)
       end
 
       private
@@ -47,12 +50,18 @@ rescue LoadError
           unless OpenC3::AuthModel.verify(token)
             raise AuthError.new("Token is invalid")
           end
+          # Identity recorded on the session/service token at login so commands,
+          # scripts and audit logs name a person rather than 'anonymous'
+          return user_info(token)
         end
-        return ANONYMOUS_USER
+        return { 'username' => ANONYMOUS_USER }
       end
 
-      def user_info(_token)
-        {} # Enterprise does stuff here
+      def user_info(token)
+        # Enterprise reads the Keycloak JWT here. Core reads the identity the
+        # session or service token was issued to (see AuthModel#identity).
+        return { 'username' => ANONYMOUS_USER } if token.nil? or token.empty?
+        return OpenC3::AuthModel.identity(token)
       end
     end
   end

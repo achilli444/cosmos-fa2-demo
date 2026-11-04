@@ -9,6 +9,7 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+import hmac
 import json
 import os
 import time
@@ -514,3 +515,24 @@ class TestOpenC3KeycloakAuthentication(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOpenC3AuthenticationServiceCredential(unittest.TestCase):
+    """Per-run service tokens and the static service password select the service endpoint"""
+
+    def test_service_token_prefix_is_a_service_credential(self):
+        self.assertTrue(OpenC3Authentication.service_credential("svc_" + "A" * 43))
+
+    @patch("openc3.utilities.authentication.OPENC3_SERVICE_PASSWORD", "unique-service-secret")
+    def test_static_service_password_is_compared_in_constant_time(self):
+        with patch("openc3.utilities.authentication.hmac.compare_digest", wraps=hmac.compare_digest) as compare:
+            self.assertTrue(OpenC3Authentication.service_credential("unique-service-secret"))
+            self.assertFalse(OpenC3Authentication.service_credential("unique-service-secreX"))
+            self.assertFalse(OpenC3Authentication.service_credential("short"))
+            self.assertEqual(compare.call_count, 3)
+
+    @patch("openc3.utilities.authentication.OPENC3_SERVICE_PASSWORD", None)
+    def test_user_password_is_not_a_service_credential(self):
+        self.assertFalse(OpenC3Authentication.service_credential("password"))
+        self.assertFalse(OpenC3Authentication.service_credential(None))
+        self.assertFalse(OpenC3Authentication.service_credential(""))

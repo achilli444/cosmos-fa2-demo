@@ -229,6 +229,10 @@ Rails.application.routes.draw do
     post "/auth/verify-token" => "auth#verify_token"
     post "/auth/verify_service" => "auth#verify_service"
     post "/auth/set" => "auth#set"
+  post "/auth/logout" => "auth#logout"
+  get "/auth/whoami" => "auth#whoami"
+  get "/auth/users" => "auth#users"
+  delete "/auth/users/:username" => "auth#delete_user"
     get "/auth/otp" => "auth#get_otp"
 
     get "/internal/health" => "internal_health#health"

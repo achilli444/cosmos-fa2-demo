@@ -68,7 +68,7 @@ ENV['OPENC3_REDIS_EPHEMERAL_HOSTNAME'] = '127.0.0.1'
 ENV['OPENC3_REDIS_EPHEMERAL_PORT'] = '6380'
 # Set some usernames / passwords
 ENV['OPENC3_API_PASSWORD'] = 'password'
-ENV['OPENC3_SERVICE_PASSWORD'] = 'openc3service'
+ENV['OPENC3_SERVICE_PASSWORD'] = 'test-service-secret-not-default'
 ENV['OPENC3_REDIS_USERNAME'] = 'openc3'
 ENV['OPENC3_REDIS_PASSWORD'] = 'openc3password'
 ENV['OPENC3_BUCKET_USERNAME'] = 'openc3bucket'

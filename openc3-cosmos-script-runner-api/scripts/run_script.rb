@@ -31,6 +31,13 @@ OpenC3::Bucket.getClient()
 OpenC3::Store.instance
 OpenC3::EphemeralStore.instance
 
+# The per-run token minted for this script by RunningScript.spawn; revoked when
+# the script exits so it cannot be reused
+script_run_token = ENV['OPENC3_API_PASSWORD']
+at_exit do
+  OpenC3::OpenC3Authentication.revoke(script_run_token) if OpenC3::AuthModel.service_token?(script_run_token)
+end
+
 # Clear ENV vars for security purposes
 ENV['OPENC3_BUCKET_USERNAME'] = nil
 ENV['OPENC3_BUCKET_PASSWORD'] = nil

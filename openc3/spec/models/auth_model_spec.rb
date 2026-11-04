@@ -137,9 +137,111 @@ module OpenC3
       end
 
       it "raises when stored password hash is SHA256" do
-        @redis.set(PW_HASH_PRIMARY_KEY, Digest::SHA256.hexdigest(AUTH_INITIAL_PASSWORD))
+        @redis.hset(AuthModel::USERS_KEY, AuthModel::LEGACY_USERNAME, Digest::SHA256.hexdigest(AUTH_INITIAL_PASSWORD))
         expect{ AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :any) }.to \
           raise_error(/invalid password hash/)
+      end
+    end
+    describe "individual accounts" do
+      it "treats the legacy password as the legacy account" do
+        expect(AuthModel.users).to eq([AuthModel::LEGACY_USERNAME])
+        expect(AuthModel.user?(AuthModel::LEGACY_USERNAME)).to be true
+        expect(AuthModel.verify_user(AuthModel::LEGACY_USERNAME, AUTH_INITIAL_PASSWORD)).to be true
+      end
+
+      it "creates accounts with their own passwords" do
+        AuthModel.set_user('alice', 'alicepass1')
+        AuthModel.set_user('bob', 'bobpassword')
+        expect(AuthModel.users).to eq([AuthModel::LEGACY_USERNAME, 'alice', 'bob'])
+        expect(AuthModel.verify_user('alice', 'alicepass1')).to be true
+        expect(AuthModel.verify_user('alice', 'bobpassword')).to be false
+        expect(AuthModel.verify_user('bob', 'alicepass1')).to be false
+        expect(AuthModel.verify_user('nobody', 'alicepass1')).to be false
+        # The shared password is not accepted for an individual account
+        expect(AuthModel.verify_user('alice', AUTH_INITIAL_PASSWORD)).to be false
+      end
+
+      it "rejects bad usernames and short passwords" do
+        expect { AuthModel.set_user('a b', 'longenough') }.to raise_error(/username must be/)
+        expect { AuthModel.set_user('', 'longenough') }.to raise_error(/username must not/)
+        expect { AuthModel.set_user('alice', 'short') }.to raise_error(/at least/)
+      end
+
+      it "requires the old password to change an account and revokes only its sessions" do
+        AuthModel.set_user('alice', 'alicepass1')
+        alice = AuthModel.generate_session(username: 'alice')
+        admin = AuthModel.generate_session(username: AuthModel::LEGACY_USERNAME)
+        expect { AuthModel.set_user('alice', 'newalicepass') }.to raise_error(/old_password must not/)
+        expect { AuthModel.set_user('alice', 'newalicepass', 'wrong') }.to raise_error(/old_password incorrect/)
+        AuthModel.set_user('alice', 'newalicepass', 'alicepass1')
+        expect(AuthModel.verify_user('alice', 'newalicepass')).to be true
+        expect(AuthModel.verify(alice)).to be false
+        expect(AuthModel.verify(admin)).to be true
+      end
+
+      it "deletes an account and its sessions but never the last one" do
+        AuthModel.set_user('alice', 'alicepass1')
+        alice = AuthModel.generate_session(username: 'alice')
+        AuthModel.delete_user('alice')
+        expect(AuthModel.user?('alice')).to be false
+        expect(AuthModel.verify(alice)).to be false
+        expect { AuthModel.delete_user(AuthModel::LEGACY_USERNAME) }.to raise_error(/last account/)
+        expect { AuthModel.delete_user('ghost') }.to raise_error(/unknown user/)
+      end
+
+      it "binds sessions to the user that logged in" do
+        token = AuthModel.generate_session(username: 'alice')
+        expect(AuthModel.identity(token)).to eq({ 'username' => 'alice', 'service' => false })
+        # Sessions created before accounts existed only stored a timestamp
+        @redis.hset(AuthModel::SESSIONS_KEY, 'ses_old', Time.now.iso8601)
+        expect(AuthModel.identity('ses_old')['username']).to eq('anonymous')
+        expect(AuthModel.identity(nil)['username']).to eq('anonymous')
+      end
+    end
+
+    describe "service tokens" do
+      it "are accepted like sessions, carry the user and can be revoked" do
+        token = AuthModel.generate_service_token(username: 'alice', purpose: 'script')
+        expect(AuthModel.service_token?(token)).to be true
+        expect(AuthModel.verify(token)).to be true
+        expect(AuthModel.identity(token)).to eq({ 'username' => 'alice', 'service' => false })
+        expect(@redis.ttl(AuthModel::SERVICE_TOKEN_KEY_PREFIX + token)).to be > 0
+        AuthModel.terminate(token)
+        expect(@redis.exists(AuthModel::SERVICE_TOKEN_KEY_PREFIX + token)).to eq(0)
+        AuthModel.logout # drop caches
+        expect(AuthModel.verify(token)).to be false
+      end
+
+      it "require a user" do
+        expect { AuthModel.generate_service_token(username: nil, purpose: 'script') }.to raise_error(/username required/)
+      end
+
+      it "reject tokens that were never issued" do
+        expect(AuthModel.verify('svc_' + 'A' * 43)).to be false
+      end
+    end
+
+    describe "service password" do
+      after(:each) { ENV.delete('OPENC3_SERVICE_PASSWORD') }
+
+      it "is compared in constant time" do
+        ENV['OPENC3_SERVICE_PASSWORD'] = 'a-unique-service-secret'
+        expect(OpenSSL).to receive(:fixed_length_secure_compare).at_least(:once).and_call_original
+        expect(AuthModel.verify('a-unique-service-secret', service_only: true)).to be true
+        expect(AuthModel.verify('a-unique-service-secreX', service_only: true)).to be false
+        expect(AuthModel.verify('short', service_only: true)).to be false
+        expect(AuthModel.identity('a-unique-service-secret')).to eq({ 'username' => 'service', 'service' => true })
+      end
+
+      it "never accepts the insecure default shipped in .env" do
+        ENV['OPENC3_SERVICE_PASSWORD'] = 'openc3service'
+        expect(AuthModel.verify('openc3service', service_only: true)).to be false
+        expect(AuthModel.verify('openc3service')).to be false
+      end
+
+      it "is not accepted when unset" do
+        expect(AuthModel.verify(nil, service_only: true)).to be false
+        expect(AuthModel.verify('', service_only: true)).to be false
       end
     end
   end
