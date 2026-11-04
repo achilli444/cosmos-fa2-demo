@@ -11,29 +11,34 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
-require 'uri'
-require 'openc3/utilities/logger'
+require 'openc3/utilities/package_source_url'
 
 module OpenC3
   class PypiUrl
-    DEFAULT = 'https://pypi.org/simple'
+    # The pypi_url setting holds the base url; callers append /simple
+    BASE_DEFAULT = 'https://pypi.org'
+    DEFAULT = "#{BASE_DEFAULT}/simple"
 
-    # Validate that a resolved pypi_url is an http(s) URL before it is handed to
-    # pip. The value can come from a user-writable setting or ENV, so a malformed
-    # or non-http value is rejected and replaced with the default rather than
-    # passed through to pip.
+    # Validate a resolved pypi_url against the PackageSourceUrl policy (https,
+    # optional admin host allow-list) before it is handed to pip. The value can
+    # come from a user-writable setting or ENV, so a malformed or non-compliant
+    # value is rejected and replaced with the default rather than passed through
+    # to pip.
     #
     # @param pypi_url [String] the resolved pypi index url to validate
     # @return [String] the original url if valid, otherwise DEFAULT
+    # @raise [PackageSourceUrl::Error] if DEFAULT is not permitted either
     def self.validate(pypi_url)
-      uri = URI.parse(pypi_url)
-      unless uri.is_a?(URI::HTTP) && !uri.host.to_s.empty?
-        raise URI::InvalidURIError, "not an http(s) URL"
-      end
-      pypi_url
-    rescue URI::InvalidURIError => e
-      Logger.error("Invalid pypi_url '#{pypi_url}' (#{e.message}); falling back to #{DEFAULT}")
-      DEFAULT
+      PackageSourceUrl.validate(pypi_url, default: DEFAULT, label: 'pypi_url')
+    end
+
+    # Raise rather than fall back, for validating a value before it is stored
+    #
+    # @param pypi_url [String] a pypi index base url
+    # @return [String] pypi_url
+    # @raise [PackageSourceUrl::Error] describing why the url is rejected
+    def self.check!(pypi_url)
+      PackageSourceUrl.check!(pypi_url)
     end
   end
 end

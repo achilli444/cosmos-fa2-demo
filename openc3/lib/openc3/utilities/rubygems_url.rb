@@ -11,29 +11,32 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
-require 'uri'
-require 'openc3/utilities/logger'
+require 'openc3/utilities/package_source_url'
 
 module OpenC3
   class RubygemsUrl
     DEFAULT = 'https://rubygems.org'
 
-    # Validate that a resolved rubygems_url is an http(s) URL before it is used
-    # as a Gem source. The value can come from a user-writable setting or ENV, so
-    # a malformed or non-http value is rejected and replaced with the default
+    # Validate a resolved rubygems_url against the PackageSourceUrl policy
+    # (https, optional admin host allow-list) before it is used as a Gem
+    # source. The value can come from a user-writable setting or ENV, so a
+    # malformed or non-compliant value is rejected and replaced with the default
     # rather than passed through to RubyGems.
     #
     # @param rubygems_url [String] the resolved rubygems source url to validate
     # @return [String] the original url if valid, otherwise DEFAULT
+    # @raise [PackageSourceUrl::Error] if DEFAULT is not permitted either
     def self.validate(rubygems_url)
-      uri = URI.parse(rubygems_url)
-      unless uri.is_a?(URI::HTTP) && !uri.host.to_s.empty?
-        raise URI::InvalidURIError, "not an http(s) URL"
-      end
-      rubygems_url
-    rescue URI::InvalidURIError => e
-      Logger.error("Invalid rubygems_url '#{rubygems_url}' (#{e.message}); falling back to #{DEFAULT}")
-      DEFAULT
+      PackageSourceUrl.validate(rubygems_url, default: DEFAULT, label: 'rubygems_url')
+    end
+
+    # Raise rather than fall back, for validating a value before it is stored
+    #
+    # @param rubygems_url [String] a rubygems source url
+    # @return [String] rubygems_url
+    # @raise [PackageSourceUrl::Error] describing why the url is rejected
+    def self.check!(rubygems_url)
+      PackageSourceUrl.check!(rubygems_url)
     end
   end
 end

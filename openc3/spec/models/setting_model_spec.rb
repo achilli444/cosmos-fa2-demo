@@ -29,7 +29,11 @@ module OpenC3
       when :boolean then 'true'
       when :json, :json_text
         JSON.generate((details[:require_keys] || ['key']).to_h { |key| [key, {}] })
-      else details[:values] ? details[:values].first : 'x'
+      else
+        if details[:package_source] then 'https://mirror.example.com'
+        elsif details[:values] then details[:values].first
+        else 'x'
+        end
       end
     end
 
@@ -504,6 +508,37 @@ module OpenC3
         # The scan is case sensitive. Nothing reads a lowercase variable, so
         # pinning it here says the silence is deliberate
         expect(SettingModel.parse_defaults_env({ 'openc3_setting_time_zone' => 'UTC' })).to eql({})
+      end
+    end
+
+    describe "package source settings" do
+      it "rejects a plain http rubygems_url / pypi_url at save time" do
+        expect { SettingModel.set({ name: 'rubygems_url', data: 'http://gems.example.com' }, scope: 'DEFAULT') }
+          .to raise_error(/Invalid value "http:\/\/gems.example.com" for setting 'rubygems_url': plain http is not permitted/)
+        expect { SettingModel.set({ name: 'pypi_url', data: 'http://pypi.example.com' }, scope: 'DEFAULT') }
+          .to raise_error(/plain http is not permitted/)
+        expect(SettingModel.get(name: 'rubygems_url')).to be_nil
+      end
+
+      it "rejects a host that is not on OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS at save time" do
+        allow(ENV).to receive(:[]).and_call_original
+        allow(ENV).to receive(:[]).with(PackageSourceUrl::ALLOWED_HOSTS_ENV).and_return('nexus.example.com')
+        expect { SettingModel.set({ name: 'pypi_url', data: 'https://pypi.org' }, scope: 'DEFAULT') }
+          .to raise_error(/host 'pypi.org' is not listed in OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS/)
+        SettingModel.set({ name: 'pypi_url', data: 'https://nexus.example.com/repository/pypi' }, scope: 'DEFAULT')
+        expect(SettingModel.get(name: 'pypi_url')['data']).to eql 'https://nexus.example.com/repository/pypi'
+      end
+
+      it "accepts https sources and leaves other settings unchecked" do
+        SettingModel.set({ name: 'rubygems_url', data: 'https://rubygems.org' }, scope: 'DEFAULT')
+        SettingModel.set({ name: 'source_url', data: 'not a url' }, scope: 'DEFAULT')
+        expect(SettingModel.get(name: 'rubygems_url')['data']).to eql 'https://rubygems.org'
+      end
+
+      it "reports a bad OPENC3_SETTING_RUBYGEMS_URL from initsettings" do
+        expect { SettingModel.validate_setting!('rubygems_url', 'ftp://gems.example.com') }
+          .to raise_error(/for setting 'rubygems_url': not an http\(s\) URL/)
+        expect { SettingModel.validate_setting!('pypi_url', 'https://pypi.org') }.to_not raise_error
       end
     end
 

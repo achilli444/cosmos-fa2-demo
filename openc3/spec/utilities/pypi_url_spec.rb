@@ -23,14 +23,29 @@ module OpenC3
           expect(PypiUrl.validate(url)).to eql url
         end
 
-        it "returns http urls unchanged" do
-          url = "http://pypi.example.com/simple"
+        it "allows a host with a port" do
+          url = "https://localhost:8080/simple"
           expect(PypiUrl.validate(url)).to eql url
         end
 
-        it "allows a host with a port" do
-          url = "http://localhost:8080/simple"
-          expect(PypiUrl.validate(url)).to eql url
+        it "rejects plain http unless OPENC3_PACKAGE_SOURCE_ALLOW_HTTP is set" do
+          expect(Logger).to receive(:error).with(/plain http is not permitted/)
+          expect(PypiUrl.validate("http://pypi.example.com/simple")).to eql PypiUrl::DEFAULT
+        end
+
+        it "allows plain http when OPENC3_PACKAGE_SOURCE_ALLOW_HTTP is set, with a warning" do
+          allow(ENV).to receive(:[]).and_call_original
+          allow(ENV).to receive(:[]).with(PackageSourceUrl::ALLOW_HTTP_ENV).and_return('1')
+          expect(Logger).to receive(:warn).with(/plain http/)
+          expect(PypiUrl.validate("http://pypi.example.com/simple")).to eql "http://pypi.example.com/simple"
+        end
+
+        it "rejects a host that is not on OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS" do
+          allow(ENV).to receive(:[]).and_call_original
+          allow(ENV).to receive(:[]).with(PackageSourceUrl::ALLOWED_HOSTS_ENV).and_return('pypi.org,nexus.example.com:8443')
+          expect(Logger).to receive(:error).with(/not listed in OPENC3_PACKAGE_SOURCE_ALLOWED_HOSTS/)
+          expect(PypiUrl.validate("https://evil.example.com/simple")).to eql PypiUrl::DEFAULT
+          expect(PypiUrl.validate("https://nexus.example.com:8443/simple")).to eql "https://nexus.example.com:8443/simple"
         end
 
         it "does not log an error" do

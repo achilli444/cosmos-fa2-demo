@@ -647,7 +647,6 @@ module OpenC3
 
           allow(ENV).to receive(:[]).and_call_original
           allow(ENV).to receive(:[]).with('OPENC3_USE_UV').and_return(use_uv)
-          allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return(nil)
           allow(ENV).to receive(:[]).with('PYPI_URL').and_return(nil)
         end
 
@@ -793,16 +792,15 @@ module OpenC3
         allow(ENV).to receive(:[]).and_call_original
       end
 
-      it "returns index args without trusted-host by default" do
-        allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return(nil)
+      it "returns index args without trusted-host" do
         expect(PluginModel.build_pypi_args("https://custom.pypi.example.com/simple")).to \
           eql ["-i", "https://custom.pypi.example.com/simple"]
       end
 
-      it "adds the trusted-host derived from the url when PIP_ENABLE_TRUSTED_HOST is set" do
+      it "never adds --trusted-host, even if PIP_ENABLE_TRUSTED_HOST is set" do
         allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return('1')
         expect(PluginModel.build_pypi_args("https://custom.pypi.example.com/simple")).to \
-          eql ["-i", "https://custom.pypi.example.com/simple", "--trusted-host", "custom.pypi.example.com"]
+          eql ["-i", "https://custom.pypi.example.com/simple"]
       end
     end
 
@@ -1037,7 +1035,6 @@ module OpenC3
         allow(PluginModel).to receive(:get_setting).and_return(nil)
         allow(ENV).to receive(:[]).and_call_original
         allow(ENV).to receive(:[]).with('PYPI_URL').and_return(nil)
-        allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return(nil)
 
         # uvinstall succeeds
         success_status = double("status", success?: true)
@@ -1064,7 +1061,6 @@ module OpenC3
         allow(PluginModel).to receive(:get_setting).and_return(nil)
         allow(ENV).to receive(:[]).and_call_original
         allow(ENV).to receive(:[]).with('PYPI_URL').and_return(nil)
-        allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return(nil)
 
         # uvinstall fails
         failure_status = double("status", success?: false)
