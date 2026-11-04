@@ -60,12 +60,17 @@ jobs:
         #   fetch-depth: 0 # all history for all branches and tags
       - name: Set up Ruby ${{ matrix.ruby-version }}
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
-        env:
-          OPENC3_DEVEL: ../openc3
         with:
           ruby-version: ${{ matrix.ruby-version }}
-          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
-          working-directory: openc3-cosmos-cmd-tlm-api
+      # The committed Gemfile.lock pins openc3 to the rubygems.org release (what the
+      # container build installs in frozen mode). These tests run against the in-repo
+      # gem via OPENC3_DEVEL, so install without frozen mode; setup-ruby's
+      # bundler-cache would enable deployment mode and reject the path override.
+      - name: Install gems
+        run: bundle install
+        working-directory: openc3-cosmos-cmd-tlm-api
+        env:
+          OPENC3_DEVEL: ../openc3
       - name: Build OpenC3
         run: bundle install; bundle exec rake build
         working-directory: openc3
@@ -110,12 +115,17 @@ jobs:
         #   fetch-depth: 0
       - name: Set up Ruby ${{ matrix.ruby-version }}
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
-        env:
-          OPENC3_DEVEL: ../openc3
         with:
           ruby-version: ${{ matrix.ruby-version }}
-          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
-          working-directory: openc3-cosmos-script-runner-api
+      # The committed Gemfile.lock pins openc3 to the rubygems.org release (what the
+      # container build installs in frozen mode). These tests run against the in-repo
+      # gem via OPENC3_DEVEL, so install without frozen mode; setup-ruby's
+      # bundler-cache would enable deployment mode and reject the path override.
+      - name: Install gems
+        run: bundle install
+        working-directory: openc3-cosmos-script-runner-api
+        env:
+          OPENC3_DEVEL: ../openc3
       - name: Build OpenC3
         run: bundle install; bundle exec rake build
         working-directory: openc3

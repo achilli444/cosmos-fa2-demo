@@ -22,7 +22,7 @@ gem 'prometheus-client', '~> 4.0'
 # gem 'bcrypt', '~> 3.1.7'
 
 # Reduces boot times through caching; required in config/boot.rb
-gem 'bootsnap', '>= 1.9.3', require: false
+gem 'bootsnap', '~> 1.18', require: false
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin AJAX possible
 gem 'rack-cors', '~> 3.0'
@@ -34,7 +34,9 @@ gem 'rails_semantic_logger', '~> 4.17'
 gem 'down', '~> 5.4', '>= 5.4.2'
 
 # Only define development/test gems if not in production build
-# Set SKIP_DEV_GEMS=1 in Dockerfile to exclude these groups entirely
+# The Dockerfile skips these groups with `bundle config without` so the Gemfile stays
+# identical to the committed Gemfile.lock (frozen install). SKIP_DEV_GEMS=1 would make
+# the Gemfile diverge from the lock and fail the build.
 unless ENV['SKIP_DEV_GEMS']
   group :development, :test do
     # Call 'byebug' anywhere in the code to stop execution and get a debugger console
@@ -53,7 +55,7 @@ unless ENV['SKIP_DEV_GEMS']
 end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
-gem 'tzinfo-data'
+gem 'tzinfo-data', '~> 1.2025'
 
 if ENV['OPENC3_DEVEL']
   gem 'openc3', :path => ENV['OPENC3_DEVEL']
