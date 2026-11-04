@@ -292,7 +292,8 @@ module OpenC3
               # Security relevant: record who called what from where (never the token)
               SecurityAudit.log(event: 'api_request', outcome: SecurityAudit::FAILURE,
                                 reason: "#{e.class.name.split('::').last}: #{e.message}",
-                                method: request.method, source: SecurityAudit.source_from_headers(request_headers))
+                                method: request.method, source: SecurityAudit.source_from_headers(request_headers),
+                                scope: (request.keyword_params || {})[:scope])
             else
               # Filter out the framework stack trace (rails, rack, puma etc)
               lines = e.formatted.split("\n")
