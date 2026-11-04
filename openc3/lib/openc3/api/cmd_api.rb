@@ -166,11 +166,14 @@ module OpenC3
     def send_raw(interface_name, data, manual: false, scope: $openc3_scope, token: $openc3_token)
       interface_name = interface_name.upcase
       interface = get_interface(interface_name, scope: scope, token: token)
+      # Always require raw command authority on the interface itself (even with no mapped targets)
+      # and capture the user so the raw transmission is attributable downstream
+      user = authorize(permission: 'cmd_raw', interface_name: interface_name, manual: manual, scope: scope, token: token)
       # Verify we have command authority on all the targets mapped to this interface
       interface['cmd_target_names'].each do |target_name|
         authorize(permission: 'cmd_raw', interface_name: interface_name, target_name: target_name, manual: manual, scope: scope, token: token)
       end
-      InterfaceTopic.write_raw(interface_name, data, scope: scope)
+      InterfaceTopic.write_raw(interface_name, data, username: _username_from_user(user), scope: scope)
     end
 
     # Returns the raw buffer from the most recent specified command packet.
@@ -448,6 +451,16 @@ module OpenC3
       return [target_name, command_name, parameter_name]
     end
 
+    # Resolve the username to attribute a command to. Internal callers (no token,
+    # e.g. microservices) are attributed to OPENC3_MICROSERVICE_NAME, otherwise 'anonymous'.
+    def _username_from_user(user)
+      if user.nil?
+        user = {}
+        user['username'] = ENV['OPENC3_MICROSERVICE_NAME']
+      end
+      user['username'] ? user['username'] : 'anonymous'
+    end
+
     # NOTE: When adding new keywords to this method, make sure to update script/commands.rb
     def _cmd_implementation(method_name, *args, range_check:, hazardous_check:, raw:, timeout: nil, log_message: nil, manual: false, validate: true, queue: nil,
                             scope: $openc3_scope, token: $openc3_token, **kwargs)
@@ -520,7 +533,7 @@ module OpenC3
         end
       end
       cmd_string = _build_cmd_output_string(method_name, target_name, cmd_name, cmd_params, packet)
-      username = user && user['username'] ? user['username'] : 'anonymous'
+      username = _username_from_user(user)
       command = {
         'target_name' => target_name,
         'cmd_name' => cmd_name,

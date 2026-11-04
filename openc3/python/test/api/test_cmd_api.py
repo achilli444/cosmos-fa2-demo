@@ -50,6 +50,8 @@ from openc3.models.interface_status_model import InterfaceStatusModel
 from openc3.models.microservice_model import MicroserviceModel
 from openc3.packets.packet import Packet
 from openc3.top_level import HazardousError
+from openc3.topics.interface_topic import InterfaceTopic
+from openc3.topics.topic import Topic
 from test.test_helper import capture_io, mock_redis, setup_system
 
 
@@ -549,6 +551,24 @@ class TestCmdApi(unittest.TestCase):
 
     def test_send_raw_sends_raw_data_to_an_interface(self):
         send_raw("inst_int", b"\x00\x01\x02\x03")
+        time.sleep(0.001)
+        self.assertEqual(MyInterface.interface_data, b"\x00\x01\x02\x03")
+
+    def test_send_raw_passes_the_requesting_user_with_the_raw_data(self):
+        with patch.object(InterfaceTopic, "write_raw") as write_raw:
+            send_raw("inst_int", b"\x00\x01\x02\x03")
+        write_raw.assert_called_once_with("INST_INT", b"\x00\x01\x02\x03", scope="DEFAULT", username="anonymous")
+
+    def test_send_raw_includes_the_username_in_the_interface_command_topic_message(self):
+        with patch.object(Topic, "write_topic", wraps=Topic.write_topic) as write_topic:
+            send_raw("inst_int", b"\x00\x01\x02\x03")
+        write_topic.assert_any_call(
+            "{DEFAULT__CMD}INTERFACE__INST_INT",
+            {"raw": b"\x00\x01\x02\x03", "username": "anonymous"},
+            "*",
+            100,
+            db_shard=0,
+        )
         time.sleep(0.001)
         self.assertEqual(MyInterface.interface_data, b"\x00\x01\x02\x03")
 

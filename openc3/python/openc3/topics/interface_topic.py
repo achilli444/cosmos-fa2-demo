@@ -77,8 +77,10 @@ class InterfaceTopic(Topic):
                         if result is not None:
                             Topic.write_ack(topic, result, msg_id, db_shard=db_shard)
 
+    # Write raw bytes to an interface. The username is carried with the request so the
+    # resulting UNKNOWN command packet and log message are attributable to the operator.
     @classmethod
-    def write_raw(cls, interface_name, data, scope, timeout=None):
+    def write_raw(cls, interface_name, data, scope, timeout=None, username=None):
         interface_name = interface_name.upper()
         db_shard = cls._db_shard_for_interface(interface_name, scope)
 
@@ -88,7 +90,11 @@ class InterfaceTopic(Topic):
         Topic.update_topic_offsets([ack_topic], db_shard=db_shard)
 
         cmd_id = Topic.write_topic(
-            f"{{{scope}__CMD}}INTERFACE__{interface_name}", {"raw": data}, "*", 100, db_shard=db_shard
+            f"{{{scope}__CMD}}INTERFACE__{interface_name}",
+            {"raw": data, "username": username or ""},
+            "*",
+            100,
+            db_shard=db_shard,
         )
         start_time = time.time()
         while (time.time() - start_time) < timeout:

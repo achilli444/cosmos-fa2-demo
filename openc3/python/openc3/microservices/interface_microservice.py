@@ -165,9 +165,14 @@ class InterfaceCmdHandlerThread:
                         command = command.clone()
                         command.buffer = msg_hash[b"raw"]
                         command.received_time = datetime.now(timezone.utc)
+                        # Attribute the raw transmission to the requesting user like a normal command
+                        username = msg_hash.get(b"username", b"").decode() or "anonymous"
+                        command.extra = command.extra or {}
+                        command.extra["username"] = username
                         CommandTopic.write_packet(command, scope=self.scope)
                         self.logger.info(
                             f"write_raw sent {len(msg_hash[b'raw'])} bytes to {self.interface.name}",
+                            user=username,
                             scope=self.scope,
                         )
                         self.interface.write_raw(msg_hash[b"raw"])
