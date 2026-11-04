@@ -234,6 +234,8 @@ services:
       - OPENC3_AUTH_RATE_LIMIT_WITHIN
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
+      - OPENC3_SECRETS_KEY
+      - OPENC3_SECRETS_KEY_FILE
       - OPENC3_LOG_LEVEL
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -309,6 +311,8 @@ services:
       # Optional: bare pass-through (only forwarded if set in host env or .env)
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
+      - OPENC3_SECRETS_KEY
+      - OPENC3_SECRETS_KEY_FILE
       - OPENC3_LOG_LEVEL
 
   openc3-operator:
@@ -391,6 +395,8 @@ services:
       # Optional: bare pass-through (only forwarded if set in host env or .env)
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
+      - OPENC3_SECRETS_KEY
+      - OPENC3_SECRETS_KEY_FILE
       - OPENC3_LOG_LEVEL
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -521,6 +527,8 @@ services:
       - OPENC3_ISTIO_ENABLED
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
+      - OPENC3_SECRETS_KEY
+      - OPENC3_SECRETS_KEY_FILE
       - OPENC3_LOG_LEVEL
       # Per-tool install opt-outs
       - OPENC3_NO_CMDTLMSERVER
