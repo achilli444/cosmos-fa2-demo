@@ -89,6 +89,79 @@ module OpenC3
       end
     end
 
+    describe "credential redaction" do
+      let(:token) { 'Bearer super-secret-session-token-123' }
+      let(:api_object) do
+        JsonApiObject.new(url: 'http://openc3-cosmos-cmd-tlm-api:2901', timeout: 1.0, authentication: double(token: token))
+      end
+
+      before(:each) do
+        api_object.send(:connect)
+        allow(api_object).to receive(:connect)
+        allow(api_object).to receive(:sleep)
+        allow(Logger).to receive(:debug)
+      end
+
+      it "does not include the Authorization token in the raised exception" do
+        expect(api_object).to receive(:_http_request).and_raise(Faraday::TimeoutError.new('read timeout'))
+        expect { api_object.request('post', '/openc3-api/timeline', scope: 'DEFAULT') }.to raise_error do |error|
+          expect(error.message).to match(/Api Exception/)
+          expect(error.message).not_to include(token)
+          expect(error.message).to match(/"Authorization" ?=?>? ?"\[REDACTED\]"/)
+        end
+      end
+
+      it "redacts an explicit token keyword" do
+        expect(api_object).to receive(:_http_request).and_raise(Faraday::TimeoutError.new('read timeout'))
+        expect { api_object.request('get', '/openc3-api/tlm', scope: 'DEFAULT', token: 'explicit-token') }.to raise_error do |error|
+          expect(error.message).not_to include('explicit-token')
+          expect(error.message).to match(/token:? ?=?>? ?"\[REDACTED\]"/)
+        end
+      end
+
+      it "redacts a caller supplied authorization header regardless of case" do
+        expect(api_object).to receive(:_http_request).and_raise(Faraday::TimeoutError.new('read timeout'))
+        headers = { 'authorization' => 'caller-token' }
+        expect { api_object.request('get', '/openc3-api/tlm', scope: 'DEFAULT', headers: headers) }.to raise_error do |error|
+          expect(error.message).not_to include('caller-token')
+        end
+      end
+
+      it "keeps the exception class and message but not the backtrace in the raised exception" do
+        exception = Faraday::TimeoutError.new('read timeout')
+        exception.set_backtrace(['/openc3/lib/openc3/io/json_api_object.rb:1:in `secret_frame`'])
+        expect(api_object).to receive(:_http_request).and_raise(exception)
+        expect { api_object.request('post', '/openc3-api/timeline', scope: 'DEFAULT') }.to raise_error do |error|
+          expect(error.message).to include('Faraday::TimeoutError, read timeout')
+          expect(error.message).not_to include('secret_frame')
+        end
+        expect(Logger).to have_received(:debug).with(/secret_frame/)
+      end
+
+      it "does not leak the token after exhausting connection retries" do
+        expect(api_object).to receive(:_http_request).exactly(RETRY_COUNT + 1).times
+                                                     .and_raise(Faraday::ConnectionFailed.new('connect timeout'))
+        expect { api_object.request('post', '/openc3-api/timeline', scope: 'DEFAULT') }.to raise_error do |error|
+          expect(error.message).not_to include(token)
+        end
+      end
+
+      it "does not leak the token when the scope keyword is missing" do
+        expect { api_object.request('get', '/openc3-api/tlm', token: 'explicit-token') }.to raise_error(JsonApiError) do |error|
+          expect(error.message).to match(/no scope keyword found/)
+          expect(error.message).not_to include('explicit-token')
+        end
+      end
+
+      it "still sends the real token to the server" do
+        allow(api_object).to receive(:_http_request) do |**args|
+          expect(args[:kwargs][:headers]['Authorization']).to eq(token)
+          double(status: 200, headers: {}, body: '{}')
+        end
+        api_object.request('get', '/openc3-api/tlm', scope: 'DEFAULT')
+      end
+    end
+
     describe "timeout retry behavior" do
       let(:api_object) { JsonApiObject.new(url: 'http://openc3-cosmos-cmd-tlm-api:2901', timeout: 1.0) }
 

@@ -52,6 +52,10 @@ module OpenC3
     attr_reader :response_data
 
     USER_AGENT = 'OpenC3 / v7 (ruby/openc3/lib/io/json_api_object)'.freeze
+    REDACTED = '[REDACTED]'.freeze
+    # Request kwargs / headers that carry credentials and are redacted from log lines and exceptions
+    SENSITIVE_KWARGS = [:token].freeze
+    SENSITIVE_HEADERS = ['Authorization'].freeze
 
     # Time limit for the first response byte from the server. This must be an
     # explicit number rather than nil, see connect() for why. Requests can
@@ -159,7 +163,7 @@ module OpenC3
     def _generate_scope(kwargs)
       scope = kwargs[:scope]
       if scope.nil?
-        raise JsonApiError, "no scope keyword found: #{kwargs}"
+        raise JsonApiError, "no scope keyword found: #{_redact(kwargs)}"
       elsif scope.is_a?(String) == false
         raise JsonApiError, "incorrect type for keyword 'scope' MUST be String: #{scope}"
       end
@@ -211,18 +215,50 @@ module OpenC3
       kwargs[:query].update(:scope => kwargs[:scope]) if kwargs[:scope]
     end
 
+    # Copy of kwargs safe to place in log lines and exception messages: the
+    # Authorization header and the token keyword carry the caller's credential
+    # (IA-5 authenticator protection) and must never be surfaced to callers.
+    # NOTE: This is a helper method and should not be called directly
+    def _redact(kwargs)
+      redacted = kwargs.dup
+      SENSITIVE_KWARGS.each { |key| redacted[key] = REDACTED if redacted.key?(key) }
+      headers = redacted[:headers]
+      if headers.is_a?(Hash)
+        redacted[:headers] = headers.to_h do |name, value|
+          [name, SENSITIVE_HEADERS.any? { |h| h.casecmp?(name.to_s) } ? REDACTED : value]
+        end
+      end
+      return redacted
+    end
+
+    # Records the exception for the raised message (class and message only) and
+    # keeps the backtrace at debug level (SI-11: error messages must not reveal
+    # internals beyond what the caller needs to act).
+    # NOTE: This is a helper method and should not be called directly
+    def _log_exception(method, error)
+      @log[2] = "#{method} Exception: #{error.class}, #{error.message}"
+      Logger.debug("JsonApiObject: #{@log[2]}\n#{Array(error.backtrace).join("\n")}")
+    end
+
+    # NOTE: This is a helper method and should not be called directly
+    def _api_exception
+      return "Api Exception: #{@log[0]} ::: #{@log[1]} ::: #{@log[2]}"
+    end
+
     # NOTE: This is a helper method and should not be called directly
     def _send_request(method:, endpoint:, kwargs:)
       uri = URI("#{@url}#{endpoint}")
-      @log[0] = "#{method} Request: #{uri.to_s} #{kwargs}"
+      @log[0] = "#{method} Request: #{uri.to_s} #{_redact(kwargs)}"
       STDOUT.puts @log[0] if JsonDRb.debug?
 
       retry_count = 0
       while retry_count <= RETRY_COUNT
         begin
           resp = _http_request(method: method, uri: uri, kwargs: kwargs)
-          @log[1] = "#{method} Response: #{resp.status} #{resp.headers} #{resp.body}"
-          STDOUT.puts @log[1] if JsonDRb.debug?
+          # Response headers (cookies, etc.) stay out of @log so they never reach
+          # a raised message; they are only printed in debug mode.
+          @log[1] = "#{method} Response: #{resp.status}"
+          STDOUT.puts "#{@log[1]} #{resp.headers} #{resp.body}" if JsonDRb.debug?
           @response_data = resp.body
           return resp
         rescue Faraday::ConnectionFailed, Errno::ECONNRESET, Errno::EPIPE, IOError => e
@@ -230,15 +266,14 @@ module OpenC3
           # Net::OpenTimeout, which Faraday maps to ConnectionFailed and which covers a
           # service that is still starting up.
           retry_count += 1
-          @log[2] = "#{method} Exception: #{e.class}, #{e.message}, #{e.backtrace}"
+          _log_exception(method, e)
           if retry_count <= RETRY_COUNT
             Logger.warn("JsonApiObject: Connection error, retry #{retry_count}/#{RETRY_COUNT}: #{e.class} #{e.message}")
             disconnect()
             sleep(RETRY_DELAY)
             connect()
           else
-            error = "Api Exception: #{@log[0]} ::: #{@log[1]} ::: #{@log[2]}"
-            raise error
+            raise _api_exception()
           end
         rescue StandardError => e
           # Everything else, including Faraday::TimeoutError from a read timeout, is NOT
@@ -246,15 +281,13 @@ module OpenC3
           # have already acted on it. Many endpoints are not idempotent (create_activity,
           # script_run, cmd), so a retry risks duplicating the operation. It would also blow
           # past the caller's deadline by RETRY_COUNT times.
-          @log[2] = "#{method} Exception: #{e.class}, #{e.message}, #{e.backtrace}"
+          _log_exception(method, e)
           disconnect()
-          error = "Api Exception: #{@log[0]} ::: #{@log[1]} ::: #{@log[2]}"
-          raise error
+          raise _api_exception()
         end
       end
       # Should not reach here, but just in case
-      error = "Api Exception: #{@log[0]} ::: #{@log[1]} ::: #{@log[2]}"
-      raise error
+      raise _api_exception()
     end
 
     # NOTE: This is a helper method and should not be called directly
