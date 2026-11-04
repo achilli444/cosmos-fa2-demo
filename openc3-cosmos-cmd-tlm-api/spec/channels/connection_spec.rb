@@ -18,8 +18,13 @@
 require "rails_helper"
 
 RSpec.describe ApplicationCable::Connection, type: :channel do
-  it "successfully connects" do
-    connect "/cable?scope=DEFAULT&authorization=password"
+  it "connects without a token and assigns uuid and scope" do
+    connect "/cable?scope=DEFAULT"
     expect(connection.uuid).to be_a(String) # Any random string will do
+    expect(connection.scope).to eql 'DEFAULT'
+  end
+
+  it "rejects a connection that carries the token in the URL query string" do
+    expect { connect "/cable?scope=DEFAULT&authorization=#{$openc3_token}" }.to have_rejected_connection
   end
 end

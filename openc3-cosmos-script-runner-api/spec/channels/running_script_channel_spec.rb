@@ -22,8 +22,6 @@ RSpec.describe RunningScriptChannel, type: :channel do
 
   before(:each) do
     mock_redis
-    # Connections without the url_authenticated identifier are treated as
-    # authenticated (see ApplicationCable::Channel#connection_url_authenticated?)
     stub_connection uuid: uuid, scope: 'DEFAULT'
     RunningScriptChannel.class_variable_set(:@@broadcasters, {})
     allow(RunningScriptReplayThread).to receive(:new).and_return(broadcaster)
@@ -44,7 +42,7 @@ RSpec.describe RunningScriptChannel, type: :channel do
   describe '#subscribed' do
     it 'transmits the backlog and starts streaming live events bounded by the arm timeout' do
       backlog({ 'type' => 'line', 'line_no' => 1 }, { 'type' => 'output', 'line' => 'hi' })
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
       expect(subscription).to be_confirmed
       expected = [
         { 'type' => 'line', 'line_no' => 1 },
@@ -62,7 +60,7 @@ RSpec.describe RunningScriptChannel, type: :channel do
 
     it 'does not start streaming when the backlog already holds the terminal complete' do
       backlog({ 'type' => 'line', 'line_no' => 1 }, { 'type' => 'complete' })
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
       expect(subscription).to be_confirmed
       expected = [
         { 'type' => 'line', 'line_no' => 1 },
@@ -78,7 +76,7 @@ RSpec.describe RunningScriptChannel, type: :channel do
       end
       backlog(*events)
 
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
 
       expect(transmissions.map(&:length)).to eq([RunningScriptReplayThread::MAX_BATCH_SIZE, 1])
       expect(transmissions.flatten).to eq(events)
@@ -88,7 +86,7 @@ RSpec.describe RunningScriptChannel, type: :channel do
       backlog({ 'type' => 'line', 'line_no' => 1 })
       OpenC3::Topic.write_topic("running-script-channel:42:replay", { 'data' => 'not json' }, '102-0')
 
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
 
       # Batching must not let one corrupt entry discard the whole preceding
       # backlog and leave the client with no state for a script that already ran
@@ -100,7 +98,7 @@ RSpec.describe RunningScriptChannel, type: :channel do
       old_broadcaster = instance_double(RunningScriptReplayThread, stop: nil)
       RunningScriptChannel.class_variable_set(:@@broadcasters, { subscription_key => old_broadcaster })
       backlog({ 'type' => 'line', 'line_no' => 1 })
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
       expect(old_broadcaster).to have_received(:stop)
       expect(RunningScriptChannel.class_variable_get(:@@broadcasters)[subscription_key]).to eq(broadcaster)
     end
@@ -109,21 +107,21 @@ RSpec.describe RunningScriptChannel, type: :channel do
   describe '#ready' do
     it 'starts streaming events without waiting out the arm timeout' do
       backlog({ 'type' => 'line', 'line_no' => 1 })
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
       perform :ready
       expect(broadcaster).to have_received(:arm)
     end
 
     it 'no-ops when the script already completed and no broadcaster exists' do
       backlog({ 'type' => 'complete' })
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
       expect { perform :ready }.not_to raise_error
       expect(broadcaster).not_to have_received(:arm)
     end
 
     it 'is safe to perform repeatedly (client reconnects report ready again)' do
       backlog({ 'type' => 'line', 'line_no' => 1 })
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
       perform :ready
       perform :ready
       expect(broadcaster).to have_received(:arm).twice
@@ -133,7 +131,7 @@ RSpec.describe RunningScriptChannel, type: :channel do
   describe '#unsubscribed' do
     it 'stops the broadcaster and clears it from the registry' do
       backlog({ 'type' => 'line', 'line_no' => 1 })
-      subscribe id: '42'
+      subscribe id: '42', token: $openc3_token
       subscription.unsubscribe_from_channel
       expect(broadcaster).to have_received(:stop)
       expect(RunningScriptChannel.class_variable_get(:@@broadcasters)).to be_empty

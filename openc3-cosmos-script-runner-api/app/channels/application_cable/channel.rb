@@ -21,14 +21,12 @@ module ApplicationCable
 
     private
 
-    # Authenticate the subscription using either:
-    #   1. Connection-level URL auth (legacy `?authorization=<token>` path), or
-    #   2. A token supplied on the channel subscription params (preferred —
-    #      keeps tokens out of WebSocket URLs / browser history / proxy logs).
-    # If neither is present or valid, the subscription is rejected before
-    # `subscribed` runs.
+    # Every subscription authenticates with the token supplied on its channel
+    # params. This is the only accepted path: tokens on the WebSocket URL are
+    # refused by ApplicationCable::Connection so they stay out of browser
+    # history and proxy logs. If the token is missing or invalid, the
+    # subscription is rejected before `subscribed` runs.
     def authenticate_subscription!
-      return if connection_url_authenticated?
       token = params[:token]
       if token
         begin
@@ -40,15 +38,6 @@ module ApplicationCable
       end
       reject
       throw :abort
-    end
-
-    # `url_authenticated` is declared as an `identified_by` on the connection
-    # so AnyCable serializes it across commands (a plain ivar wouldn't survive
-    # — see ApplicationCable::Connection). Stub-based channel specs that
-    # don't set the identifier are treated as authenticated.
-    def connection_url_authenticated?
-      return true unless connection.respond_to?(:url_authenticated)
-      !!connection.url_authenticated
     end
   end
 end
