@@ -641,6 +641,48 @@ class TestInterfaceMicroservice(unittest.TestCase):
         result = handler.process_cmd(topic, msg_id, full_msg_hash, None)
         self.assertIsNone(result)
 
+    def test_process_cmd_build_failure_does_not_log_obfuscated_params(self):
+        """When build_cmd raises, only the already-masked cmd_string (not the raw
+        cmd_params) is logged, and the invalid-command ack does not echo msg_hash."""
+        im = InterfaceMicroservice("DEFAULT__INTERFACE__INST_INT")
+        self.addCleanup(im.shutdown)
+        handler = im.handler_thread
+        topic = "{DEFAULT__CMD}TARGET__INST"
+        msg_id = f"{int(time.time() * 1000)}-0"
+        masked_cmd_string = "cmd('INST SET_PASSWORD with USERNAME \"username\", PASSWORD *****')"
+
+        # BOGUS is not a SET_PASSWORD parameter so build_cmd raises (not a ValueError)
+        msg_hash = {
+            b"target_name": b"INST",
+            b"cmd_name": b"SET_PASSWORD",
+            b"cmd_params": json.dumps({"USERNAME": "username", "PASSWORD": "hunter2", "BOGUS": 1}).encode(),
+            b"cmd_string": masked_cmd_string.encode(),
+            b"obfuscated_items": b'["PASSWORD", "KEY"]',
+        }
+        for stdout in capture_io():
+            result = handler.process_cmd(topic, msg_id, msg_hash, None)
+            output = stdout.getvalue()
+        self.assertIn("BOGUS", result)
+        self.assertNotIn("hunter2", result)
+        # Logger emits JSON so quotes in cmd_string are escaped; match the masked parameter
+        self.assertIn("PASSWORD *****", output)
+        self.assertNotIn("hunter2", output)
+
+        # Neither cmd_params nor cmd_buffer so the handler rejects it as invalid
+        msg_hash = {
+            b"target_name": b"INST",
+            b"cmd_name": b"SET_PASSWORD",
+            b"cmd_string": masked_cmd_string.encode(),
+            b"password": b"hunter2",
+        }
+        for stdout in capture_io():
+            result = handler.process_cmd(topic, msg_id, msg_hash, None)
+            output = stdout.getvalue()
+        self.assertIn("Invalid command received", result)
+        self.assertIn(masked_cmd_string, result)
+        self.assertNotIn("hunter2", result)
+        self.assertNotIn("hunter2", output)
+
     def test_process_cmd_supports_interface_directives(self):
         """Directive messages on the CMD}INTERFACE topic: interface_details and
         target_control (enable/disable and the error path)."""

@@ -228,6 +228,75 @@ module OpenC3
       end
     end
 
+    describe "command build failure" do
+      # Drive the command handler block directly with a crafted command message
+      # and capture the ack it returns (see "interface_details directive").
+      def handle_cmd(interface, msg_hash)
+        handler = InterfaceCmdHandlerThread.new(interface, double("tlm").as_null_object, scope: "DEFAULT")
+        result = nil
+        allow(InterfaceTopic).to receive(:receive_commands) do |*_args, **_kwargs, &block|
+          result = block.call("{DEFAULT__CMD}TARGET__INST",
+                              "#{(Time.now.to_f * 1000).to_i}-0",
+                              msg_hash, nil)
+        end
+        handler.run
+        result
+      end
+
+      let(:masked_cmd_string) { "cmd(\"INST SET_PASSWORD with USERNAME 'username', PASSWORD *****\")" }
+
+      it "logs the masked cmd_string, not the raw parameters, when build_cmd raises" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        interface = im.instance_variable_get(:@interface)
+        # BOGUS is not a SET_PASSWORD parameter so build_cmd raises (not a RangeError)
+        msg_hash = {
+          'target_name' => 'INST',
+          'cmd_name' => 'SET_PASSWORD',
+          'cmd_params' => JSON.generate({ 'USERNAME' => 'username', 'PASSWORD' => 'hunter2', 'BOGUS' => 1 }),
+          'range_check' => 'true',
+          'hazardous_check' => 'true',
+          'raw' => 'false',
+          'cmd_string' => masked_cmd_string,
+          'username' => 'anonymous',
+          'obfuscated_items' => '["PASSWORD", "KEY"]'
+        }
+        result = nil
+        capture_io do |stdout|
+          result = handle_cmd(interface, msg_hash)
+          # Logger emits JSON so quotes in cmd_string are escaped; match the masked parameter
+          expect(stdout.string).to include("USERNAME 'username', PASSWORD *****")
+          expect(stdout.string).to include("BOGUS")
+          expect(stdout.string).to_not include("hunter2")
+        end
+        expect(result).to include("BOGUS")
+        expect(result).to_not include("hunter2")
+        im.shutdown
+        sleep 0.1 # Allow threads to exit
+      end
+
+      it "does not echo the message hash in the invalid command ack" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        interface = im.instance_variable_get(:@interface)
+        # Neither cmd_params nor cmd_buffer so the handler rejects it as invalid
+        msg_hash = {
+          'target_name' => 'INST',
+          'cmd_name' => 'SET_PASSWORD',
+          'cmd_string' => masked_cmd_string,
+          'password' => 'hunter2'
+        }
+        result = nil
+        capture_io do |stdout|
+          result = handle_cmd(interface, msg_hash)
+          expect(stdout.string).to_not include("hunter2")
+        end
+        expect(result).to include("Invalid command received")
+        expect(result).to include(masked_cmd_string)
+        expect(result).to_not include("hunter2")
+        im.shutdown
+        sleep 0.1 # Allow threads to exit
+      end
+    end
+
     describe "handle_packet" do
       it "does not write the status model after cancel_thread is set" do
         # A packet already buffered can be returned from read() after stop()

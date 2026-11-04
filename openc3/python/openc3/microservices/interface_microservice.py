@@ -104,6 +104,19 @@ class InterfaceCmdHandlerThread:
         # receive_commands does a while True and does not return
         InterfaceTopic.receive_commands(self.process_cmd, self.interface, self.scope, db_shard=self.db_shard)
 
+    def cmd_description(self, msg_hash):
+        """Describe a command message for logs and error acks without exposing raw
+        parameter values. cmd_string was built by the API with OBFUSCATE
+        parameters already masked; cmd_params has not been masked."""
+        cmd_string = msg_hash.get(b"cmd_string")
+        if cmd_string:
+            return cmd_string.decode()
+        parts = [msg_hash.get(b"target_name"), msg_hash.get(b"cmd_name")]
+        description = " ".join(part.decode() for part in parts if part)
+        if description:
+            return description
+        return "keys: " + ", ".join(key.decode() for key in msg_hash)
+
     def process_cmd(self, topic, msg_id, msg_hash, _redis):
         # OpenC3.with_context(msg_hash) do
         release_critical = False
@@ -312,7 +325,7 @@ class InterfaceCmdHandlerThread:
                         command = System.commands.packet("UNKNOWN", "UNKNOWN").clone()
                         command.buffer = cmd_buffer
                 else:
-                    raise RuntimeError(f"Invalid command received:\n{msg_hash}")
+                    raise RuntimeError(f"Invalid command received:\n{self.cmd_description(msg_hash)}")
 
                 if not self.interface.cmd_target_enabled.get(command.target_name, False):
                     return None  # Don't ack disabled targets
@@ -329,7 +342,7 @@ class InterfaceCmdHandlerThread:
                 self.logger.error(f"{self.interface.name}: {str(e)}")
                 return str(e)
             except Exception as e:
-                self.logger.error(f"{self.interface.name}: {msg_hash}")
+                self.logger.error(f"{self.interface.name}: {self.cmd_description(msg_hash)}")
                 self.logger.error(f"{self.interface.name}: {traceback.format_exc()}")
                 # Return only the error message (not full traceback) to match Ruby behavior
                 # This provides a clean error message to the GUI while still logging the full trace
