@@ -121,9 +121,9 @@ $store_queued = false
 module OpenC3
   class StoreQueued
     alias old_initialize initialize
-    def initialize(update_interval, db_shard: 0)
+    def initialize(update_interval, db_shard: 0, **kwargs)
       if $store_queued
-        old_initialize(update_interval, db_shard: db_shard)
+        old_initialize(update_interval, db_shard: db_shard, **kwargs)
       else
         @update_interval = update_interval
         @db_shard = db_shard

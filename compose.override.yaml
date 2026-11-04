@@ -288,6 +288,16 @@
 #   # YAML keeps only the last of two identical keys, so a repeated
 #   # "openc3-operator:" would silently discard the first one's ports/volumes.
 #   #   - OPENC3_LOG_STDERR=1
+#
+#   # -----------------------------------------------------------------------
+#   # Bound the queued Redis writes on any service
+#   # -----------------------------------------------------------------------
+#   # OPENC3_STORE_QUEUE_MAX_SIZE caps how many pending Redis requests each
+#   # StoreQueued/EphemeralStoreQueued instance holds (default 100000). When
+#   # Redis is unreachable the queue stops growing at this size and newer
+#   # requests are dropped and reported in the log stream instead of exhausting
+#   # memory. Every container reads it; raise it for very high-rate interfaces.
+#   #   - OPENC3_STORE_QUEUE_MAX_SIZE=100000
 
 # -------------------------------------------------------------------------
 # Secret file directory
