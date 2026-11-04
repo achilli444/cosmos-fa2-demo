@@ -62,6 +62,7 @@ docker buildx build \
   --progress plain \
   --build-arg ALPINE_VERSION=${ALPINE_VERSION} \
   --build-arg ALPINE_BUILD=${ALPINE_BUILD} \
+  --build-arg ALPINE_DIGEST=${ALPINE_DIGEST} \
   --build-arg APK_URL=${APK_URL} \
   --build-arg RUBYGEMS_URL=${RUBYGEMS_URL} \
   --build-arg PYPI_URL=$PYPI_URL \
@@ -69,6 +70,7 @@ docker buildx build \
   --build-arg OPENC3_UBI_REGISTRY=$OPENC3_UBI_REGISTRY \
   --build-arg OPENC3_UBI_IMAGE=$OPENC3_UBI_IMAGE \
   --build-arg OPENC3_UBI_TAG=$OPENC3_UBI_TAG \
+  --build-arg OPENC3_UBI_DIGEST=$OPENC3_UBI_DIGEST \
   --push -t ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/openc3-ruby${SUFFIX}:${OPENC3_RELEASE_VERSION} \
   --push -t ${OPENC3_ENTERPRISE_REGISTRY}/${OPENC3_ENTERPRISE_NAMESPACE}/openc3-ruby${SUFFIX}:${OPENC3_RELEASE_VERSION} .
 
@@ -80,6 +82,7 @@ docker buildx build \
   --progress plain \
   --build-arg ALPINE_VERSION=${ALPINE_VERSION} \
   --build-arg ALPINE_BUILD=${ALPINE_BUILD} \
+  --build-arg ALPINE_DIGEST=${ALPINE_DIGEST} \
   --build-arg APK_URL=${APK_URL} \
   --build-arg RUBYGEMS_URL=${RUBYGEMS_URL} \
   --build-arg PYPI_URL=$PYPI_URL \
@@ -87,6 +90,7 @@ docker buildx build \
   --build-arg OPENC3_UBI_REGISTRY=$OPENC3_UBI_REGISTRY \
   --build-arg OPENC3_UBI_IMAGE=$OPENC3_UBI_IMAGE \
   --build-arg OPENC3_UBI_TAG=$OPENC3_UBI_TAG \
+  --build-arg OPENC3_UBI_DIGEST=$OPENC3_UBI_DIGEST \
   --push -t ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/openc3-ruby${SUFFIX}:latest \
   --push -t ${OPENC3_ENTERPRISE_REGISTRY}/${OPENC3_ENTERPRISE_NAMESPACE}/openc3-ruby${SUFFIX}:latest .
 fi

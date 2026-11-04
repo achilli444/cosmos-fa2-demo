@@ -1,8 +1,12 @@
 ARG OPENC3_UBI_REGISTRY=registry1.dso.mil
 ARG OPENC3_UBI_IMAGE=ironbank/redhat/ubi/ubi9-minimal
 ARG OPENC3_UBI_TAG=9.6
+# Digest pin for the UBI base in the form "@sha256:<digest>". Resolve it after
+# `docker login registry1.dso.mil` with:
+#   docker buildx imagetools inspect registry1.dso.mil/ironbank/redhat/ubi/ubi9-minimal:9.6
+ARG OPENC3_UBI_DIGEST=
 
-FROM ${OPENC3_UBI_REGISTRY}/${OPENC3_UBI_IMAGE}:${OPENC3_UBI_TAG}
+FROM ${OPENC3_UBI_REGISTRY}/${OPENC3_UBI_IMAGE}:${OPENC3_UBI_TAG}${OPENC3_UBI_DIGEST}
 
 LABEL maintainer="support@openc3.com"
 
