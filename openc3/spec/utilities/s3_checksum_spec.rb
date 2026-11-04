@@ -35,6 +35,9 @@ module OpenC3
       client
     end
 
+    # Other spec files stub Aws::S3::Client.new via local_s3() and may leave it in place
+    before(:each) { local_s3_unset() }
+
     describe 's3_autoload local config' do
       it 'enables response checksum validation for the local backend' do
         expect(Aws.config[:s3][:response_checksum_validation]).to eql 'when_supported'
