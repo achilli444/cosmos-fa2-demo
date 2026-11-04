@@ -52,7 +52,7 @@ export default {
       if (this.settingsLoading) {
         return
       }
-      this.api
+      return this.api
         .set_setting(setting, jsonString, kwparams)
         .then(() => {
           this.errorSaving = false

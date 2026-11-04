@@ -172,20 +172,21 @@ module OpenC3
         model.deploy(File.join(SPEC_DIR, "install"), {})
       end
 
-      it "defaults the settings it owns" do
+      it "defaults the settings it owns, with the news feed off" do
         deploy_default_scope()
-        expect(SettingModel.get(name: "news_feed")['data']).to be true
+        expect(SettingModel.get(name: "news_feed")['data']).to be false
         expect(SettingModel.get(name: "source_url")['data']).to eql "https://github.com/OpenC3/cosmos"
         expect(SettingModel.get(name: "rubygems_url")['data']).to eql RubygemsUrl::DEFAULT
       end
 
       it "doesn't clobber settings seeded from the environment" do
         # `openc3cli initsettings` runs before the first plugin load creates the
-        # scope, so seed_database must not discard what it wrote
-        SettingModel.apply_defaults(env: { 'OPENC3_SETTING_NEWS_FEED' => 'false',
+        # scope, so seed_database must not discard what it wrote. This is also
+        # the news feed opt-in path for connected deployments.
+        SettingModel.apply_defaults(env: { 'OPENC3_SETTING_NEWS_FEED' => 'true',
                                           'OPENC3_SETTING_SOURCE_URL' => 'https://git.example.com/cosmos' })
         deploy_default_scope()
-        expect(SettingModel.get(name: "news_feed")['data']).to be false
+        expect(SettingModel.get(name: "news_feed")['data']).to be true
         expect(SettingModel.get(name: "source_url")['data']).to eql "https://git.example.com/cosmos"
       end
 
@@ -200,9 +201,9 @@ module OpenC3
 
       it "doesn't revert an Admin Console edit on a second deploy" do
         deploy_default_scope()
-        SettingModel.set({ name: "news_feed", data: false }, scope: "DEFAULT")
+        SettingModel.set({ name: "news_feed", data: true }, scope: "DEFAULT")
         ScopeModel.new(name: "OTHER").deploy(File.join(SPEC_DIR, "install"), {})
-        expect(SettingModel.get(name: "news_feed")['data']).to be false
+        expect(SettingModel.get(name: "news_feed")['data']).to be true
       end
     end
 

@@ -79,32 +79,16 @@ module OpenC3
     # save_setting is DEPRECATED
     alias save_setting set_setting
 
-    # Update the news feed on demand to respond to frontend setting changes
+    # Update the news feed on demand to respond to frontend setting changes.
+    # Honors the news_feed setting: when the feed is off (the default) no
+    # request leaves the system, even for an admin.
     def update_news(manual: false, scope: $openc3_scope, token: $openc3_token)
-      # Authorize outside the begin/rescue so AuthError propagates to the caller
-      # rather than being swallowed and written into the news feed
       authorize(permission: 'admin', manual: manual, scope: scope, token: token)
-      begin
-        conn = Faraday.new(
-          url: 'https://news.openc3.com',
-          params: {version: VERSION, enterprise: ENTERPRISE},
-        )
-        response = conn.get('/news')
-        if response.success?
-          NewsModel.set(response.body)
-        else
-          NewsModel.news_error("Error contacting OpenC3 news feed (status: #{response.status})")
-        end
-
-        # Test code to update the news feed with a dummy message
-        # data = NewsModel.all()
-        # json = JSON.parse(data)
-        # json.unshift( { date: Time.now.utc.iso8601, title: "News at #{Time.now}", body: "The news feed has been updated at #{Time.now}." })
-        # json.pop if json.length > 5
-        # NewsModel.set(json.to_json)
-      rescue StandardError => e
-        NewsModel.news_error("Error contacting OpenC3 news feed. #{e.message}")
+      unless NewsModel.enabled?(scope: scope)
+        Logger.info("News feed is disabled (setting '#{NewsModel::SETTING_NAME}' is not true); not contacting #{NewsModel::NEWS_URL}", scope: scope)
+        return nil
       end
+      NewsModel.update()
     end
 
     # Update the local copy of the plugin store data

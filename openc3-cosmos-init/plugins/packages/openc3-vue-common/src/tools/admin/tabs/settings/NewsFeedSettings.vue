@@ -26,8 +26,8 @@
     <v-card-text class="pb-0">
       <v-switch
         v-model="newsFeed"
-        label="Allow COSMOS backend to pull the news feed from the COSMOS external news site.
-        This is a low bandwidth poll which only happens every 12 hrs. To immediately update the news feed, click the 'Refresh' in the User Menu."
+        label="Allow COSMOS backend to pull the news feed from the COSMOS external news site (off by default).
+        This is a low bandwidth poll which only happens once a day. To immediately update the news feed, click the 'Refresh' in the User Menu."
         color="primary"
         :disabled="settingsLoading"
       />
@@ -53,7 +53,7 @@ export default {
   mixins: [Settings],
   data() {
     return {
-      newsFeed: true,
+      newsFeed: false,
     }
   },
   created() {
@@ -61,9 +61,11 @@ export default {
   },
   methods: {
     save() {
-      this.saveSetting(settingName, this.newsFeed)
-      if (this.newsFeed) {
-        this.api.update_news()
+      // The backend only fetches the feed once the setting is stored as true,
+      // so wait for the save before asking it to refresh
+      const saved = this.saveSetting(settingName, this.newsFeed)
+      if (saved && this.newsFeed) {
+        saved.then(() => this.api.update_news())
       }
     },
     parseSetting: function (response) {

@@ -14,7 +14,6 @@
 require 'openc3/microservices/microservice'
 require 'openc3/models/offline_access_model'
 require 'openc3/models/news_model'
-# The VERSION and ENTERPRISE constants are set by settings_api.rb
 require 'openc3/api/settings_api'
 
 module OpenC3
@@ -27,27 +26,16 @@ module OpenC3
     def initialize(*args)
       super(*args)
       @metric.set(name: 'periodic_total', value: @count, type: 'counter')
-      @conn = nil # Faraday connection set by get_news
       get_news()
     end
 
+    # Only contacts the news site when the operator has opted in (news_feed
+    # setting true). The default is off, so an unconfigured install makes no
+    # outbound request.
     def get_news
-      if get_setting('news_feed', scope: @scope)
-        unless @conn
-          @conn = Faraday.new(
-            url: 'https://news.openc3.com',
-            params: {version: VERSION, enterprise: ENTERPRISE},
-          )
-        end
-        response = @conn.get('/news')
-        if response.success?
-          NewsModel.set(response.body)
-        else
-          NewsModel.news_error("Error contacting OpenC3 news feed (status: #{response.status})")
-        end
-      end
-    rescue StandardError => e
-      NewsModel.news_error("Error contacting OpenC3 news feed. #{e.message}")
+      return unless NewsModel.enabled?(scope: @scope)
+
+      NewsModel.update()
     end
 
     def run
