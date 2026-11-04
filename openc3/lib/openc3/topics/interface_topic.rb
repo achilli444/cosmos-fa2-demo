@@ -130,21 +130,23 @@ module OpenC3
       Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface.name}", { 'shutdown' => 'true' }, '*', 100, db_shard: db_shard)
     end
 
-    def self.interface_cmd(interface_name, cmd_name, *cmd_params, scope:)
+    def self.interface_cmd(interface_name, cmd_name, *cmd_params, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['cmd_name'] = cmd_name
       data['cmd_params'] = cmd_params
+      data['username'] = username
       Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'interface_cmd' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
     end
 
-    def self.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, scope:)
+    def self.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['cmd_name'] = cmd_name
       data['cmd_params'] = cmd_params
       data['read_write'] = read_write.to_s.upcase
       data['index'] = index
+      data['username'] = username
       Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'protocol_cmd' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
     end
 
@@ -179,23 +181,25 @@ module OpenC3
       raise "Timeout of #{timeout}s waiting for cmd ack"
     end
 
-    def self.interface_target_enable(interface_name, target_name, cmd_only: false, tlm_only: false, scope:)
+    def self.interface_target_enable(interface_name, target_name, cmd_only: false, tlm_only: false, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['target_name'] = target_name.to_s.upcase
       data['cmd_only'] = cmd_only
       data['tlm_only'] = tlm_only
       data['action'] = 'enable'
+      data['username'] = username
       Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'target_control' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
     end
 
-    def self.interface_target_disable(interface_name, target_name, cmd_only: false, tlm_only: false, scope:)
+    def self.interface_target_disable(interface_name, target_name, cmd_only: false, tlm_only: false, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['target_name'] = target_name.to_s.upcase
       data['cmd_only'] = cmd_only
       data['tlm_only'] = tlm_only
       data['action'] = 'disable'
+      data['username'] = username
       Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'target_control' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
     end
 

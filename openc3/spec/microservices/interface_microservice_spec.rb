@@ -647,6 +647,9 @@ module OpenC3
       expect(all["INST_INT"]["state"]).to eql "ATTEMPTING"
       interface = im.instance_variable_get(:@interface)
       expect(interface).to receive(:interface_cmd).with("DO_THE_THING", "PARAM1", 2)
+      logger = im.instance_variable_get(:@logger)
+      allow(logger).to receive(:info).and_call_original
+      expect(logger).to receive(:info).with("INST_INT: interface_cmd: DO_THE_THING PARAM1 2", user: "anonymous").and_call_original
 
       Thread.new { im.run }
       sleep 0.01 # Allow to start
@@ -663,6 +666,9 @@ module OpenC3
       expect(all["INST_INT"]["state"]).to eql "ATTEMPTING"
       interface = im.instance_variable_get(:@interface)
       expect(interface).to receive(:protocol_cmd).with("DO_THE_OTHER_THING", "PARAM1", 2, {:index => -1, :read_write => "READ_WRITE"})
+      logger = im.instance_variable_get(:@logger)
+      allow(logger).to receive(:info).and_call_original
+      expect(logger).to receive(:info).with("INST_INT: protocol_cmd: DO_THE_OTHER_THING PARAM1 2 read_write: READ_WRITE index: -1", user: "anonymous").and_call_original
 
       Thread.new { im.run }
       sleep 0.01 # Allow to start
