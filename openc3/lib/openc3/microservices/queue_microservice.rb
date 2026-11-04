@@ -18,18 +18,10 @@ require 'openc3/utilities/authentication'
 require 'openc3/api/api'
 
 module OpenC3
-  saved_verbose = $VERBOSE
-  $VERBOSE = nil
-  module Script
-    private
-    # Override the prompt_for_hazardous method to always return true since there is no user to prompt
-    def prompt_for_hazardous(target_name, cmd_name, hazardous_description)
-      return true
-    end
-  end
-  $VERBOSE = saved_verbose
-
   # The queue processor runs in a single thread and processes commands via cmd_api.
+  # There is no operator to prompt, so a hazardous command is never released from here:
+  # it is put back at the head of the queue and the queue is placed in HOLD until an
+  # operator explicitly confirms it (queue_exec / exec_command with hazardous_confirmed).
   class QueueProcessor
     include Api # Provides access to api methods
 
@@ -58,13 +50,12 @@ module OpenC3
     def process_queued_commands
       while @state == 'RELEASE'
         begin
-          _queue_name, command_data, _timestamp = Store.bzpopmin("#{@scope}:#{@name}", timeout: 0.2)
+          _queue_name, command_data, id = Store.bzpopmin("#{@scope}:#{@name}", timeout: 0.2)
           if command_data
             command = JSON.parse(command_data)
             # It's important to set queue: false here to avoid infinite recursion when
             # OPENC3_DEFAULT_QUEUE is set because commands would be re-queued to the default queue
-            # NOTE: cmd() via script rescues hazardous errors and calls prompt_for_hazardous()
-            # but we've overridden it to always return true and go straight to cmd_no_hazardous_check()
+            # NOTE: cmd() raises HazardousError for hazardous commands which is handled by hold_for_hazardous()
 
             # Support both new format (target_name, cmd_name, cmd_params) and legacy format (command string)
             if command['target_name'] && command['cmd_name']
@@ -76,12 +67,20 @@ module OpenC3
               end
               validate = command.key?('validate') ? command['validate'] : true
               timeout = command['timeout']
-              cmd(command['target_name'], command['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, scope: @scope)
+              begin
+                cmd(command['target_name'], command['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, scope: @scope)
+              rescue HazardousError => e
+                hold_for_hazardous(command_data, id, e)
+              end
             elsif command['value']
               # Legacy format: use single string parameter for backwards compatibility
               validate = command.key?('validate') ? command['validate'] : true
               timeout = command['timeout']
-              cmd(command['value'], queue: false, validate: validate, timeout: timeout, scope: @scope)
+              begin
+                cmd(command['value'], queue: false, validate: validate, timeout: timeout, scope: @scope)
+              rescue HazardousError => e
+                hold_for_hazardous(command_data, id, e)
+              end
             else
               @logger.error "QueueProcessor: Invalid command format, missing required fields"
             end
@@ -91,6 +90,22 @@ module OpenC3
         end
         break if @cancel_thread
       end
+    end
+
+    # Put the hazardous command back into the queue at its original id and HOLD the queue
+    # so an operator must explicitly confirm the command before it is released
+    def hold_for_hazardous(command_data, id, error)
+      @state = 'HOLD'
+      Store.zadd("#{@scope}:#{@name}", id.to_f, command_data)
+      model = QueueModel.get_model(name: @name, scope: @scope)
+      if model
+        model.state = 'HOLD'
+        model.update()
+        model.notify(kind: 'command')
+      end
+      @logger.error "QueueProcessor: Hazardous command #{error.target_name} #{error.cmd_name} " \
+                    "held in queue #{@name} at id #{id.to_f}. #{error.hazardous_description} " \
+                    "Queue placed in HOLD. Release it with queue_exec() and confirm the hazardous prompt."
     end
 
     def shutdown

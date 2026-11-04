@@ -223,6 +223,50 @@ module OpenC3
           .with('TARGET', 'COMMAND3', { 'PARAM' => 3 }, queue: false, scope: scope, timeout: 0, validate: false)
       end
 
+      it 'holds the queue and puts a hazardous command back instead of releasing it' do
+        hazardous = HazardousError.new
+        hazardous.target_name = 'TARGET'
+        hazardous.cmd_name = 'COMMAND3'
+        hazardous.hazardous_description = 'Dangerous'
+        allow(processor).to receive(:cmd).and_raise(hazardous)
+        allow(processor).to receive(:cmd_no_hazardous_check)
+        allow(Store).to receive(:zadd)
+        allow(Store).to receive(:bzpopmin).and_return(["#{scope}:QUEUE", command3_new_format.to_json, 7.0])
+        model = QueueModel.new(name: 'QUEUE', scope: scope, state: 'RELEASE')
+        allow(QueueModel).to receive(:get_model).and_return(model)
+        allow(model).to receive(:update)
+        allow(model).to receive(:notify)
+        expect(logger).to receive(:error).with(/Hazardous command TARGET COMMAND3 held in queue .* at id 7.0. Dangerous/)
+
+        processor.process_queued_commands
+
+        expect(processor).to have_received(:cmd).once
+        expect(processor).not_to have_received(:cmd_no_hazardous_check)
+        expect(Store).to have_received(:zadd).with("#{scope}:#{name}", 7.0, command3_new_format.to_json)
+        expect(processor.state).to eq('HOLD')
+        expect(model.state).to eq('HOLD')
+        expect(model).to have_received(:update)
+        expect(model).to have_received(:notify).with(kind: 'command')
+      end
+
+      it 'holds the queue and puts a hazardous legacy command back instead of releasing it' do
+        hazardous = HazardousError.new
+        hazardous.target_name = 'TARGET'
+        hazardous.cmd_name = 'COMMAND'
+        allow(processor).to receive(:cmd).and_raise(hazardous)
+        allow(processor).to receive(:cmd_no_hazardous_check)
+        allow(Store).to receive(:zadd)
+        allow(Store).to receive(:bzpopmin).and_return(["#{scope}:QUEUE", command1.to_json, 1.0])
+        allow(QueueModel).to receive(:get_model).and_return(nil)
+        allow(logger).to receive(:error)
+
+        processor.process_queued_commands
+
+        expect(processor).not_to have_received(:cmd_no_hazardous_check)
+        expect(Store).to have_received(:zadd).with("#{scope}:#{name}", 1.0, command1.to_json)
+        expect(processor.state).to eq('HOLD')
+      end
+
       it 'logs error for invalid command format (missing required fields)' do
         invalid_command = { 'username' => 'test_user' }
         allow(Store).to receive(:bzpopmin) do
