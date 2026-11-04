@@ -429,6 +429,7 @@ module OpenC3
     describe "set_limits_set attribution" do
       it "records the requesting user in the log message and limits event" do
         username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+        allow(Logger).to receive(:info).and_call_original
         expect(Logger).to receive(:info).with("Setting Limits Set: TVAC", scope: "DEFAULT", user: username)
         @api.set_limits_set("TVAC")
         event = @api.get_limits_events()[-1][1]
