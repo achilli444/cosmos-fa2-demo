@@ -194,7 +194,7 @@ module OpenC3
           OpenC3.set_working_dir(@work_dir) do
             if File.exist?(ruby_filename)
               # Run ruby syntax so we can log those
-              syntax_check, _ = Open3.capture2e("ruby -c #{ruby_filename}")
+              syntax_check, _ = Open3.capture2e('ruby', '-c', ruby_filename)
               if /Syntax OK/.match?(syntax_check)
                 @logger.debug("Ruby microservice #{@name} file #{ruby_filename} passed syntax check\n", scope: @scope)
               else
