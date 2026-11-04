@@ -50,4 +50,35 @@ RSpec.describe RedisController, type: :controller do
       expect(response).to have_http_status(:unauthorized)
     end
   end
+
+  describe "#execute_raw role enforcement" do
+    before(:each) do
+      mock_redis
+      @authorize = $openc3_authorize
+      $openc3_authorize = true
+    end
+
+    after(:each) do
+      $openc3_authorize = @authorize
+    end
+
+    it "forbids principals without the admin permission" do
+      request.headers['HTTP_AUTHORIZATION'] = 'ses_operator'
+      allow(OpenC3::AuthModel).to receive(:principal).with('ses_operator').and_return({ 'username' => 'op', 'roles' => ['operator'] })
+      expect_any_instance_of(OpenC3::Store).not_to receive(:method_missing)
+      request.content_type = "text/plain"
+      post :execute_raw, body: "GET key", params: {scope: "DEFAULT"}
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "allows principals with the admin permission" do
+      request.headers['HTTP_AUTHORIZATION'] = 'ses_admin'
+      allow(OpenC3::AuthModel).to receive(:principal).with('ses_admin').and_return({ 'username' => 'root', 'roles' => ['admin'] })
+      expect_any_instance_of(OpenC3::Store).to receive(:method_missing).with(:GET, ["key"]).and_return("value")
+      request.content_type = "text/plain"
+      post :execute_raw, body: "GET key", params: {scope: "DEFAULT"}
+      expect(response).to have_http_status(:created)
+    end
+  end
+
 end

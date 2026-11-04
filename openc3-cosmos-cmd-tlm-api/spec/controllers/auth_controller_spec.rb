@@ -393,4 +393,75 @@ RSpec.describe AuthController, :type => :controller do
       end
     end
   end
+
+  describe "verify with username" do
+    before(:each) do
+      post :set, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+      OpenC3::AuthModel.create_user(username: 'alice', password: 'alicepassword', roles: ['viewer'])
+    end
+
+    it "issues the built-in admin session for the shared password" do
+      post :verify, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.principal(response.body)).to eq({ 'username' => 'admin', 'roles' => OpenC3::AuthModel::BUILTIN_ADMIN_ROLES })
+
+      post :verify, params: { username: 'admin', password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.principal(response.body)['username']).to eq('admin')
+    end
+
+    it "issues a role scoped session for a named account" do
+      post :verify, params: { username: 'alice', password: 'alicepassword' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.principal(response.body)).to eq({ 'username' => 'alice', 'roles' => ['viewer'] })
+    end
+
+    it "rejects a named account with the shared password or a bad password" do
+      post :verify, params: { username: 'alice', password: 'PASSWORD' }
+      expect(response).to have_http_status(:unauthorized)
+      post :verify, params: { username: 'alice', password: 'bad' }
+      expect(response).to have_http_status(:unauthorized)
+      post :verify, params: { username: 'nobody', password: 'alicepassword' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "rejects a disabled named account" do
+      OpenC3::AuthModel.update_user('alice', enabled: false)
+      post :verify, params: { username: 'alice', password: 'alicepassword' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
+  describe "user" do
+    before(:each) do
+      @authorize = $openc3_authorize
+      $openc3_authorize = true
+      allow(OpenC3::AuthModel).to receive(:verify).and_call_original
+    end
+
+    after(:each) do
+      $openc3_authorize = @authorize
+    end
+
+    it "returns the principal and its permissions" do
+      request.headers['HTTP_AUTHORIZATION'] = OpenC3::AuthModel.generate_session(username: 'alice', roles: ['viewer', 'approver'])
+      get :user, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json['username']).to eq('alice')
+      expect(json['roles']).to eq(['viewer', 'approver'])
+      expect(json['permissions']).to include('tlm', 'script_approver')
+      expect(json['permissions']).not_to include('cmd', 'admin')
+    end
+
+    it "requires a valid token" do
+      get :user, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:unauthorized)
+      request.headers['HTTP_AUTHORIZATION'] = 'ses_bogus'
+      get :user, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
 end

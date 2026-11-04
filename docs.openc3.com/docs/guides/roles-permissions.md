@@ -31,6 +31,18 @@ Examples:
 - `MISSION1__viewer` - Viewer role in the MISSION1 scope
 - `ALLSCOPES__admin` - Admin role across all scopes
 
+## COSMOS Core Roles
+
+COSMOS Core enforces the same built-in roles without Keycloak. Every API call is resolved to a principal by `OpenC3::Authorization#authorize`, which raises `ForbiddenError` (HTTP 403) when the principal's roles do not grant the requested permission.
+
+- The shared password (set on the login page) is the built-in `admin` account and keeps every role (`admin`, `operator`, `approver`), so an existing deployment behaves as before.
+- Named accounts with a subset of roles are created by an `admin` through the Core user API (`GET/POST /openc3-api/users`, `GET/PUT/DELETE /openc3-api/users/:username`). Each login, create, update and delete is written to the audit log with the acting user. Accounts that have not logged in for `OPENC3_USER_INACTIVITY_DAYS` days (default 35, `0` disables) are disabled at their next login attempt and must be re-enabled by an `admin`.
+- Users log in with a username and password; leaving the username blank logs in as the built-in `admin`.
+- Microservices and scripts authenticating with `OPENC3_SERVICE_PASSWORD` run as the `service` principal with every role.
+- `GET /openc3-api/permissions` returns the Core role to permission matrix and `GET /openc3-api/roles` lists the roles. In Core the `approver` role also carries `script_approver` because custom roles are not available.
+
+Per-target, per-packet and per-interface restrictions, custom roles and command authority remain Enterprise features.
+
 ## Built-in Roles
 
 Individual built-in roles in COSMOS Enterprise are scoped to a minimal set of permissions. Individual users can have multiple roles (e.g., Admin and Operator) if users need administrative access and commanding access. COSMOS Enterprise includes five built-in roles with predefined permission sets:

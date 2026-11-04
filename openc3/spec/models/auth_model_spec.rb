@@ -136,11 +136,116 @@ module OpenC3
         expect(AuthModel.verify(token)).to eq(false)
       end
 
+      it "resolves a session token to its principal" do
+        expect(AuthModel.principal(nil)).to be_nil
+        expect(AuthModel.principal('')).to be_nil
+        expect(AuthModel.principal("#{AuthModel::SESSION_PREFIX}#{'A' * 22}")).to be_nil
+
+        admin = AuthModel.principal(AuthModel.generate_session)
+        expect(admin).to eq({ 'username' => AuthModel::BUILTIN_ADMIN_USERNAME, 'roles' => AuthModel::BUILTIN_ADMIN_ROLES })
+
+        token = AuthModel.generate_session(username: 'alice', roles: ['viewer'])
+        expect(AuthModel.principal(token)).to eq({ 'username' => 'alice', 'roles' => ['viewer'] })
+        AuthModel.terminate(token)
+        expect(AuthModel.principal(token)).to be_nil
+      end
+
+      it "consumes an OTP when resolving its principal" do
+        otp = AuthModel.generate_session(otp: true, username: 'alice', roles: ['viewer'])
+        expect(AuthModel.principal(otp)['username']).to eq('alice')
+        expect(AuthModel.principal(otp)).to be_nil
+      end
+
+      it "resolves the service password to the service principal" do
+        ENV['OPENC3_SERVICE_PASSWORD'] = 'servicepw_spec'
+        expect(AuthModel.principal('servicepw_spec')).to eq({ 'username' => AuthModel::SERVICE_USERNAME, 'roles' => AuthModel::SERVICE_ROLES })
+      ensure
+        ENV.delete('OPENC3_SERVICE_PASSWORD')
+      end
+
+      it "treats a legacy timestamp session as the built-in admin" do
+        token = "#{AuthModel::SESSION_PREFIX}#{'B' * 22}"
+        @redis.hset(AuthModel::SESSIONS_KEY, token, Time.now.iso8601)
+        expect(AuthModel.verify(token)).to eq(true)
+        expect(AuthModel.principal(token)['username']).to eq(AuthModel::BUILTIN_ADMIN_USERNAME)
+      end
+
       it "raises when stored password hash is SHA256" do
         @redis.set(PW_HASH_PRIMARY_KEY, Digest::SHA256.hexdigest(AUTH_INITIAL_PASSWORD))
         expect{ AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :any) }.to \
           raise_error(/invalid password hash/)
       end
     end
+
+    describe "named accounts" do
+      it "creates, lists and authenticates a user without exposing the hash" do
+        record = AuthModel.create_user(username: 'alice', password: 'alicepassword', roles: ['viewer'], name: 'Alice')
+        expect(record['username']).to eq('alice')
+        expect(record['roles']).to eq(['viewer'])
+        expect(record['enabled']).to be true
+        expect(record).not_to have_key('password_hash')
+        expect(AuthModel.users['alice']).not_to have_key('password_hash')
+        expect(AuthModel.user('alice')['password_hash']).to start_with('$argon2')
+
+        expect(AuthModel.authenticate_user('alice', 'wrong')).to be_nil
+        expect(AuthModel.authenticate_user('alice', '')).to be_nil
+        expect(AuthModel.authenticate_user('nobody', 'alicepassword')).to be_nil
+        principal = AuthModel.authenticate_user('alice', 'alicepassword')
+        expect(principal).to eq({ 'username' => 'alice', 'roles' => ['viewer'] })
+        expect(AuthModel.user('alice')['last_login']).not_to be_nil
+      end
+
+      it "rejects reserved and malformed usernames, duplicates and short passwords" do
+        expect { AuthModel.create_user(username: 'admin', password: 'password1', roles: ['viewer']) }.to raise_error(/invalid username/)
+        expect { AuthModel.create_user(username: 'service', password: 'password1', roles: ['viewer']) }.to raise_error(/invalid username/)
+        expect { AuthModel.create_user(username: 'bad user', password: 'password1', roles: ['viewer']) }.to raise_error(/invalid username/)
+        expect { AuthModel.create_user(username: 'alice', password: 'short', roles: ['viewer']) }.to raise_error(/at least 8/)
+        AuthModel.create_user(username: 'alice', password: 'alicepassword', roles: ['viewer'])
+        expect { AuthModel.create_user(username: 'alice', password: 'alicepassword', roles: ['viewer']) }.to raise_error(/already exists/)
+      end
+
+      it "terminates sessions when roles change, the account is disabled or deleted" do
+        AuthModel.create_user(username: 'alice', password: 'alicepassword', roles: ['operator'])
+        admin_token = AuthModel.generate_session
+        token = AuthModel.generate_session(username: 'alice', roles: ['operator'])
+
+        AuthModel.update_user('alice', roles: ['viewer'])
+        expect(AuthModel.principal(token)).to be_nil
+        expect(AuthModel.principal(admin_token)).not_to be_nil
+        expect(AuthModel.authenticate_user('alice', 'alicepassword')['roles']).to eq(['viewer'])
+
+        token = AuthModel.generate_session(username: 'alice', roles: ['viewer'])
+        AuthModel.update_user('alice', enabled: false)
+        expect(AuthModel.principal(token)).to be_nil
+        expect(AuthModel.authenticate_user('alice', 'alicepassword')).to be_nil
+
+        AuthModel.update_user('alice', enabled: true, password: 'newalicepassword')
+        expect(AuthModel.authenticate_user('alice', 'alicepassword')).to be_nil
+        expect(AuthModel.authenticate_user('alice', 'newalicepassword')).not_to be_nil
+
+        token = AuthModel.generate_session(username: 'alice', roles: ['viewer'])
+        AuthModel.delete_user('alice')
+        expect(AuthModel.principal(token)).to be_nil
+        expect(AuthModel.user('alice')).to be_nil
+        expect { AuthModel.delete_user('alice') }.to raise_error(/user not found/)
+        expect { AuthModel.update_user('alice', roles: ['viewer']) }.to raise_error(/user not found/)
+      end
+
+      it "disables an account that has been inactive past the limit" do
+        AuthModel.create_user(username: 'alice', password: 'alicepassword', roles: ['viewer'])
+        record = AuthModel.user('alice')
+        stale = (Time.now - (AuthModel::USER_INACTIVITY_DAYS + 1) * 86400).iso8601
+        record['created_at'] = record['updated_at'] = record['last_login'] = stale
+        @redis.hset(AuthModel::USERS_KEY, 'alice', JSON.generate(record))
+
+        expect(AuthModel.authenticate_user('alice', 'alicepassword')).to be_nil
+        expect(AuthModel.user('alice')['enabled']).to be false
+
+        # Re-enabling by an administrator restores access
+        AuthModel.update_user('alice', enabled: true)
+        expect(AuthModel.authenticate_user('alice', 'alicepassword')).not_to be_nil
+      end
+    end
+
   end
 end

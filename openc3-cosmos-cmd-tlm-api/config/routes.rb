@@ -230,6 +230,7 @@ Rails.application.routes.draw do
     post "/auth/verify_service" => "auth#verify_service"
     post "/auth/set" => "auth#set"
     get "/auth/otp" => "auth#get_otp"
+    get "/auth/user" => "auth#user"
 
     get "/internal/health" => "internal_health#health"
     get "/internal/metrics" => "internal_metrics#index"
@@ -250,6 +251,13 @@ Rails.application.routes.draw do
     ##########################
     get "/users/active" => "users#active"
     match "/users/logout/:user", to: "users#logout", id: /[^\/]+/, via: [:patch, :put]
+    unless defined?(OPENC3_ENTERPRISE_VERSION)
+      # Core named-account management (Enterprise manages users in Keycloak)
+      resources :users, only: [:index, :create]
+      get '/users/:id', to: 'users#show', id: /[^\/]+/
+      match '/users/:id', to: 'users#update', id: /[^\/]+/, via: [:patch, :put]
+      delete '/users/:id', to: 'users#destroy', id: /[^\/]+/
+    end
 
     get "/info" => "info#info"
 
