@@ -29,6 +29,14 @@ class ScriptsController < ApplicationController
   SUITE_REGEX = /^\s*class\s+\w+\s+<\s+(Cosmos::|OpenC3::)?(Suite|TestSuite)/
   PYTHON_SUITE_REGEX = /^\s*class\s+\w+\s*\(\s*(Suite|TestSuite)\s*\)/
 
+  audit_actions create: 'Script saved',
+                run: 'Script started',
+                destroy: 'Script destroyed',
+                lock: 'Script locked',
+                unlock: 'Script unlocked',
+                delete_temp: 'Temp scripts deleted',
+                delete_all_breakpoints: 'All breakpoints deleted'
+
   def ping
     render plain: 'OK'
   end
@@ -47,7 +55,9 @@ class ScriptsController < ApplicationController
     scope = sanitize_params([:scope])
     return unless scope
     scope = scope[0]
-    render json: Script.delete_temp(scope)
+    files = Script.delete_temp(scope)
+    audit_detail(deleted: files.length)
+    render json: files
   end
 
   def body
@@ -95,8 +105,8 @@ class ScriptsController < ApplicationController
       results['suites'] = results_suites
       results['error'] = results_error
       results['success'] = success
+      audit_detail(suite: true, suite_success: success ? true : false)
     end
-    OpenC3::Logger.info("Script created: #{name}", scope: scope, user: username()) if success
     render json: results
   rescue => e
     log_error(e)
@@ -118,7 +128,7 @@ class ScriptsController < ApplicationController
     environment = params[:environment]
     running_script_id = Script.run(scope, name, suite_runner, disconnect, environment, user_full_name(), username(), line_no, end_line_no)
     if running_script_id
-      OpenC3::Logger.info("Script started: #{name}", scope: scope, user: username())
+      audit_detail(running_script_id: running_script_id, disconnect: disconnect)
       render plain: running_script_id.to_s
     else
       head :not_found
@@ -138,7 +148,11 @@ class ScriptsController < ApplicationController
     scope, name = sanitize_params([:scope, :name], :allow_forward_slash => true)
     return unless scope
     locked_by = Script.locked?(scope, name)
-    Script.unlock(scope, name) if username() == locked_by
+    if username() == locked_by
+      Script.unlock(scope, name)
+    else
+      audit_detail(outcome: 'skipped', locked_by: locked_by)
+    end
     render status: :ok
   end
 
@@ -147,7 +161,6 @@ class ScriptsController < ApplicationController
     scope, name = sanitize_params([:scope, :name], :allow_forward_slash => true)
     return unless scope
     Script.destroy(scope, name)
-    OpenC3::Logger.info("Script destroyed: #{name}", scope: scope, user: username())
     head :ok
   rescue => e
     log_error(e)

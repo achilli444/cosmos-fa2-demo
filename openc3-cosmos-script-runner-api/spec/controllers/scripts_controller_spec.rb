@@ -390,4 +390,186 @@ RSpec.describe ScriptsController, type: :controller do
       expect(response).to have_http_status(:unauthorized)
     end
   end
+  describe "audit records" do
+    # CNSSP 12 para 9 / 16.e: state changes and denied requests must leave a
+    # user-attributed record. See ApplicationController#audit_request.
+    def capture_audit(level)
+      records = []
+      allow(OpenC3::Logger).to receive(level) do |message, **options|
+        records << [message, options]
+      end
+      records
+    end
+
+    it "logs an ordinary (non-suite) script save" do
+      allow(Script).to receive(:create)
+      records = capture_audit(:info)
+
+      post :create, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", text: "puts 1"}
+
+      expect(response).to have_http_status(:ok)
+      expect(records.length).to eq(1)
+      message, options = records[0]
+      expect(message).to eq("Script saved: INST/procedures/test.rb")
+      expect(options[:scope]).to eq("DEFAULT")
+      expect(options[:user]).to eq("anonymous")
+      expect(options[:other]).to include(
+        audit: 'script-api', action: 'create', script: 'INST/procedures/test.rb',
+        status: 200, outcome: 'success', permission: 'script_edit'
+      )
+    end
+
+    it "logs a suite save even when suite analysis fails" do
+      suite = "class TestSuite < OpenC3::Suite\nend"
+      allow(Script).to receive(:create)
+      expect(Script).to receive(:process_suite).and_return([nil, "analysis failed", false])
+      records = capture_audit(:info)
+
+      post :create, params: {scope: "DEFAULT", name: "INST/procedures/suite.rb", text: suite}
+
+      expect(response).to have_http_status(:ok)
+      expect(records.length).to eq(1)
+      expect(records[0][0]).to eq("Script saved: INST/procedures/suite.rb")
+      expect(records[0][1][:other]).to include(suite: true, suite_success: false)
+    end
+
+    it "logs the script save as a failure when Script.create raises" do
+      allow(Script).to receive(:create).and_raise("bucket unavailable")
+      allow_any_instance_of(ScriptsController).to receive(:log_error)
+      records = capture_audit(:warn)
+
+      post :create, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", text: "puts 1"}
+
+      expect(response).to have_http_status(500)
+      expect(records.length).to eq(1)
+      expect(records[0][0]).to eq("scripts#create error: INST/procedures/test.rb")
+      expect(records[0][1][:other]).to include(status: 500, outcome: 'error')
+    end
+
+    it "logs temp script deletion with the number of files removed" do
+      expect(Script).to receive(:delete_temp).with("DEFAULT").and_return(["temp/a.rb", "temp/b.rb"])
+      records = capture_audit(:info)
+
+      delete :delete_temp, params: {scope: "DEFAULT"}
+
+      expect(response).to have_http_status(:ok)
+      expect(records.length).to eq(1)
+      expect(records[0][0]).to eq("Temp scripts deleted")
+      expect(records[0][1][:user]).to eq("anonymous")
+      expect(records[0][1][:other]).to include(action: 'delete_temp', outcome: 'success', deleted: 2)
+    end
+
+    it "logs the scope-wide breakpoint wipe" do
+      mock_redis
+      allow_any_instance_of(OpenC3::Store).to receive(:method_missing).with(:del, "DEFAULT__script-breakpoints")
+      records = capture_audit(:info)
+
+      delete :delete_all_breakpoints, params: {scope: "DEFAULT"}
+
+      expect(response).to have_http_status(:ok)
+      expect(records.length).to eq(1)
+      expect(records[0][0]).to eq("All breakpoints deleted")
+      expect(records[0][1]).to include(scope: "DEFAULT", user: "anonymous")
+      expect(records[0][1][:other]).to include(action: 'delete_all_breakpoints', outcome: 'success')
+    end
+
+    it "logs lock, unlock, run and destroy" do
+      allow(Script).to receive(:lock)
+      allow(Script).to receive(:locked?).and_return("anonymous")
+      allow(Script).to receive(:unlock)
+      allow(Script).to receive(:run).and_return(7)
+      allow(Script).to receive(:destroy)
+      records = capture_audit(:info)
+
+      post :lock, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+      post :unlock, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+      post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+      delete :destroy, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+      messages = [
+        "Script locked: INST/procedures/test.rb",
+        "Script unlocked: INST/procedures/test.rb",
+        "Script started: INST/procedures/test.rb",
+        "Script destroyed: INST/procedures/test.rb",
+      ]
+      expect(records.map(&:first)).to eq(messages)
+      expect(records[2][1][:other]).to include(running_script_id: 7, permission: 'script_run', target: 'INST')
+    end
+
+    it "records an unlock attempt on a script locked by another user as skipped" do
+      allow(Script).to receive(:locked?).and_return("someone_else")
+      expect(Script).not_to receive(:unlock)
+      records = capture_audit(:warn)
+
+      post :unlock, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+      expect(response).to have_http_status(:ok)
+      expect(records.length).to eq(1)
+      expect(records[0][0]).to eq("scripts#unlock skipped: INST/procedures/test.rb")
+      expect(records[0][1][:other]).to include(outcome: 'skipped', locked_by: 'someone_else')
+    end
+
+    it "does not log successful read-only requests" do
+      allow(Script).to receive(:all).and_return([])
+      expect(OpenC3::Logger).not_to receive(:info)
+      expect(OpenC3::Logger).not_to receive(:warn)
+
+      get :index, params: {scope: "DEFAULT"}
+
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "logs a WARN for unauthorized requests on any endpoint without the token" do
+      request.headers['Authorization'] = 'super-secret-token'
+      records = capture_audit(:warn)
+
+      get :index, params: {name: "INST/procedures/test.rb"}
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(records.length).to eq(1)
+      message, options = records[0]
+      expect(message).to eq("scripts#index unauthorized: INST/procedures/test.rb")
+      expect(options[:other]).to include(
+        action: 'index', status: 401, outcome: 'unauthorized',
+        permission: 'script_view', reason: 'Scope is required', path: '/script-api/scripts'
+      )
+      expect(options.to_s).not_to include('super-secret-token')
+    end
+
+    it "logs a WARN for forbidden requests" do
+      allow_any_instance_of(ScriptsController).to receive(:authorize).and_raise(OpenC3::ForbiddenError.new("Insufficient permission"))
+      records = capture_audit(:warn)
+
+      delete :destroy, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+      expect(response).to have_http_status(:forbidden)
+      expect(records.length).to eq(1)
+      expect(records[0][0]).to eq("scripts#destroy forbidden: INST/procedures/test.rb")
+      expect(records[0][1]).to include(scope: "DEFAULT")
+      expect(records[0][1][:other]).to include(
+        status: 403, outcome: 'forbidden', permission: 'script_edit', reason: 'Insufficient permission'
+      )
+    end
+
+    it "still writes a record when an audited action raises" do
+      allow(Script).to receive(:lock).and_raise("redis down")
+      records = capture_audit(:warn)
+
+      expect { post :lock, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"} }.to raise_error("redis down")
+
+      expect(records.length).to eq(1)
+      expect(records[0][0]).to eq("scripts#lock error: INST/procedures/test.rb")
+      expect(records[0][1][:other]).to include(status: 500, outcome: 'error', error: 'RuntimeError')
+    end
+
+    it "never lets an audit failure break the request" do
+      allow(Script).to receive(:lock)
+      allow(OpenC3::Logger).to receive(:info).and_raise("logger down")
+      expect_any_instance_of(ScriptsController).to receive(:log_error)
+
+      post :lock, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+      expect(response).to have_http_status(:ok)
+    end
+  end
 end
