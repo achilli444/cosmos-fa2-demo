@@ -162,6 +162,10 @@ You can generate a new secret key with:
 openssl rand -hex 64
 ```
 
+### Stored Credential Encryption Key
+
+COSMOS Enterprise stores each user's Keycloak offline access refresh token in Redis so that scripts and queued commands can run on the user's behalf after they log out. Because a refresh token is a long-lived bearer credential, it is encrypted with AES-256-GCM using the same `OPENC3_SECRETS_KEY` / `OPENC3_SECRETS_KEY_FILE` key that protects the Redis secrets backend (see [Secrets](../guides/secrets.md)) before it is written to Redis, and decrypted only when a service needs to use it. The key is never written to Redis. Tokens stored before the key was configured are read as-is and are re-encrypted the next time they are refreshed (the periodic microservice refreshes them daily). Rotating the key invalidates stored tokens, so users are prompted to re-authorize offline access on their next script run.
+
 ### COSMOS Enterprise Credentials
 
 COSMOS Enterprise has additional credentials for Keycloak and PostgreSQL. See the `DockerComposeSecurity.md` file in your project directory for Enterprise-specific credential documentation.
