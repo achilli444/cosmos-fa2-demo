@@ -711,6 +711,91 @@ RSpec.describe QueuesController, type: :controller do
       expect(json["message"]).to eql("Unexpected error")
       expect(json["type"]).to eql("StandardError")
     end
+
+    context "with a hazardous command" do
+      let(:queue_model) { double("QueueModel") }
+      let(:legacy_command_data) do
+        { "username" => "user1", "value" => "INST CLEAR", "timestamp" => 1000, "id" => 1.0 }
+      end
+      let(:new_format_command_data) do
+        { "username" => "user2", "target_name" => "INST", "cmd_name" => "CLEAR", "cmd_params" => "{}",
+          "validate" => false, "timeout" => 5, "timestamp" => 2000, "id" => 3.0 }
+      end
+      let(:cmd_kwargs) { { queue: false, validate: true, timeout: nil, queue_username: "user1", scope: "DEFAULT", token: anything } }
+
+      def hazardous_error
+        error = HazardousError.new
+        error.target_name = "INST"
+        error.cmd_name = "CLEAR"
+        error.cmd_params = {}
+        error.hazardous_description = "Clears counters"
+        error.formatted = "cmd('INST CLEAR')"
+        error
+      end
+
+      before(:each) do
+        allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+        allow(OpenC3::Logger).to receive(:warn)
+      end
+
+      it "refuses with 409, requeues the command and does not bypass the hazardous check without confirm_hazardous" do
+        allow(queue_model).to receive(:remove_command).and_return(legacy_command_data)
+        allow(controller).to receive(:cmd).with("INST CLEAR", cmd_kwargs).and_raise(hazardous_error)
+        expect(controller).not_to receive(:cmd_no_hazardous_check)
+        expect(queue_model).to receive(:insert_command).with(
+          hash_including(id: 1.0, username: "user1", command: "INST CLEAR", target_name: nil, cmd_name: nil, cmd_params: nil)
+        )
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+        expect(response).to have_http_status(:conflict)
+        json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+        expect(json["status"]).to eql("error")
+        expect(json["type"]).to eql("HazardousError")
+        expect(json["hazardous_description"]).to eql("Clears counters")
+        expect(json["target_name"]).to eql("INST")
+        expect(json["cmd_name"]).to eql("CLEAR")
+        expect(json["id"]).to eql(1.0)
+        expect(json["message"]).to include("is Hazardous due to 'Clears counters'")
+        expect(json["message"]).to include("confirm_hazardous=true")
+        expect(OpenC3::Logger).to have_received(:warn).with(/INST CLEAR from queue QUEUE1 id 1.0 not sent/, scope: "DEFAULT", user: "anonymous")
+      end
+
+      it "treats confirm_hazardous=false the same as absent" do
+        allow(queue_model).to receive(:remove_command).and_return(legacy_command_data)
+        allow(controller).to receive(:cmd).and_raise(hazardous_error)
+        allow(queue_model).to receive(:insert_command)
+        expect(controller).not_to receive(:cmd_no_hazardous_check)
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT", confirm_hazardous: "false"}
+        expect(response).to have_http_status(:conflict)
+      end
+
+      it "sends with cmd_no_hazardous_check and logs the confirming user when confirm_hazardous=true" do
+        allow(queue_model).to receive(:remove_command).and_return(new_format_command_data)
+        kwargs = { queue: false, validate: false, timeout: 5, queue_username: "user2", scope: "DEFAULT", token: anything }
+        allow(controller).to receive(:cmd).with("INST", "CLEAR", {}, kwargs).and_raise(hazardous_error)
+        expect(controller).to receive(:cmd_no_hazardous_check).with("INST", "CLEAR", {}, kwargs)
+        expect(queue_model).not_to receive(:insert_command)
+
+        post :exec_command, params: {name: "QUEUE1", id: "3.0", scope: "DEFAULT", confirm_hazardous: "true"}
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+        expect(json["id"]).to eql(3.0)
+        expect(OpenC3::Logger).to have_received(:warn).with(
+          /INST CLEAR from queue QUEUE1 id 3.0 confirmed by anonymous \(due to 'Clears counters'\)/, scope: "DEFAULT", user: "anonymous"
+        )
+      end
+
+      it "does not bypass the hazardous check for a non-hazardous command even when confirm_hazardous=true" do
+        allow(queue_model).to receive(:remove_command).and_return(legacy_command_data)
+        expect(controller).to receive(:cmd).with("INST CLEAR", cmd_kwargs)
+        expect(controller).not_to receive(:cmd_no_hazardous_check)
+
+        post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT", confirm_hazardous: "true"}
+        expect(response).to have_http_status(:ok)
+        expect(OpenC3::Logger).not_to have_received(:warn)
+      end
+    end
   end
 
   describe "DELETE destroy" do
