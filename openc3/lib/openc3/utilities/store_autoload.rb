@@ -17,6 +17,7 @@
 
 require 'redis'
 require 'hiredis-client'
+require 'openssl'
 require 'json'
 require 'connection_pool'
 
@@ -119,8 +120,43 @@ module OpenC3
       @redis_username = ENV.fetch('OPENC3_REDIS_USERNAME', nil)
       @redis_key = ENV.fetch('OPENC3_REDIS_PASSWORD', nil)
       hostname = ENV['OPENC3_REDIS_HOSTNAME'].to_s.gsub("SHARDNUM", db_shard.to_s)
-      @redis_url = "redis://#{hostname}:#{ENV.fetch('OPENC3_REDIS_PORT', 6379)}"
+      @redis_url = build_redis_url(hostname, ENV.fetch('OPENC3_REDIS_PORT', 6379))
       @redis_pool = StoreConnectionPool.new(size: pool_size) { build_redis() }
+    end
+
+    REDIS_TLS_TRUE_VALUES = %w(1 TRUE YES ON)
+
+    # TLS to Redis is opt-in via OPENC3_REDIS_TLS. When enabled every Store
+    # connection uses the rediss:// scheme and the server certificate is always
+    # verified (VERIFY_PEER plus hostname check) against OPENC3_REDIS_TLS_CA_FILE,
+    # or the system CA store when that is unset. There is deliberately no knob
+    # to disable verification: an unverifiable server is a configuration error.
+    def self.redis_tls?
+      REDIS_TLS_TRUE_VALUES.include?(ENV['OPENC3_REDIS_TLS'].to_s.strip.upcase)
+    end
+
+    def build_redis_url(hostname, port)
+      "#{Store.redis_tls? ? 'rediss' : 'redis'}://#{hostname}:#{port}"
+    end
+
+    # ssl_params for redis-client. Paths are passed through as strings so the
+    # same hash works with both the pure Ruby and the hiredis drivers.
+    def redis_ssl_params
+      params = { verify_mode: OpenSSL::SSL::VERIFY_PEER }
+      ca_file = ENV['OPENC3_REDIS_TLS_CA_FILE'].to_s
+      params[:ca_file] = ca_file unless ca_file.empty?
+      # Optional client certificate for mutual TLS
+      cert_file = ENV['OPENC3_REDIS_TLS_CERT_FILE'].to_s
+      key_file = ENV['OPENC3_REDIS_TLS_KEY_FILE'].to_s
+      unless cert_file.empty? and key_file.empty?
+        if cert_file.empty? or key_file.empty?
+          raise "OPENC3_REDIS_TLS_CERT_FILE and OPENC3_REDIS_TLS_KEY_FILE must be set together"
+        end
+
+        params[:cert] = cert_file
+        params[:key] = key_file
+      end
+      params
     end
 
     # cap/base for the equal-jitter reconnect backoff (seconds)
@@ -140,12 +176,14 @@ module OpenC3
       # (no per-failure backoff callable), so we sample the jittered delays once
       # per connection here.
       # Connection, read, and write timeouts are left as the default: 1s
-      return Redis.new(
+      options = {
         url: @redis_url,
         username: @redis_username,
         password: @redis_key,
         reconnect_attempts: reconnect_backoff_delays()
-      )
+      }
+      options[:ssl_params] = redis_ssl_params() if Store.redis_tls?
+      return Redis.new(**options)
     end
 
     # Equal-jitter backoff delays for 3 retries, matching Python's
@@ -299,7 +337,7 @@ module OpenC3
     def initialize(pool_size = 10, db_shard: 0)
       super(pool_size)
       hostname = ENV['OPENC3_REDIS_EPHEMERAL_HOSTNAME'].to_s.gsub("SHARDNUM", db_shard.to_s)
-      @redis_url = "redis://#{hostname}:#{ENV.fetch('OPENC3_REDIS_EPHEMERAL_PORT', 6380)}"
+      @redis_url = build_redis_url(hostname, ENV.fetch('OPENC3_REDIS_EPHEMERAL_PORT', 6380))
       @redis_pool = StoreConnectionPool.new(size: pool_size) { build_redis() }
     end
   end

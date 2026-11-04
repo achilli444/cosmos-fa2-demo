@@ -35,6 +35,10 @@ _openc3_redis_username = "OPENC3_REDIS_USERNAME"
 _openc3_redis_password = "OPENC3_REDIS_PASSWORD"
 _openc3_redis_ephemeral_hostname = "OPENC3_REDIS_EPHEMERAL_HOSTNAME"
 _openc3_redis_ephemeral_port = "OPENC3_REDIS_EPHEMERAL_PORT"
+_openc3_redis_tls = "OPENC3_REDIS_TLS"
+_openc3_redis_tls_ca_file = "OPENC3_REDIS_TLS_CA_FILE"
+_openc3_redis_tls_cert_file = "OPENC3_REDIS_TLS_CERT_FILE"
+_openc3_redis_tls_key_file = "OPENC3_REDIS_TLS_KEY_FILE"
 _openc3_cloud = "OPENC3_CLOUD"
 _aws_region = "AWS_REGION"
 _openc3_aws_arn_prefix = "OPENC3_AWS_ARN_PREFIX"
@@ -138,6 +142,12 @@ try:
     OPENC3_REDIS_EPHEMERAL_PORT = int(os.environ.get(_openc3_redis_ephemeral_port))
 except TypeError:
     OPENC3_REDIS_EPHEMERAL_PORT = 6380
+# TLS to Redis is opt-in. When enabled the server certificate is always verified
+# against OPENC3_REDIS_TLS_CA_FILE (or the system CA store when unset).
+OPENC3_REDIS_TLS = get_env_bool(_openc3_redis_tls)
+OPENC3_REDIS_TLS_CA_FILE = os.environ.get(_openc3_redis_tls_ca_file) or None
+OPENC3_REDIS_TLS_CERT_FILE = os.environ.get(_openc3_redis_tls_cert_file) or None
+OPENC3_REDIS_TLS_KEY_FILE = os.environ.get(_openc3_redis_tls_key_file) or None
 OPENC3_CLOUD = os.environ.get(_openc3_cloud, "local")
 AWS_REGION = os.environ.get(_aws_region)
 OPENC3_AWS_ARN_PREFIX = os.environ.get(_openc3_aws_arn_prefix, "arn:aws")

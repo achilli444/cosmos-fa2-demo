@@ -181,7 +181,31 @@ class Store(metaclass=StoreMeta):
             password=OPENC3_REDIS_PASSWORD,
             retry=Retry(EqualJitterBackoff(cap=5, base=0.625), 3),
             retry_on_error=[BusyLoadingError, ConnectionError, TimeoutError],
+            **self.redis_tls_options(),
         )
+
+    # TLS to Redis is opt-in via OPENC3_REDIS_TLS (mirrors the Ruby Store). When
+    # enabled the server certificate is always verified (cert required plus
+    # hostname check) against OPENC3_REDIS_TLS_CA_FILE, or the system CA store
+    # when that is unset. There is deliberately no knob to disable verification:
+    # an unverifiable server is a configuration error.
+    @staticmethod
+    def redis_tls_options():
+        if not OPENC3_REDIS_TLS:
+            return {}
+        options = {
+            "ssl": True,
+            "ssl_cert_reqs": "required",
+            "ssl_check_hostname": True,
+            "ssl_ca_certs": OPENC3_REDIS_TLS_CA_FILE,
+        }
+        # Optional client certificate for mutual TLS
+        if OPENC3_REDIS_TLS_CERT_FILE or OPENC3_REDIS_TLS_KEY_FILE:
+            if not (OPENC3_REDIS_TLS_CERT_FILE and OPENC3_REDIS_TLS_KEY_FILE):
+                raise RuntimeError("OPENC3_REDIS_TLS_CERT_FILE and OPENC3_REDIS_TLS_KEY_FILE must be set together")
+            options["ssl_certfile"] = OPENC3_REDIS_TLS_CERT_FILE
+            options["ssl_keyfile"] = OPENC3_REDIS_TLS_KEY_FILE
+        return options
 
     ###########################################################################
     # Stream APIs
