@@ -363,6 +363,28 @@ module OpenC3
       end
     end
 
+    describe "cmd username" do
+      it "attributes the command to the login session behind the token" do
+        username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+        expect(username).to match(/\Aanonymous:[0-9a-f]{12}\z/)
+        expect(CommandTopic).to receive(:send_command).with(hash_including('username' => username), timeout: nil, scope: "DEFAULT")
+        @api.cmd("INST ABORT")
+      end
+
+      it "attributes commands sent without a token to the microservice" do
+        saved = ENV['OPENC3_MICROSERVICE_NAME']
+        ENV['OPENC3_MICROSERVICE_NAME'] = 'DEFAULT__DECOM__INST_INT'
+        expect(CommandTopic).to receive(:send_command).with(hash_including('username' => 'DEFAULT__DECOM__INST_INT'), timeout: nil, scope: "DEFAULT")
+        @api.cmd("INST ABORT", token: nil)
+      ensure
+        if saved
+          ENV['OPENC3_MICROSERVICE_NAME'] = saved
+        else
+          ENV.delete('OPENC3_MICROSERVICE_NAME')
+        end
+      end
+    end
+
     describe "send_raw" do
       it "raises on unknown interfaces" do
         expect { @api.send_raw("BLAH_INT", "\x00\x01\x02\x03") }.to raise_error("Interface 'BLAH_INT' does not exist")
@@ -378,6 +400,24 @@ module OpenC3
         @api.send_raw("inst_int", "\x00\x01\x02\x03")
         sleep 0.001
         expect(@interface_data).to eql "\x00\x01\x02\x03"
+      end
+
+      it "records the requesting user on the raw write" do
+        username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+        expect(username).to match(/\Aanonymous:[0-9a-f]{12}\z/)
+        expect(InterfaceTopic).to receive(:write_raw).with("INST_INT", "\x00\x01", username: username, scope: "DEFAULT")
+        @api.send_raw("inst_int", "\x00\x01")
+      end
+
+      it "authorizes the raw write even if the interface has no command targets" do
+        model = InterfaceModel.new(name: "EMPTY_INT", scope: "DEFAULT", target_names: [], cmd_target_names: [], tlm_target_names: [], config_params: ["interface.rb"])
+        model.create
+        model = InterfaceStatusModel.new(name: "EMPTY_INT", scope: "DEFAULT", state: "ACTIVE")
+        model.create
+        allow(InterfaceTopic).to receive(:write_raw)
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system', interface_name: 'EMPTY_INT')).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd_raw', interface_name: 'EMPTY_INT')).and_call_original
+        @api.send_raw("EMPTY_INT", "\x00\x01")
       end
     end
 

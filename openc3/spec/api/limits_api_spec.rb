@@ -400,6 +400,55 @@ module OpenC3
         item = @api.get_item("INST", "HEALTH_STATUS", "TEMP1")
         expect(item['limits']['enabled']).to be true
       end
+
+      it "records the requesting user in the log message and limits event" do
+        username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+        expect(username).to match(/\Aanonymous:[0-9a-f]{12}\z/)
+        expect(Logger).to receive(:info).with(/Disabling Limits for 'INST HEALTH_STATUS TEMP1'/, scope: "DEFAULT", user: username)
+        @api.disable_limits("INST", "HEALTH_STATUS", "TEMP1")
+        events = @api.get_limits_events()
+        event = events[-1][1]
+        expect(event['type']).to eql "LIMITS_ENABLE_STATE"
+        expect(event['item_name']).to eql "TEMP1"
+        expect(event['enabled']).to be false
+        expect(event['username']).to eql username
+      end
+    end
+
+    describe "set_limits attribution" do
+      it "records the requesting user in the log message and limits event" do
+        username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+        expect(Logger).to receive(:info).with(/Setting 'INST HEALTH_STATUS TEMP1' limits/, scope: "DEFAULT", user: username)
+        @api.set_limits("INST", "HEALTH_STATUS", "TEMP1", 0.0, 10.0, 20.0, 30.0)
+        event = @api.get_limits_events()[-1][1]
+        expect(event['type']).to eql "LIMITS_SETTINGS"
+        expect(event['username']).to eql username
+      end
+    end
+
+    describe "set_limits_set attribution" do
+      it "records the requesting user in the log message and limits event" do
+        username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+        allow(Logger).to receive(:info).and_call_original
+        expect(Logger).to receive(:info).with("Setting Limits Set: TVAC", scope: "DEFAULT", user: username)
+        @api.set_limits_set("TVAC")
+        event = @api.get_limits_events()[-1][1]
+        expect(event['type']).to eql "LIMITS_SET"
+        expect(event['username']).to eql username
+        @api.set_limits_set("DEFAULT") # Restore so later specs see the DEFAULT limits
+      end
+    end
+
+    describe "limits group attribution" do
+      it "records the requesting user on every item event" do
+        username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+        expect(Logger).to receive(:info).with("Disable Limits Group: FIRST", scope: "DEFAULT", user: username)
+        expect(Logger).to receive(:info).with(/Disabling Limits for/, scope: "DEFAULT", user: username).at_least(:once)
+        @api.disable_limits_group("FIRST")
+        event = @api.get_limits_events()[-1][1]
+        expect(event['type']).to eql "LIMITS_ENABLE_STATE"
+        expect(event['username']).to eql username
+      end
     end
   end
 end

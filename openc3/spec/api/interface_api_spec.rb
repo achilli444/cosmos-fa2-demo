@@ -264,26 +264,26 @@ module OpenC3
 
     describe "interface_target_enable" do
       it "enables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: /\Aanonymous:[0-9a-f]{12}\z/, scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: /\Aanonymous:[0-9a-f]{12}\z/, scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: /\Aanonymous:[0-9a-f]{12}\z/, scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", tlm_only: true)
       end
     end
 
     describe "interface_target_disable" do
       it "disables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: /\Aanonymous:[0-9a-f]{12}\z/, scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: /\Aanonymous:[0-9a-f]{12}\z/, scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: /\Aanonymous:[0-9a-f]{12}\z/, scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", tlm_only: true)
       end
     end

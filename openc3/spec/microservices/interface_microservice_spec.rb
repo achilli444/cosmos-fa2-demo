@@ -447,6 +447,40 @@ module OpenC3
       end
     end
 
+    it "logs interface directives with the requesting user" do
+      username = Authorization.audit_username(Authorization.user_from_token($openc3_token))
+      expect(username).to match(/\Aanonymous:[0-9a-f]{12}\z/)
+      im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+      Thread.new { im.run }
+      sleep 0.01 # Allow to start
+
+      capture_io do |stdout|
+        @api.send_raw("INST_INT", "\x00\x01")
+        sleep 0.1
+        lines = stdout.string.split("\n").select { |line| line.include?("write_raw sent 2 bytes to INST_INT") }
+        expect(lines.length).to eql 1
+        expect(JSON.parse(lines[0])['user']).to eql username
+      end
+
+      capture_io do |stdout|
+        @api.interface_target_disable("INST_INT", "INST")
+        sleep 0.1
+        lines = stdout.string.split("\n").select { |line| line.include?("target_disable: INST") }
+        expect(lines.length).to eql 1
+        expect(JSON.parse(lines[0])['user']).to eql username
+      end
+
+      # A directive published without a username (e.g. an older producer) is still logged
+      capture_io do |stdout|
+        InterfaceTopic.disconnect_interface("INST_INT", scope: "DEFAULT")
+        sleep 0.1
+        lines = stdout.string.split("\n").select { |line| line.include?("Disconnect requested") }
+        expect(lines.length).to eql 1
+        expect(JSON.parse(lines[0])).not_to have_key('user')
+      end
+      im.shutdown
+    end
+
     it "supports inject_tlm" do
       im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
       all = InterfaceStatusModel.all(scope: "DEFAULT")

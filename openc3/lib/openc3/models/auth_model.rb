@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'argon2'
+require 'digest'
 require 'securerandom'
 require 'openc3/utilities/store'
 
@@ -46,6 +47,22 @@ module OpenC3
 
     def self.set?(key = PRIMARY_KEY)
       Store.exists(key) == 1
+    end
+
+    # Whether the token is the shared service password used by microservices and ScriptRunner
+    def self.service_token?(token)
+      service_password = ENV['OPENC3_SERVICE_PASSWORD']
+      !!(service_password and !service_password.empty? and service_password == token)
+    end
+
+    # Stable, non-reversible identifier for a session or OTP token so audit records
+    # can be correlated back to the login that produced them without exposing the token.
+    # @return [String, nil] 12 hex characters or nil if the token is not a session token
+    def self.session_id(token)
+      return nil unless token.is_a?(String)
+      return nil unless token.start_with?(SESSION_PREFIX) or token.start_with?(OTP_PREFIX)
+
+      Digest::SHA256.hexdigest(token)[0, 12]
     end
 
     # Checks whether the provided token is a valid user password, service password, or session token.
