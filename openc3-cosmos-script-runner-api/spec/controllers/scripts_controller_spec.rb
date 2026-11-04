@@ -668,7 +668,8 @@ RSpec.describe ScriptsController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body)
       expect(json["status"]).to eq("error")
-      expect(json["message"]).to eq("Lifecycle failed")
+      expect(json["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
     end
 
     it "denies moving to approved without the script_approver permission" do
@@ -762,7 +763,8 @@ RSpec.describe ScriptsController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body)
       expect(json["status"]).to eq("error")
-      expect(json["message"]).to eq("Destruction failed")
+      expect(json["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
     end
 
     it "handles authorization failure" do

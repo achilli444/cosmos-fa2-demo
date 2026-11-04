@@ -28,5 +28,19 @@ RSpec.describe InternalStatusController, :type => :controller do
       expect(JSON.parse(response.body, symbolize_names: true, allow_nan: true)).to include(status: 'UP')
       expect(response).to have_http_status(:ok)
     end
+
+    it "does not expose backend errors to unauthenticated callers" do
+      allow(Rails.logger).to receive(:error)
+      allow(OpenC3::PingModel).to receive(:get).and_raise(Redis::CannotConnectError.new("Error connecting to Redis on openc3-redis:6379 (ECONNREFUSED)"))
+      get :status
+      expect(response).to have_http_status(:internal_server_error)
+      json = JSON.parse(response.body)
+      expect(json["status"]).to eql('error')
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(response.body).not_to include("openc3-redis")
+      expect(response.body).not_to include("6379")
+    end
   end
 end

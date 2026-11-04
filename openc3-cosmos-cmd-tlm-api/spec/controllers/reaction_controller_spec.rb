@@ -237,9 +237,10 @@ RSpec.describe ReactionController, type: :controller do
 
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Database error")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
   end
@@ -280,9 +281,10 @@ RSpec.describe ReactionController, type: :controller do
 
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
   end
@@ -345,9 +347,10 @@ RSpec.describe ReactionController, type: :controller do
       post :create, params: hash.merge({"scope" => "DEFAULT"})
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Test standard error")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
   end
@@ -462,9 +465,10 @@ RSpec.describe ReactionController, type: :controller do
 
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Database failure")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
   end
@@ -501,9 +505,10 @@ RSpec.describe ReactionController, type: :controller do
 
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Notification failed")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
   end
@@ -540,9 +545,10 @@ RSpec.describe ReactionController, type: :controller do
 
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Notification failed")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
   end
@@ -579,9 +585,10 @@ RSpec.describe ReactionController, type: :controller do
 
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Execution failed")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
   end
@@ -631,9 +638,10 @@ RSpec.describe ReactionController, type: :controller do
 
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Database failure")
-      expect(json["type"]).to include("StandardError")
-      expect(json).to have_key("backtrace")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
       expect(response).to have_http_status(:internal_server_error)
     end
 

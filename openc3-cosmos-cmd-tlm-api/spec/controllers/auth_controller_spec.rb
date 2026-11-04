@@ -41,13 +41,13 @@ RSpec.describe AuthController, :type => :controller do
       expect(response).to have_http_status(:ok)
 
       post :set, params: { password: 'PASSWORD2' }
-      expect(response).to have_http_status(:error)
+      expect(response).to have_http_status(:bad_request)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql 'error'
       expect(json["message"]).to eql 'old_password must not be nil or empty'
 
       post :set, params: { password: 'PASSWORD2', old_password: 'BAD' }
-      expect(response).to have_http_status(:error)
+      expect(response).to have_http_status(:bad_request)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql 'error'
       expect(json["message"]).to eql 'old_password incorrect'

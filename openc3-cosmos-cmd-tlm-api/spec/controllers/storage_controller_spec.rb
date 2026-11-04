@@ -114,7 +114,7 @@ RSpec.describe StorageController, type: :controller do
 
       get :files, params: {root: "OPENC3_CONFIG_BUCKET", path: "config", scope: "DEFAULT"}
       expect(response).to have_http_status(:internal_server_error)
-      expect(JSON.parse(response.body)["message"]).to eq("General error")
+      expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
     end
 
     it "returns nothing without authorization" do
@@ -154,7 +154,7 @@ RSpec.describe StorageController, type: :controller do
 
       get :exists, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "file.txt", scope: "DEFAULT"}
       expect(response).to have_http_status(:internal_server_error)
-      expect(JSON.parse(response.body)["message"]).to eq("General error")
+      expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
     end
 
     it "returns nothing without authorization" do
@@ -200,7 +200,7 @@ RSpec.describe StorageController, type: :controller do
 
       get :download_file, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "file.txt", scope: "DEFAULT"}
       expect(response).to have_http_status(:internal_server_error)
-      expect(JSON.parse(response.body)["message"]).to eq("General error")
+      expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
     end
 
     it "returns nothing without authorization" do
@@ -487,7 +487,7 @@ RSpec.describe StorageController, type: :controller do
 
       get :get_download_presigned_request, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "file.txt", scope: "DEFAULT"}
       expect(response).to have_http_status(:internal_server_error)
-      expect(JSON.parse(response.body)["message"]).to eq("General error")
+      expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
     end
 
     it "returns nothing without authorization" do
@@ -525,7 +525,7 @@ RSpec.describe StorageController, type: :controller do
 
       get :get_upload_presigned_request, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "file.txt", scope: "DEFAULT"}
       expect(response).to have_http_status(:internal_server_error)
-      expect(JSON.parse(response.body)["message"]).to eq("General error")
+      expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
     end
 
     context "with a non-admin user (system_set but not admin)" do
@@ -627,7 +627,7 @@ RSpec.describe StorageController, type: :controller do
 
         test_cases.each do |test_case|
           post :download_multiple_files, params: test_case[:params].merge(scope: "DEFAULT")
-          expect(response).to have_http_status(:internal_server_error)
+          expect(response).to have_http_status(:bad_request)
           expect(JSON.parse(response.body)["message"]).to eq(test_case[:message])
         end
       end
@@ -641,7 +641,7 @@ RSpec.describe StorageController, type: :controller do
           allow(ENV).to receive(:[]).with(test_case[storage_key]).and_return(nil)
 
           post :download_multiple_files, params: test_case.merge(path: "test/", files: ["file1.txt"], scope: "DEFAULT")
-          expect(response).to have_http_status(:internal_server_error)
+          expect(response).to have_http_status(:bad_request)
           expect(JSON.parse(response.body)["message"]).to eq(test_case[:message])
         end
       end
@@ -652,7 +652,7 @@ RSpec.describe StorageController, type: :controller do
         post :download_multiple_files, params: { bucket: "OPENC3_CONFIG_BUCKET", path: "test/", files: ["file1.txt"], scope: "DEFAULT" }
 
         expect(response).to have_http_status(:internal_server_error)
-        expect(JSON.parse(response.body)["message"]).to eq("Zip error")
+        expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
         expect(FileUtils).to have_received(:remove_entry_secure).with(tmp_dir, true)
       end
     end
@@ -730,12 +730,12 @@ RSpec.describe StorageController, type: :controller do
 
       delete :delete, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "file.txt", scope: "DEFAULT"}
       expect(response).to have_http_status(:internal_server_error)
-      expect(JSON.parse(response.body)["message"]).to eq("General error")
+      expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
     end
 
     it "requires bucket or volume parameter" do
       delete :delete, params: {object_id: "file.txt", scope: "DEFAULT"}
-      expect(response).to have_http_status(:internal_server_error)
+      expect(response).to have_http_status(:bad_request)
       expect(JSON.parse(response.body)["message"]).to eq("Must pass bucket or volume parameter!")
     end
   end
@@ -853,7 +853,7 @@ RSpec.describe StorageController, type: :controller do
 
         delete :delete_directory, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "scope/targets_modified/INST", scope: "DEFAULT"}
         expect(response).to have_http_status(:internal_server_error)
-        expect(JSON.parse(response.body)["message"]).to eq("General error")
+        expect(JSON.parse(response.body)["message"]).to eq(ApplicationController::GENERIC_ERROR_MESSAGE)
       end
     end
 
@@ -886,7 +886,7 @@ RSpec.describe StorageController, type: :controller do
 
     it "requires bucket or volume parameter" do
       delete :delete_directory, params: {object_id: "test", scope: "DEFAULT"}
-      expect(response).to have_http_status(:internal_server_error)
+      expect(response).to have_http_status(:bad_request)
       expect(JSON.parse(response.body)["message"]).to eq("Must pass bucket or volume parameter!")
     end
   end

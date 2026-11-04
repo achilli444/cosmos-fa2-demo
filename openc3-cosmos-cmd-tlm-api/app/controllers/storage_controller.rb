@@ -38,6 +38,11 @@ end
 class StorageController < ApplicationController
   class StorageError < StandardError; end
 
+  # StorageError carries deliberate, client-safe validation messages
+  rescue_from StorageError do |e|
+    render json: { status: 'error', message: e.message }, status: :bad_request
+  end
+
   # Check if a bucket requires RBAC (config and logs do, tools does not)
   def bucket_requires_rbac?(bucket_param)
     # Tools bucket is accessible to all users with system permission
@@ -260,10 +265,9 @@ class StorageController < ApplicationController
   rescue OpenC3::Bucket::NotFound => e
     log_error(e)
     render json: { status: 'error', message: e.message }, status: :not_found
-  rescue Exception => e
-    log_error(e)
+  rescue StandardError => e
     OpenC3::Logger.error("File listing failed: #{e.message}", user: username())
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
+    raise
   end
 
   def exists
@@ -291,10 +295,9 @@ class StorageController < ApplicationController
     else
       render json: result, status: :not_found
     end
-  rescue Exception => e
-    log_error(e)
+  rescue StandardError => e
     OpenC3::Logger.error("File exists request failed: #{e.message}", user: username())
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
+    raise
   end
 
   def download_file
@@ -348,10 +351,9 @@ class StorageController < ApplicationController
       else
         render json: { filename: params[:object_id], contents: Base64.encode64(file) }
       end
-    rescue Exception => e
-      log_error(e)
+    rescue StandardError => e
       OpenC3::Logger.error("Download failed: #{e.message}", user: username())
-      render json: { status: 'error', message: e.message }, status: :internal_server_error
+      raise
     ensure
       FileUtils.remove_entry_secure(tmp_dir, true) if tmp_dir
     end
@@ -392,10 +394,9 @@ class StorageController < ApplicationController
       zip_filename = "download_#{Time.now.strftime('%Y%m%d_%H%M%S')}.zip"
 
       render json: { filename: zip_filename, contents: Base64.encode64(zip_data) }
-    rescue Exception => e
-      log_error(e)
+    rescue StandardError => e
       OpenC3::Logger.error("Multiple file download failed: #{e.message}", user: username())
-      render json: { status: 'error', message: e.message }, status: :internal_server_error
+      raise
     ensure
       FileUtils.remove_entry_secure(tmp_dir, true) if tmp_dir
     end
@@ -422,10 +423,9 @@ class StorageController < ApplicationController
                                       method: :get_object,
                                       internal: params[:internal])
     render json: result, status: :created
-  rescue Exception => e
-    log_error(e)
+  rescue StandardError => e
     OpenC3::Logger.error("Download request failed: #{e.message}", user: username())
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
+    raise
   end
 
   def get_upload_presigned_request
@@ -456,10 +456,9 @@ class StorageController < ApplicationController
     OpenC3::Logger.info("S3 upload presigned request generated: #{bucket_name}/#{path}",
         scope: params[:scope], user: username())
     render json: result, status: :created
-  rescue Exception => e
-    log_error(e)
+  rescue StandardError => e
     OpenC3::Logger.error("Upload request failed: #{e.message}", user: username())
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
+    raise
   end
 
   def delete
@@ -469,13 +468,12 @@ class StorageController < ApplicationController
     elsif params[:volume].presence
       return unless delete_volume_item(params)
     else
-      raise "Must pass bucket or volume parameter!"
+      raise StorageError, "Must pass bucket or volume parameter!"
     end
     head :ok
-  rescue Exception => e
-    log_error(e)
+  rescue StandardError => e
     OpenC3::Logger.error("Delete failed: #{e.message}", user: username())
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
+    raise
   end
 
   def delete_directory
@@ -487,10 +485,9 @@ class StorageController < ApplicationController
     else
       raise StorageError, "Must pass bucket or volume parameter!"
     end
-  rescue Exception => e
-    log_error(e)
+  rescue StandardError => e
     OpenC3::Logger.error("Delete directory failed: #{e.message}", user: username())
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
+    raise
   end
 
   def reingest_files
@@ -548,10 +545,9 @@ class StorageController < ApplicationController
 
     OpenC3::Logger.info("Reingest job #{job_id} enqueued: #{files.length} file(s)", user: username())
     render json: { job_id: job_id, state: 'Queued' }, status: :accepted
-  rescue Exception => e
-    log_error(e)
+  rescue StandardError => e
     OpenC3::Logger.error("Reingest enqueue failed: #{e.message}", user: username())
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
+    raise
   end
 
   def reingest_status
@@ -563,9 +559,6 @@ class StorageController < ApplicationController
       return
     end
     render json: job.as_json, status: :ok
-  rescue Exception => e
-    log_error(e)
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
 
   def repair_candidates
@@ -608,9 +601,6 @@ class StorageController < ApplicationController
       path: "#{prefix}/",
       files: files,
     }, status: :ok
-  rescue Exception => e
-    log_error(e)
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
 
   private

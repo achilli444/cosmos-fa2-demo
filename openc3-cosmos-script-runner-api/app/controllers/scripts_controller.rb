@@ -178,9 +178,6 @@ class ScriptsController < ApplicationController
     end
     OpenC3::Logger.info("Script lifecycle changed from #{current} to #{state}: #{name} (#{comment})", scope: scope, user: username())
     render json: result
-  rescue => e
-    log_error(e)
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
 
   def create
@@ -213,9 +210,6 @@ class ScriptsController < ApplicationController
     end
     OpenC3::Logger.info("Script created: #{name}", scope: scope, user: username()) if success
     render json: results
-  rescue => e
-    log_error(e)
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
 
   def run
@@ -254,9 +248,6 @@ class ScriptsController < ApplicationController
     else
       render plain: "Script not found: #{name}", status: :not_found
     end
-  rescue => e
-    log_error(e)
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
 
   def lock
@@ -292,9 +283,6 @@ class ScriptsController < ApplicationController
     end
     OpenC3::Logger.info("Script destroyed: #{name}", scope: scope, user: username())
     head :ok
-  rescue => e
-    log_error(e)
-    render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
 
   def mnemonics

@@ -21,6 +21,10 @@ require 'openc3/utilities/store'
 
 module OpenC3
   class AuthModel
+    # Raised by set() for password validation failures whose messages are
+    # intended to be shown to the user
+    class PasswordError < StandardError; end
+
     ARGON2_PROFILE = ENV["OPENC3_ARGON2_PROFILE"]&.to_sym || :rfc_9106_low_memory
 
     # Redis keys
@@ -135,12 +139,12 @@ module OpenC3
     end
 
     def self.set(password, old_password, key = PRIMARY_KEY)
-      raise "password must not be nil or empty" if password.nil? or password.empty?
-      raise "password must be at least 8 characters" if password.length < MIN_PASSWORD_LENGTH
+      raise PasswordError, "password must not be nil or empty" if password.nil? or password.empty?
+      raise PasswordError, "password must be at least 8 characters" if password.length < MIN_PASSWORD_LENGTH
 
       if set?(key)
-        raise "old_password must not be nil or empty" if old_password.nil? or old_password.empty?
-        raise "old_password incorrect" unless verify_no_service(old_password, mode: :password)
+        raise PasswordError, "old_password must not be nil or empty" if old_password.nil? or old_password.empty?
+        raise PasswordError, "old_password incorrect" unless verify_no_service(old_password, mode: :password)
       end
       pw_hash = Argon2::Password.create(password, profile: ARGON2_PROFILE)
       Store.set(key, pw_hash)

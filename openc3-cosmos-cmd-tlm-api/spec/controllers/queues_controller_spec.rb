@@ -52,8 +52,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -94,8 +96,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -147,8 +151,10 @@ RSpec.describe QueuesController, type: :controller do
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       pp json
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -185,8 +191,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -223,8 +231,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -261,8 +271,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -336,8 +348,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -419,8 +433,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -499,8 +515,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -539,8 +557,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -708,8 +728,10 @@ RSpec.describe QueuesController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -767,16 +789,12 @@ RSpec.describe QueuesController, type: :controller do
       expect(controller).to have_received(:render).with(json: { status: 'error', message: 'queue not found' }, status: :not_found)
     end
 
-    it "handles unexpected errors" do
+    it "propagates unexpected errors to the central handler" do
       allow(OpenC3::QueueModel).to receive(:get).and_raise(StandardError.new("Unexpected error"))
-      allow(controller).to receive(:log_error)
 
-      controller.send(:change_state, { name: "QUEUE1", scope: "DEFAULT" }, "HOLD")
-
-      expect(controller).to have_received(:render).with(
-        json: { status: 'error', message: 'Unexpected error', type: 'StandardError', backtrace: anything },
-        status: :internal_server_error
-      )
+      expect {
+        controller.send(:change_state, { name: "QUEUE1", scope: "DEFAULT" }, "HOLD")
+      }.to raise_error(StandardError, "Unexpected error")
     end
   end
 end
