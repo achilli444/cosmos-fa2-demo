@@ -51,6 +51,32 @@ module OpenC3
       allow(Bucket).to receive(:getClient).and_return(@client)
     end
 
+    describe "move_log_file_to_bucket" do
+      it "uploads with a digest in the metadata and writes the index record" do
+        file = Tempfile.new(['cmd', '.bin'])
+        file.binmode
+        file.write('command log contents')
+        file.close
+        bucket_key = 'DEFAULT/raw_logs/cmd/INST/20200101/20200101000000000000000__20200101001000000000000.bin'
+        puts_ = []
+        allow(@client).to receive(:put_object) do |args|
+          puts_ << args.merge(body: args[:body].respond_to?(:read) ? args[:body].read : args[:body])
+        end
+        thread = BucketUtilities.move_log_file_to_bucket(file.path, bucket_key, metadata: { 'target' => 'INST' })
+        thread.join
+        expect(puts_.length).to eql 2
+        object = puts_[0]
+        expect(object[:key]).to eql "#{bucket_key}.gz"
+        expect(object[:metadata]['target']).to eql 'INST'
+        expect(object[:metadata]['log-digest-algorithm']).to eql 'sha256'
+        expect(object[:metadata]['log-digest']).to eql OpenSSL::Digest::SHA256.hexdigest(object[:body])
+        index = puts_[1]
+        expect(index[:key]).to eql "DEFAULT/log_integrity/raw_logs/cmd/INST/20200101/20200101000000000000000__20200101001000000000000.bin.gz.sha256"
+        expect(index[:body]).to start_with("sha256  #{object[:metadata]['log-digest']}  #{bucket_key}.gz  ")
+        expect(File.exist?(file.path)).to be false
+      end
+    end
+
     describe "files_between_time" do
       it "returns empty array for non-existent bucket" do
         allow(@client).to receive(:exist?).and_return(false)

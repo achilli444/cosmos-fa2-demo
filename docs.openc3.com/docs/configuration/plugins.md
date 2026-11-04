@@ -594,7 +594,7 @@ The following keywords must follow a TARGET keyword.
 
 | Parameter | Description | Required |
 |-----------|-------------|----------|
-| Time | Number of seconds to keep raw command logs (default = nil = Forever) | True |
+| Time | Number of seconds to keep raw command logs (default = nil = Forever). Values below `OPENC3_LOG_MIN_RETAIN_TIME` are raised to that minimum | True |
 
 ### TLM_BUFFER_DEPTH
 <span class="badge badge--secondary since-right">Since 5.2.0</span>**Number of telemetry packets to buffer to ensure logged in order**
@@ -622,7 +622,7 @@ The following keywords must follow a TARGET keyword.
 
 | Parameter | Description | Required |
 |-----------|-------------|----------|
-| Time | Number of seconds to keep raw telemetry logs (default = nil = Forever) | True |
+| Time | Number of seconds to keep raw telemetry logs (default = nil = Forever). Values below `OPENC3_LOG_MIN_RETAIN_TIME` are raised to that minimum | True |
 
 ### CMD_DECOM_RETAIN_TIME
 <span class="badge badge--secondary since-right">Since 7.0.0</span>**How long to keep command decommutation records in the TSDB.**

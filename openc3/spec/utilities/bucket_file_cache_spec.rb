@@ -159,6 +159,33 @@ describe BucketFileCache do
         expect(bucket_file.size).to eql file_size
       end
 
+      it "verifies the stored digest and refuses a modified log file" do
+        build_cache()
+        gz = StringIO.new
+        Zlib::GzipWriter.wrap(gz) { |w| w.write(contents) }
+        good = OpenSSL::Digest::SHA256.hexdigest(gz.string)
+        allow(@client).to receive(:head_object).and_return(OpenStruct.new(metadata: { 'log-digest' => good, 'log-digest-algorithm' => 'sha256' }))
+        bucket_file = BucketFile.new("#{bucket_path}.gz")
+        # Object in the bucket no longer matches what was written
+        allow(@client).to receive(:get_object) do |bucket:, key:, path:|
+          FileUtils.mkdir_p(File.dirname(path))
+          Zlib::GzipWriter.open(path) { |z| z.write('y' * 100) }
+          OpenStruct.new
+        end
+        expect { bucket_file.retrieve(@client) }.to raise_error(OpenC3::LogIntegrity::IntegrityError, /Integrity check failed/)
+        expect(bucket_file.local_path).to be_nil
+        expect(Dir.glob(File.join(@caches.first.cache_dir, '**', '*')).select { |f| File.file?(f) }).to be_empty
+      end
+
+      it "warns for a legacy object without a digest and still serves it" do
+        build_cache()
+        allow(@client).to receive(:head_object).and_return(OpenStruct.new(metadata: {}))
+        expect(OpenC3::Logger).to receive(:warn).with(/No integrity digest stored/)
+        bucket_file = BucketFile.new(bucket_path)
+        expect(bucket_file.retrieve(@client)).to be true
+        expect(File.read(bucket_file.local_path)).to eql contents
+      end
+
       it "retries three times then raises and records the error" do
         build_cache()
         allow(@client).to receive(:get_object).and_raise("bucket down")

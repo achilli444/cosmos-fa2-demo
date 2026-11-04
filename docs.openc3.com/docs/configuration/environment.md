@@ -121,11 +121,20 @@ Set in `.env`, or overridden per service in `compose.override.yaml`:
 | `OPENC3_DEMO` | `true` | Install the Demo plugin. Accepts `false` and `0` to disable |
 | `OPENC3_REGISTRY`, `OPENC3_NAMESPACE` | `docker.io`, `openc3inc` | Where to pull COSMOS images from |
 | `OPENC3_LOGS_BUCKET`, `OPENC3_TOOLS_BUCKET`, `OPENC3_CONFIG_BUCKET` | `logs`, `tools`, `config` | Bucket names |
+| `OPENC3_LOG_MIN_RETAIN_TIME` | `0` | Minimum retention in seconds for objects in the logs bucket. Target and scope `*_RETAIN_TIME` values below it are raised to it by the cleanup microservices, and the storage API refuses to delete log files younger than it. `0` disables the floor. See [Log integrity and retention](#log-integrity-and-retention) |
+| `OPENC3_LOG_INTEGRITY_KEY` | unset | Optional secret. When set, log file digests are HMAC-SHA256 with this key instead of plain SHA-256. Pass it through `compose.override.yaml` or a secret, never `.env` |
+| `OPENC3_LOG_INTEGRITY_REQUIRED` | unset | When set, reading a log file that has no stored digest (written before integrity protection) fails instead of warning |
 | `OPENC3_REDIS_HOSTNAME`, `OPENC3_REDIS_PORT` | `openc3-redis`, `6379` | Redis / Valkey connection |
 | `OPENC3_CLOUD` | `local` | Cloud provider, for bucket and secret handling |
 | `RUBYGEMS_URL`, `PYPI_URL`, `NPM_URL`, `MAVEN_URL` | public mirrors | Package sources used at *build* time. To change the URLs COSMOS uses at *run* time, set the `rubygems_url` / `pypi_url` Admin settings |
 
 Per-service runtime flags - `OPENC3_NO_*`, `OPENC3_FORCE_INSTALL`, `OPENC3_ALLOW_HTTP`, `OPENC3_DEFAULT_QUEUE`, `OPENC3_AUTH_RATE_LIMIT_*`, `OPENC3_LANGUAGE`, `OPENC3_LOG_STDERR` - are documented in `compose.override.yaml` under the service each one applies to, because a flag only takes effect on the container that reads it. See [Install and runtime flags](compose.md#install-and-runtime-flags) for how their values are interpreted.
+
+## Log integrity and retention
+
+Every command, telemetry, message and script log file moved to the logs bucket carries a SHA-256 digest (HMAC-SHA256 when `OPENC3_LOG_INTEGRITY_KEY` is set) of the exact bytes stored, in two places: the object metadata (`log-digest`, `log-digest-algorithm`) and a write-once index record at `<SCOPE>/log_integrity/<same path>.sha256`. The streaming and message log readers verify the digest when they download a file and refuse to serve a file whose contents no longer match. Deleting a log file does not delete its index record, so the index remains a record of what was written.
+
+Log file deletion is an audited event: the cleanup microservices and the storage API log each deleted log object at `INFO` with the retention that applied and the user who requested it. `OPENC3_LOG_MIN_RETAIN_TIME` is the organization-defined floor on how soon a log file may be deleted; set it to the audit record retention period your policy requires.
 
 ## Admin Console settings
 
