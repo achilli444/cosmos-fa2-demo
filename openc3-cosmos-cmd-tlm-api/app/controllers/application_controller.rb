@@ -70,9 +70,9 @@ class ApplicationController < ActionController::API
   # @return [Boolean] true if the request carries the service credential
   def service_authorization()
     token = request.headers['HTTP_AUTHORIZATION']
-    return true if token and OpenC3::AuthModel.verify(token, service_only: true)
-    render json: { status: 'error', message: 'Service token is required' }, status: :unauthorized
-    return false
+    authorized = token.present? && OpenC3::AuthModel.verify(token, service_only: true)
+    render json: { status: 'error', message: 'Service token is required' }, status: :unauthorized unless authorized
+    return authorized
   end
 
   def sanitize_params(param_list, require_params: true, allow_forward_slash: false, allow_parent_dir: false)

@@ -111,6 +111,8 @@ RSpec.describe MicroservicesController, type: :controller do
     it "fails closed when no service password is configured" do
       allow(ENV).to receive(:[]).and_call_original
       allow(ENV).to receive(:[]).with("OPENC3_SERVICE_PASSWORD").and_return(nil)
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("OPENC3_SERVICE_PASSWORD", nil).and_return(nil)
 
       get :traefik
 
