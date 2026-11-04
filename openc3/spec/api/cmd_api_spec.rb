@@ -194,6 +194,60 @@ module OpenC3
           expect { @api.send(method, "INST DISABLED") }.to raise_error(DisabledError, "INST DISABLED is Disabled")
         end
 
+        if method.include?('no_checks') or method.include?('no_range') or method.include?('no_hazard')
+          it "requires the distinct cmd_bypass permission in addition to cmd" do
+            expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: 'INST', packet_name: 'ABORT')).ordered.and_call_original
+            expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd_bypass', target_name: 'INST', packet_name: 'ABORT')).ordered.and_call_original
+            @api.send(method, "INST", "ABORT")
+          end
+
+          it "propagates ForbiddenError when cmd_bypass is denied" do
+            allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd')).and_call_original
+            allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd_bypass')).and_raise(ForbiddenError.new("User lacks cmd_bypass"))
+            expect { @api.send(method, "INST", "ABORT") }.to raise_error(ForbiddenError, "User lacks cmd_bypass")
+          end
+
+          context "when OPENC3_ALLOW_CMD_BYPASS is unset" do
+            around(:each) do |example|
+              saved = ENV.delete('OPENC3_ALLOW_CMD_BYPASS')
+              example.run
+            ensure
+              ENV['OPENC3_ALLOW_CMD_BYPASS'] = saved
+            end
+
+            it "rejects the bypass at the interface when critical commanding is OFF" do
+              expect { @api.send(method, "INST", "ABORT") }.to raise_error(ForbiddenError, /#{method}\("INST ABORT"\) bypasses command safety checks/)
+              expect(@interface_data).to eql ''
+            end
+
+            it "forces the bypass through critical command approval when critical commanding is on" do
+              critical_model = double('CriticalCmdModel', create: nil, name: 'critical-uuid', approver: nil)
+              stub_const('OpenC3::CriticalCmdModel', double('CriticalCmdModelClass', new: critical_model))
+              @thread.instance_variable_set(:@critical_commanding, 'NORMAL')
+              expect { @api.send(method, "INST", "ABORT") }.to raise_error(CriticalCmdError) do |error|
+                expect(error.uuid).to eql 'critical-uuid'
+              end
+              expect(@interface_data).to eql ''
+            end
+          end
+        else
+          it "does not require the cmd_bypass permission" do
+            expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd')).and_call_original
+            expect(@api).not_to receive(:authorize).with(hash_including(permission: 'cmd_bypass'))
+            @api.send(method, "INST", "ABORT")
+          end
+
+          it "still sends when OPENC3_ALLOW_CMD_BYPASS is unset" do
+            saved = ENV.delete('OPENC3_ALLOW_CMD_BYPASS')
+            begin
+              command = @api.send(method, "INST", "ABORT")
+              expect(command['cmd_name']).to eql 'ABORT'
+            ensure
+              ENV['OPENC3_ALLOW_CMD_BYPASS'] = saved
+            end
+          end
+        end
+
         it "times out if the interface does not process the command" do
           expect { @api.send(method, "INST", "ABORT", timeout: true) }.to raise_error("Invalid timeout parameter: true. Must be numeric.")
           expect { @api.send(method, "INST", "ABORT", timeout: false) }.to raise_error("Invalid timeout parameter: false. Must be numeric.")

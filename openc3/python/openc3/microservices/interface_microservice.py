@@ -40,6 +40,7 @@ from openc3.topics.command_topic import CommandTopic
 from openc3.topics.interface_topic import InterfaceTopic
 from openc3.topics.router_topic import RouterTopic
 from openc3.topics.telemetry_topic import TelemetryTopic
+from openc3.utilities.cmd_bypass import cmd_bypass_allowed, cmd_bypass_rejection_message, cmd_bypass_requested
 from openc3.utilities.json import JsonDecoder, JsonEncoder
 from openc3.utilities.logger import Logger
 from openc3.utilities.sleeper import Sleeper
@@ -323,6 +324,25 @@ class InterfaceCmdHandlerThread:
                 command.extra["approver"] = critical_model.approver
             hazardous, hazardous_description = System.commands.cmd_pkt_hazardous(command)
 
+            # A request to skip range or hazardous checks is only dispatched if the deployment
+            # allows it, or if the scope routes it through critical command approval
+            force_critical = False
+            if (
+                cmd_params is not None
+                and cmd_bypass_requested(range_check, hazardous_check)
+                and not release_critical
+                and not cmd_bypass_allowed()
+            ):
+                if self.critical_commanding is not None and self.critical_commanding != "OFF":
+                    force_critical = True
+                else:
+                    self.logger.warn(
+                        f"Cmd bypass rejected: {command.extra['cmd_string']}",
+                        user=command.extra["username"],
+                        scope=self.scope,
+                    )
+                    return f"ForbiddenError\n{cmd_bypass_rejection_message(command.extra['cmd_string'])}"
+
             # Return back the error, description, and the formatted command
             # This allows the error handler to simply re-send the command
             if hazardous_check and hazardous and not release_critical:
@@ -330,7 +350,7 @@ class InterfaceCmdHandlerThread:
 
             if self.critical_commanding is not None and self.critical_commanding != "OFF" and not release_critical:
                 restricted = command.restricted
-                if hazardous or restricted or (self.critical_commanding == "ALL" and manual):
+                if hazardous or restricted or force_critical or (self.critical_commanding == "ALL" and manual):
                     cmd_type = "NORMAL"
                     if hazardous:
                         cmd_type = "HAZARDOUS"

@@ -67,6 +67,7 @@ end
 
 # Disable Redis and Fluentd in the Logger
 ENV['OPENC3_NO_STORE'] = 'true'
+ENV['OPENC3_ALLOW_CMD_BYPASS'] = '1' # Specs exercise the *_no_*_check variants; cmd_bypass_spec and cmd_api_spec unset this
 ENV['OPENC3_LOGS_BUCKET'] = 'logs'
 ENV['OPENC3_TOOLS_BUCKET'] = 'tools'
 ENV['OPENC3_CONFIG_BUCKET'] = 'config'

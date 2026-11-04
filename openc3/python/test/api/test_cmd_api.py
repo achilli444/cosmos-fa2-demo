@@ -10,6 +10,7 @@
 # if purchased from OpenC3, Inc.
 
 import contextlib
+import os
 import struct
 import threading
 import time
@@ -49,7 +50,8 @@ from openc3.models.interface_model import InterfaceModel
 from openc3.models.interface_status_model import InterfaceStatusModel
 from openc3.models.microservice_model import MicroserviceModel
 from openc3.packets.packet import Packet
-from openc3.top_level import HazardousError
+from openc3.top_level import CriticalCmdError, HazardousError
+from openc3.utilities.authorization import ForbiddenError, authorize
 from test.test_helper import capture_io, mock_redis, setup_system
 
 
@@ -322,6 +324,83 @@ class TestCmdApi(unittest.TestCase):
                 func("INST CLEAR")
             except HazardousError:
                 self.fail(f"{name} raised HazardousError unexpectedly!")
+
+    BYPASS_METHODS = [
+        "cmd_no_range_check",
+        "cmd_no_hazardous_check",
+        "cmd_no_checks",
+        "cmd_raw_no_range_check",
+        "cmd_raw_no_hazardous_check",
+        "cmd_raw_no_checks",
+    ]
+    NORMAL_METHODS = ["cmd", "cmd_raw"]
+
+    def test_bypass_variants_require_the_distinct_cmd_bypass_permission(self):
+        for name in self.BYPASS_METHODS:
+            func = globals()[name]
+            with patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize:
+                func("INST ABORT")
+            permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+            self.assertEqual(permissions, ["cmd", "cmd_bypass"], f"{name} authorized with {permissions}")
+
+    def test_normal_variants_do_not_require_cmd_bypass(self):
+        for name in self.NORMAL_METHODS:
+            func = globals()[name]
+            with patch("openc3.api.cmd_api.authorize", wraps=authorize) as mock_authorize:
+                func("INST ABORT")
+            permissions = [call.kwargs["permission"] for call in mock_authorize.call_args_list]
+            self.assertEqual(permissions, ["cmd"], f"{name} authorized with {permissions}")
+
+    def test_bypass_variants_propagate_forbidden_error_when_cmd_bypass_is_denied(self):
+        def deny_bypass(permission=None, **kwargs):
+            if permission == "cmd_bypass":
+                raise ForbiddenError("User lacks cmd_bypass")
+            return authorize(permission=permission, **kwargs)
+
+        for name in self.BYPASS_METHODS:
+            func = globals()[name]
+            with (
+                patch("openc3.api.cmd_api.authorize", side_effect=deny_bypass),
+                self.assertRaisesRegex(ForbiddenError, "User lacks cmd_bypass"),
+            ):
+                func("INST ABORT")
+
+    def test_bypass_variants_are_rejected_at_the_interface_when_not_allowed(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPENC3_ALLOW_CMD_BYPASS", None)
+            for name in self.BYPASS_METHODS:
+                func = globals()[name]
+                MyInterface.interface_data = ""
+                with self.assertRaisesRegex(ForbiddenError, f'{name}\\("INST ABORT"\\) bypasses command safety checks'):
+                    func("INST ABORT")
+                self.assertEqual(MyInterface.interface_data, "")
+            for name in self.NORMAL_METHODS:
+                func = globals()[name]
+                command = func("INST ABORT")
+                self.assertEqual(command["cmd_name"], "ABORT")
+
+    def test_bypass_variants_are_forced_through_critical_approval_when_enabled(self):
+        critical_model = Mock()
+        critical_model.name = "critical-uuid"
+        critical_model_class = Mock(return_value=critical_model)
+        with (
+            patch.dict(os.environ, {}, clear=False),
+            patch(
+                "openc3.microservices.interface_microservice.CriticalCmdModel",
+                critical_model_class,
+                create=True,
+            ),
+        ):
+            os.environ.pop("OPENC3_ALLOW_CMD_BYPASS", None)
+            self.icht.critical_commanding = "NORMAL"
+            for name in self.BYPASS_METHODS:
+                func = globals()[name]
+                MyInterface.interface_data = ""
+                with self.assertRaises(CriticalCmdError) as context:
+                    func("INST ABORT")
+                self.assertEqual(context.exception.uuid, "critical-uuid")
+                self.assertEqual(MyInterface.interface_data, "")
+            critical_model.create.assert_called()
 
     def test_cmd_warns_about_disabled_commands(self):
         for name in [

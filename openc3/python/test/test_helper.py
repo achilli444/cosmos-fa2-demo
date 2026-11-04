@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 
 os.environ["OPENC3_NO_STORE"] = "true"
+os.environ["OPENC3_ALLOW_CMD_BYPASS"] = "1"  # Tests exercise the *_no_*_check variants; cmd_bypass tests unset this
 os.environ["OPENC3_CLOUD"] = "local"
 os.environ["OPENC3_LOGS_BUCKET"] = "logs"
 os.environ["OPENC3_TOOLS_BUCKET"] = "tools"

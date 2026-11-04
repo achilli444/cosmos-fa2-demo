@@ -244,6 +244,12 @@ services:
       - CI
       - GEM_HOME=/gems
       - PYTHONUSERBASE=/gems/python_packages
+      # Allow the command safety-check bypass API variants (cmd_no_range_check,
+      # cmd_no_hazardous_check, cmd_no_checks and the cmd_raw_* equivalents) to be
+      # dispatched by interfaces. Defaults to 1 for the demo; set to 0 in .env or the
+      # shell to reject bypasses unless the scope has critical commanding enabled,
+      # which routes them through approval instead. This is an Authorizing Official decision.
+      - OPENC3_ALLOW_CMD_BYPASS=${OPENC3_ALLOW_CMD_BYPASS:-1}
     env_file:
       - .env
     extra_hosts:
