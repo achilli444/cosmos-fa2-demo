@@ -226,7 +226,7 @@ module OpenC3
       @secret_options.each do |option|
         secret_name = option[1]
         secret_value = interface_or_router.secrets.get(secret_name, scope: @scope)
-        interface_or_router.set_option(option[0], [secret_value])
+        interface_or_router.set_secret_option(option[0], [secret_value])
       end
       @protocols.each do |protocol|
         klass = OpenC3.require_class(protocol[1])

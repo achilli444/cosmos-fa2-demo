@@ -197,7 +197,7 @@ class InterfaceModel(Model):
         for option in self.secret_options:
             secret_name = option[1]
             secret_value = interface_or_router.secrets.get(secret_name, scope=self.scope)
-            interface_or_router.set_option(option[0], [secret_value])
+            interface_or_router.set_secret_option(option[0], [secret_value])
         for protocol in self.protocols:
             klass = get_class_from_module(
                 filename_to_module(protocol[1]),

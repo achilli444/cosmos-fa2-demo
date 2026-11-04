@@ -173,6 +173,8 @@ class TestInterfaceModel(unittest.TestCase):
         )
         interface = model.build()
         self.assertEqual(interface.options["PASSWORD"], ["abc123"])
+        self.assertEqual(interface.secret_option_names, ["PASSWORD"])
+        self.assertEqual(interface.details()["options"]["PASSWORD"], ["Set"])
         json = model.as_json()
         self.assertEqual(json["secret_options"], [["password", "password"]])
 

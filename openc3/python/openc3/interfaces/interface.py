@@ -10,6 +10,8 @@
 # if purchased from OpenC3, Inc.
 
 
+import copy
+import re
 import threading
 import time
 import traceback
@@ -28,6 +30,11 @@ class WriteRejectError(RuntimeError):
     """Define a class to allow interfaces and protocols to reject commands without disconnecting the interface"""
 
     pass
+
+
+# Option names which are always masked in details regardless of source
+SECRET_OPTION_NAME_PATTERN = re.compile(r"PASSWORD|PASSWD|SECRET|TOKEN|KEY|CERT|CA_FILE")
+SECRET_OPTION_MASK = "Set"
 
 
 class Interface:
@@ -62,6 +69,8 @@ class Interface:
         self.write_allowed = True
         self.write_raw_allowed = True
         self.options = {}
+        # Upcased option names whose values came from the secret store
+        self.secret_option_names = []
         self.read_protocols = []
         self.write_protocols = []
         self.protocol_info = []
@@ -369,6 +378,7 @@ class Interface:
                     other_interface.set_option(option_name, ovs)
             else:
                 other_interface.set_option(option_name, option_values)
+        other_interface.secret_option_names = self.secret_option_names[:]
         other_interface.protocol_info = []
         for protocol_class, protocol_args, read_write in self.protocol_info:
             if read_write != "PARAMS":
@@ -388,6 +398,32 @@ class Interface:
             self.options[option_name_upcase].append(option_values[:])
         else:
             self.options[option_name_upcase] = option_values[:]
+
+    # Set an option whose value was read from the secret store. The value is
+    # stored like any other option but is masked in details().
+    def set_secret_option(self, option_name, option_values):
+        self.set_option(option_name, option_values)
+        option_name_upcase = option_name.upper()
+        if option_name_upcase not in self.secret_option_names:
+            self.secret_option_names.append(option_name_upcase)
+
+    # Whether the option value must be masked in details()
+    def secret_option(self, option_name):
+        option_name_upcase = str(option_name).upper()
+        return option_name_upcase in self.secret_option_names or bool(
+            SECRET_OPTION_NAME_PATTERN.search(option_name_upcase)
+        )
+
+    # Copy of the options with secret values replaced by SECRET_OPTION_MASK.
+    # Safe to return to API callers and to modify.
+    def masked_options(self):
+        masked = {}
+        for option_name, option_values in self.options.items():
+            if self.secret_option(option_name):
+                masked[option_name] = [SECRET_OPTION_MASK]
+            else:
+                masked[option_name] = copy.deepcopy(option_values)
+        return masked
 
     # Called to convert the read data into a OpenC3 Packet object
     #
@@ -548,7 +584,7 @@ class Interface:
         else:
             result["stream_log"] = False
 
-        result["options"] = self.options
+        result["options"] = self.masked_options()
         result["read_protocols"] = []
         for read_protocol in self.read_protocols:
             result["read_protocols"].append(read_protocol.read_details())
