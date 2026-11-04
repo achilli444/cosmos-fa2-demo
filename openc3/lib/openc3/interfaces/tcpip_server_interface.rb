@@ -115,12 +115,21 @@ module OpenC3
 
     def connection_string
       if @write_port == @read_port
-        return "listening on #{@listen_address}:#{@write_port} (R/W)"
+        return "listening on #{@listen_address}:#{@write_port} (R/W)#{ssl_suffix()}"
       end
       result = "listening on"
       result += " #{@listen_address}:#{@write_port} (write)" if @write_port
       result += " #{@listen_address}:#{@read_port} (read)" if @read_port
-      return result
+      return result + ssl_suffix()
+    end
+
+    # @return [Boolean] Whether accepted connections will be wrapped in TLS (SSL options set)
+    def ssl?
+      @options.any? { |name, values| name == 'SSL' ? ConfigParser.handle_true_false(values[0]) == true : TcpipSocketStream::SSL_OPTIONS[1..-1].include?(name) }
+    end
+
+    def ssl_suffix
+      ssl?() ? " (TLS)" : ""
     end
 
     # Create the read and write port listen threads. Incoming connections will
@@ -128,6 +137,7 @@ module OpenC3
     def connect
       @cancel_threads = false
       @read_queue.clear if @read_queue
+      enforce_link_encryption_policy(connection_string(), encrypted: ssl?)
       if @write_port == @read_port # One socket
         start_listen_thread(@read_port, true, true)
       else
@@ -398,6 +408,13 @@ module OpenC3
       @options.each do |option_name, option_values|
         stream.set_option(option_name, option_values)
       end
+      begin
+        stream.start_tls(:server)
+      rescue => e
+        OpenC3.close_socket(socket)
+        Logger.error "#{@name}: Tcpip server rejected connection from #{hostname}(#{host_ip}):#{port}: TLS handshake failed: #{e.message}"
+        return
+      end
 
       interface = StreamInterface.new
       interface.target_names = @target_names
@@ -629,6 +646,8 @@ module OpenC3
       result['write_timeout'] = @write_timeout
       result['read_timeout'] = @read_timeout
       result['listen_address'] = @listen_address
+      result['ssl'] = ssl?
+      result['options'] = result['options'].reject { |name, _| name == 'SSL_KEY' } if result['options']
       return result
     end
   end

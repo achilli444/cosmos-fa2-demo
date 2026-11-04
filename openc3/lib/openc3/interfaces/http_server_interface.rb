@@ -15,6 +15,9 @@ require 'openc3/interfaces/interface'
 require 'openc3/config/config_parser'
 require 'openc3/accessors/http_accessor'
 require 'webrick'
+require 'webrick/https'
+require 'openssl'
+require 'tempfile'
 
 module OpenC3
   class HttpServerInterface < Interface
@@ -25,25 +28,57 @@ module OpenC3
       @port = Integer(port)
       @server = nil
       @request_queue = Queue.new
+      @ssl_cert = nil
+      @ssl_key = nil
+      @ssl_ca_file = nil
     end
 
     # Supported Options
     # LISTEN_ADDRESS - Ip address of the interface to accept connections on
+    # SSL_CERT - PEM server certificate; with SSL_KEY enables HTTPS (TLS 1.2 minimum)
+    # SSL_KEY - PEM private key matching SSL_CERT
+    # SSL_CA_FILE - PEM certificate authority chain; when set clients must present a certificate it signed (mutual TLS)
     # (see Interface#set_option)
     def set_option(option_name, option_values)
       super(option_name, option_values)
-      if option_name.upcase == 'LISTEN_ADDRESS'
+      case option_name.upcase
+      when 'LISTEN_ADDRESS'
         @listen_address = option_values[0]
+      when 'SSL_CERT'
+        @ssl_cert = OpenSSL::X509::Certificate.new(option_values[0])
+      when 'SSL_KEY'
+        @ssl_key = OpenSSL::PKey.read(option_values[0])
+      when 'SSL_CA_FILE'
+        @ssl_ca_file = Tempfile.new('ca_file')
+        @ssl_ca_file.write(option_values[0])
+        @ssl_ca_file.close
       end
     end
 
     def connection_string
-      return "listening on #{@listen_address}:#{@port}"
+      return "listening on #{@listen_address}:#{@port}#{ssl? ? ' (TLS)' : ''}"
+    end
+
+    # @return [Boolean] Whether the server terminates TLS
+    def ssl?
+      !!(@ssl_cert and @ssl_key)
     end
 
     # Connects the interface to its target(s)
     def connect
-      @server = WEBrick::HTTPServer.new(:BindAddress => @listen_address, :Port => @port)
+      enforce_link_encryption_policy(connection_string(), encrypted: ssl?)
+      config = { :BindAddress => @listen_address, :Port => @port }
+      if ssl?
+        config[:SSLEnable] = true
+        config[:SSLCertificate] = @ssl_cert
+        config[:SSLPrivateKey] = @ssl_key
+        config[:SSLOptions] = OpenSSL::SSL::OP_NO_SSLv2 | OpenSSL::SSL::OP_NO_SSLv3 | OpenSSL::SSL::OP_NO_TLSv1 | OpenSSL::SSL::OP_NO_TLSv1_1
+        if @ssl_ca_file
+          config[:SSLCACertificateFile] = @ssl_ca_file.path
+          config[:SSLVerifyClient] = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+        end
+      end
+      @server = WEBrick::HTTPServer.new(config)
       @request_queue = Queue.new
 
       # Create a response hook for every command packet

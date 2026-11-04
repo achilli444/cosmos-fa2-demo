@@ -148,6 +148,7 @@ class TcpipServerInterface(StreamInterface):
     # Create the read and write port listen threads. Incoming connections will
     # spawn separate threads to process the reads and writes.
     def connect(self):
+        self.enforce_link_encryption_policy(self.connection_string(), encrypted=False)
         self.cancel_threads = False
         if self.read_queue:
             while not self.read_queue.empty():

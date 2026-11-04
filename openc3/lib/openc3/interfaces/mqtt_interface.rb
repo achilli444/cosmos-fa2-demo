@@ -119,11 +119,17 @@ module OpenC3
     end
 
     def connection_string
-      return "#{@hostname}:#{@port} (ssl: #{@ssl})"
+      return "#{@hostname}:#{@port} (ssl: #{ssl?})"
+    end
+
+    # @return [Boolean] Whether the broker connection uses TLS (ssl flag, client cert or CA given)
+    def ssl?
+      !!(@ssl or (@cert and @key) or @ca_file)
     end
 
     # Connects the interface to its target(s)
     def connect
+      enforce_link_encryption_policy(connection_string(), encrypted: ssl?)
       @write_topics = []
       @read_topics = []
       @client = MQTT::Client.new

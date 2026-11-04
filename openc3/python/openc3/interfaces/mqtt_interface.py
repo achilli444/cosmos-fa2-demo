@@ -61,8 +61,13 @@ class MqttInterface(Interface):
     def connection_string(self):
         return f"{self.hostname}:{self.port} (ssl: {self.ssl})"
 
+    # Whether the broker connection uses TLS (ssl flag or CA file given)
+    def ssl_enabled(self):
+        return bool(self.ssl or self.ca_file)
+
     # Connects the interface to its target(s)
     def connect(self):
+        self.enforce_link_encryption_policy(self.connection_string(), encrypted=self.ssl_enabled())
         self.read_topics = []
         self.write_topics = []
         self.pkt_queue.empty()

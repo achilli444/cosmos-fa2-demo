@@ -128,6 +128,7 @@ class HttpServerInterface(Interface):
     def connect(self):
         # Can't build the lookup until after init because the target_names are not set
         self.build_path_lookup()
+        self.enforce_link_encryption_policy(self.connection_string(), encrypted=False)
         self.server = ThreadingHTTPServer((self.listen_address, self.port), Handler)
         self.server.request_queue = queue.Queue()
         self.server.lookup = self.lookup

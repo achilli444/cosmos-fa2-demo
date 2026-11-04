@@ -29,7 +29,9 @@ module OpenC3
       super()
       @hostname = hostname
       @port = Integer(port)
-      @protocol = protocol
+      @protocol = protocol.to_s.downcase
+      raise "Invalid protocol '#{protocol}'. Must be http or https." unless %w[http https].include?(@protocol)
+
       if (@port == 80 and @protocol == 'http') or (@port == 443 and @protocol == 'https')
         @url = "#{@protocol}://#{@hostname}"
       else
@@ -60,11 +62,26 @@ module OpenC3
       request['open_timeout'] = @connect_timeout if @connect_timeout
       request['read_timeout'] = @read_timeout if @read_timeout
       request['write_timeout'] = @write_timeout if @write_timeout
-      @http = Faraday.new(request: request) do |f|
-        f.response :follow_redirects # use Faraday::FollowRedirects::Middleware
+      enforce_link_encryption_policy(@url, encrypted: ssl?)
+      ssl = { verify: true, min_version: :TLS1_2 }
+      @http = Faraday.new(request: request, ssl: ssl) do |f|
+        # use Faraday::FollowRedirects::Middleware but never follow an https -> http downgrade
+        f.response :follow_redirects, callback: method(:check_redirect)
         f.adapter :net_http # adds the adapter to the connection, defaults to `Faraday.default_adapter`
       end
       super()
+    end
+
+    # @return [Boolean] Whether requests are sent over TLS
+    def ssl?
+      @protocol == 'https'
+    end
+
+    # Refuse redirects that would move an https request to plaintext http
+    def check_redirect(old_env, new_env)
+      if old_env.url.scheme == 'https' and new_env.url.scheme != 'https'
+        raise "#{@name}: refusing redirect from #{old_env.url} to plaintext #{new_env.url}"
+      end
     end
 
     # Whether the interface is connected to its target(s)
