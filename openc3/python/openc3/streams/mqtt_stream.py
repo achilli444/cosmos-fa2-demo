@@ -18,6 +18,7 @@ import paho.mqtt.client as mqtt
 
 from openc3.config.config_parser import ConfigParser
 from openc3.utilities.logger import Logger
+from openc3.utilities.mqtt_tls import configure_client_tls
 
 
 class MqttStream:
@@ -59,27 +60,16 @@ class MqttStream:
         self.client.on_message = self.on_message
         self.client.user_data_set(self.pkt_queue)  # passed to on_message
 
-        if self.ssl:
-            self.client.tls_set()
         if self.username and self.password:
             self.client.username_pw_set(self.username, self.password)
-        # You still need the ca_file if you're using your own cert and key
-        if self.cert and self.key and self.ca_file:
-            if self.keyfile_password:
-                self.client.tls_set(
-                    ca_certs=self.ca_file.name,
-                    certfile=self.cert.name,
-                    keyfile=self.key.name,
-                    keyfile_password=self.keyfile_password,
-                )
-            else:
-                self.client.tls_set(
-                    ca_certs=self.ca_file.name,
-                    certfile=self.cert.name,
-                    keyfile=self.key.name,
-                )
-        elif self.ca_file:
-            self.client.tls_set(ca_certs=self.ca_file.name)
+        configure_client_tls(
+            self.client,
+            ssl=self.ssl,
+            cert=self.cert,
+            key=self.key,
+            ca_file=self.ca_file,
+            keyfile_password=self.keyfile_password,
+        )
 
         self.client.loop_start()
         # Connect doesn't fully establish the connection, it just sends the CONNECT packet

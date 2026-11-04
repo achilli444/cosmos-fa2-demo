@@ -9,6 +9,9 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+import os
+import shutil
+import tempfile
 import unittest
 from unittest.mock import ANY, Mock, patch
 
@@ -21,6 +24,36 @@ class TestMqttInterface(unittest.TestCase):
     def setUp(self):
         mock_redis(self)
         setup_system()
+        # Isolate the stdlib temp directory so leaked key material is detectable
+        self.tmpdir = tempfile.mkdtemp()
+        self.saved_tempdir = tempfile.tempdir
+        tempfile.tempdir = self.tmpdir
+
+    def tearDown(self):
+        tempfile.tempdir = self.saved_tempdir
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("openc3.interfaces.mqtt_interface.mqtt.Client")
+    def test_does_not_leave_client_key_material_on_disk(self, mock_client):
+        mock_client_instance = mock_client.return_value
+        mock_client_instance.is_connected.return_value = True
+        i = MqttInterface("localhost", "1883")
+        i.set_option("CERT", ["cert_content"])
+        i.set_option("KEY", ["key_content"])
+        i.set_option("KEY", ["replacement_key_content"])
+        i.set_option("CA_FILE", ["ca_file_content"])
+        # Setting options must not persist the PEM contents anywhere
+        self.assertEqual(os.listdir(self.tmpdir), [])
+        i.connect()
+        kwargs = mock_client_instance.tls_set.call_args.kwargs
+        for path in (kwargs["ca_certs"], kwargs["certfile"], kwargs["keyfile"]):
+            self.assertFalse(os.path.exists(path))
+        self.assertEqual(os.listdir(self.tmpdir), [])
+        i.disconnect()
+        # Reconnecting still has the material available (it is held in memory)
+        i.connect()
+        self.assertEqual(mock_client_instance.tls_set.call_count, 2)
+        self.assertEqual(os.listdir(self.tmpdir), [])
 
     def test_sets_all_the_instance_variables(self):
         i = MqttInterface("localhost", "1883")

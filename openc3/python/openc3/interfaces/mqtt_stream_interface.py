@@ -13,8 +13,6 @@
 # docker run -it -p 1883:1883 eclipse-mosquitto:2.0.15 mosquitto -c /mosquitto-no-auth.conf
 # You can also test against encrypted and authenticated servers at https://test.mosquitto.org/
 
-import tempfile
-
 from openc3.config.config_parser import ConfigParser
 from openc3.interfaces.stream_interface import StreamInterface
 from openc3.streams.mqtt_stream import MqttStream
@@ -100,17 +98,14 @@ class MqttStreamInterface(StreamInterface):
             case "PASSWORD":
                 self.password = option_values[0]
             case "CERT":
-                # CERT must be given as a file
-                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as self.cert:
-                    self.cert.write(option_values[0])
+                # PEM contents, written to a temporary file only while connecting
+                self.cert = option_values[0]
             case "KEY":
-                # KEY must be given as a file
-                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as self.key:
-                    self.key.write(option_values[0])
+                # PEM contents, written to a temporary file only while connecting
+                self.key = option_values[0]
             case "CA_FILE":
-                # CA_FILE must be given as a file
-                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as self.ca_file:
-                    self.ca_file.write(option_values[0])
+                # PEM contents, written to a temporary file only while connecting
+                self.ca_file = option_values[0]
             case "KEYFILE_PASSWORD":
                 self.keyfile_password = option_values[0]
 
