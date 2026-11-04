@@ -6,6 +6,8 @@ playwright/openc3-cosmos-pw-test/
 *.gem
 Makefile
 *Gemfile.lock
+# Deployable apps commit their lockfile so image builds are reproducible (bundle install --frozen)
+!openc3-cosmos-cmd-tlm-api/Gemfile.lock
 package-lock.json
 .yardoc
 .DS_Store

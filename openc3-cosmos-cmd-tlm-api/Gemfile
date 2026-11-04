@@ -22,7 +22,7 @@ gem 'prometheus-client', '~> 4.0'
 # gem 'bcrypt', '~> 3.1.7'
 
 # Reduces boot times through caching; required in config/boot.rb
-gem 'bootsnap', '>= 1.9.3', require: false
+gem 'bootsnap', '~> 1.26', require: false
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin AJAX possible
 gem 'rack-cors', '~> 3.0'
@@ -33,25 +33,24 @@ gem 'rails_semantic_logger', '~> 4.17'
 # For downloading files to the server (e.g. plugin install from the OpenC3 Store)
 gem 'down', '~> 5.4', '>= 5.4.2'
 
-# Only define development/test gems if not in production build
-# Set SKIP_DEV_GEMS=1 in Dockerfile to exclude these groups entirely
-unless ENV['SKIP_DEV_GEMS']
-  group :development, :test do
-    # Call 'byebug' anywhere in the code to stop execution and get a debugger console
-    gem 'byebug', platforms: [:mri, :windows]
-    gem 'rspec-rails', '~> 8.0'
-    gem 'simplecov', '~> 1.1'
-    gem 'simplecov-cobertura', '~> 4.0'
-    gem 'rexml', '~> 3.4'
-  end
+# Development/test gems are always declared so the Gemfile resolves to the
+# committed Gemfile.lock; production images skip installing them via
+# BUNDLE_WITHOUT=development:test (see Dockerfile)
+group :development, :test do
+  # Call 'byebug' anywhere in the code to stop execution and get a debugger console
+  gem 'byebug', platforms: [:mri, :windows]
+  gem 'rspec-rails', '~> 8.0'
+  gem 'simplecov', '~> 1.1'
+  gem 'simplecov-cobertura', '~> 4.0'
+  gem 'rexml', '~> 3.4'
+end
 
-  group :test do
-    gem 'mock_redis', '~> 0.47'
-  end
+group :test do
+  gem 'mock_redis', '~> 0.47'
 end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
-gem 'tzinfo-data'
+gem 'tzinfo-data', '~> 1.2026'
 
 if ENV['OPENC3_DEVEL']
   gem 'openc3', :path => ENV['OPENC3_DEVEL']
