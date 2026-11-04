@@ -50,10 +50,11 @@ rescue LoadError
           unless OpenC3::AuthModel.verify(token)
             raise AuthError.new("Token is invalid")
           end
+          # Identity recorded on the session/service token at login so commands,
+          # scripts and audit logs name a person rather than 'anonymous'
+          return user_info(token)
         end
-        # Identity recorded on the session/service token at login so commands,
-        # scripts and audit logs name a person rather than 'anonymous'
-        return user_info(token)
+        return { 'username' => ANONYMOUS_USER }
       end
 
       def user_info(token)
