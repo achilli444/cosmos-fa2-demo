@@ -448,6 +448,15 @@ module OpenC3
       return [target_name, command_name, parameter_name]
     end
 
+    # Audit record for commands sent with range and/or hazardous checks bypassed.
+    # Always logged (independent of DISABLE_MESSAGES) so the bypass is attributable.
+    def _log_check_bypass(method_name, range_check, hazardous_check, cmd_string, username, scope)
+      bypassed = []
+      bypassed << 'range' unless range_check
+      bypassed << 'hazardous' unless hazardous_check
+      Logger.warn("User #{username} bypassed #{bypassed.join(' and ')} check via #{method_name}: #{cmd_string}", scope: scope, user: username)
+    end
+
     # NOTE: When adding new keywords to this method, make sure to update script/commands.rb
     def _cmd_implementation(method_name, *args, range_check:, hazardous_check:, raw:, timeout: nil, log_message: nil, manual: false, validate: true, queue: nil,
                             scope: $openc3_scope, token: $openc3_token, **kwargs)
@@ -482,6 +491,11 @@ module OpenC3
       cmd_name = cmd_name.upcase
       cmd_params = cmd_params.transform_keys(&:upcase)
       user = authorize(permission: 'cmd', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      # Bypassing range or hazardous checks additionally requires a distinct, stronger
+      # permission so roles can allow normal commanding without allowing the safety bypass
+      unless range_check && hazardous_check
+        authorize(permission: 'cmd_no_checks', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      end
       if user.nil?
         user = {}
         user['username'] = ENV['OPENC3_MICROSERVICE_NAME']
@@ -521,6 +535,7 @@ module OpenC3
       end
       cmd_string = _build_cmd_output_string(method_name, target_name, cmd_name, cmd_params, packet)
       username = user && user['username'] ? user['username'] : 'anonymous'
+      _log_check_bypass(method_name, range_check, hazardous_check, cmd_string, username, scope) unless range_check && hazardous_check
       command = {
         'target_name' => target_name,
         'cmd_name' => cmd_name,
