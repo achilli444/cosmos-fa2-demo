@@ -70,6 +70,16 @@
 #       # Enterprise, use Keycloak to configure this instead.
 #       - OPENC3_AUTH_RATE_LIMIT_TO=10
 #       - OPENC3_AUTH_RATE_LIMIT_WITHIN=120
+#       # Session lifetime in seconds (defaults shown). A login session ends
+#       # after OPENC3_SESSION_IDLE_TIMEOUT seconds without an API request or
+#       # OPENC3_SESSION_MAX_AGE seconds after login, whichever comes first,
+#       # and the browser is sent back to the login page. Both must be positive
+#       # integers; the API refuses to start a session check with a value that
+#       # would disable expiry. Every service that verifies session tokens
+#       # (cmd-tlm-api, script-runner-api, operator) must be given the same
+#       # values, so set them in .env rather than here.
+#       - OPENC3_SESSION_IDLE_TIMEOUT=900
+#       - OPENC3_SESSION_MAX_AGE=43200
 #       # Default language used by the generators (`openc3.sh cli generate`).
 #       - OPENC3_LANGUAGE=python
 #

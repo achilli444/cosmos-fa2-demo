@@ -148,6 +148,19 @@ The `OPENC3_SERVICE_PASSWORD` is a backend service account password that allows 
 
 Note: In COSMOS Enterprise with Keycloak, user offline access tokens can be used instead when available, but the service password serves as a fallback for automated operations.
 
+### Session Lifetime
+
+| Variable                      | Default Value | Description                                                   |
+| ----------------------------- | ------------- | ------------------------------------------------------------- |
+| `OPENC3_SESSION_IDLE_TIMEOUT` | `900`         | Seconds a login session may go without an API request         |
+| `OPENC3_SESSION_MAX_AGE`      | `43200`       | Seconds a login session may live after login, regardless of use |
+
+In COSMOS Core a successful login creates a session token that the browser sends with every API request. The token stops working after `OPENC3_SESSION_IDLE_TIMEOUT` seconds without a request (default 15 minutes) or `OPENC3_SESSION_MAX_AGE` seconds after it was issued (default 12 hours), whichever comes first. An expired token is rejected with `401 Unauthorized` and the browser returns to the login page. Each session is stored in Redis with a TTL, so abandoned sessions are also removed from Redis automatically.
+
+Both values must be positive integers; setting one to `0`, a negative number or a non-number is rejected rather than disabling expiry. The same values must be set for every service that verifies session tokens (`openc3-cosmos-cmd-tlm-api`, `openc3-cosmos-script-runner-api` and `openc3-operator`), so set them in `.env`, which `compose.yaml` forwards to all three. Note that tools which poll telemetry keep a session active, so the idle timeout only takes effect once the browser tab is closed or stops polling. Changing the password still terminates every session immediately.
+
+In COSMOS Enterprise session lifetime is governed by Keycloak token settings instead.
+
 ### Rails Application Secret
 
 | Variable          | Description                                                     |
