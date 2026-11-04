@@ -61,9 +61,12 @@ module OpenC3
       return _make_request(action: 'disable queue', verb: 'post', uri: "/openc3-api/queues/#{name}/disable", scope: scope)
     end
 
-    def queue_exec(name, id=nil, scope: $openc3_scope)
+    # Removes a command from the queue and executes it. Hazardous commands are
+    # rejected by the server unless hazardous_ack is true, which is logged.
+    def queue_exec(name, id=nil, hazardous_ack: false, scope: $openc3_scope)
       data = {}
       data['id'] = id if id
+      data['hazardous_ack'] = true if hazardous_ack
       return _make_request(action: 'exec command', verb: 'post', uri: "/openc3-api/queues/#{name}/exec_command", data: data, scope: scope)
     end
 

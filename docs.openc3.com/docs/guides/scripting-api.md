@@ -2509,13 +2509,13 @@ queue_disable('TEST')
 
 <span class="badge badge--secondary since-heading">Since 6.8.0</span>
 
-Removes a command from the queue and executes it.
+Removes a command from the queue and executes it. Hazardous commands are not sent unless the hazard is explicitly acknowledged with `hazardous_ack`; without it the command is left in the queue and an error is raised. Every acknowledged bypass is logged with the user who requested it.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Syntax">
 
 ```python
-queue_exec('<Queue Name>', '<Optional Index>')
+queue_exec('<Queue Name>', '<Optional Index>', hazardous_ack=<Optional Boolean>)
 ```
 
 </TabItem>
@@ -2523,16 +2523,17 @@ queue_exec('<Queue Name>', '<Optional Index>')
 <TabItem value="ruby" label="Ruby Syntax">
 
 ```ruby
-queue_exec('<Queue Name>', '<Optional Index>')
+queue_exec('<Queue Name>', '<Optional Index>', hazardous_ack: <Optional Boolean>)
 ```
 
 </TabItem>
 </Tabs>
 
-| Parameter  | Description                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------- |
-| Queue Name | Case sensitive name of the queue                                                                                |
-| Index      | Remove and execute at the specified index. If the index is not given the first command is removed and executed. |
+| Parameter     | Description                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Queue Name    | Case sensitive name of the queue                                                                                           |
+| Index         | Remove and execute at the specified index. If the index is not given the first command is removed and executed.            |
+| hazardous_ack | Explicitly acknowledge a hazardous command so it is sent without the hazardous check. Default is false (hazardous commands are rejected and remain queued). |
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Example">
@@ -2540,6 +2541,7 @@ queue_exec('<Queue Name>', '<Optional Index>')
 ```python
 queue_exec('TEST') # Removes and executes the first command in the queue
 queue_exec('TEST', index=5) # Removes and executes the command at index 5
+queue_exec('TEST', hazardous_ack=True) # Acknowledge and send even if the first command is hazardous
 ```
 
 </TabItem>
@@ -2549,6 +2551,7 @@ queue_exec('TEST', index=5) # Removes and executes the command at index 5
 ```ruby
 queue_exec('TEST') # Removes and executes the first command in the queue
 queue_exec('TEST', index: 5) # Removes and executes the command at index 5
+queue_exec('TEST', hazardous_ack: true) # Acknowledge and send even if the first command is hazardous
 ```
 
 </TabItem>
