@@ -37,7 +37,8 @@ class ApiServerProxy:
             else:
                 hostname = "openc3-cosmos-cmd-tlm-api"
 
-        return f"{OPENC3_API_SCHEMA}://{hostname}:{OPENC3_API_PORT}"
+        schema = resolve_api_schema("OPENC3_API_SCHEMA")
+        return f"{schema}://{hostname}:{OPENC3_API_PORT}"
 
     def generate_timeout(self):
         """pull openc3-cosmos-cmd-tlm-api timeout from environment variables"""
@@ -104,7 +105,8 @@ class ScriptServerProxy:
                 hostname = "127.0.0.1"
             else:
                 hostname = "openc3-cosmos-script-runner-api"
-        return f"{OPENC3_SCRIPT_API_SCHEMA}://{hostname}:{OPENC3_SCRIPT_API_PORT}"
+        schema = resolve_api_schema("OPENC3_SCRIPT_API_SCHEMA")
+        return f"{schema}://{hostname}:{OPENC3_SCRIPT_API_PORT}"
 
     def generate_timeout(self):
         """pull openc3-cosmos-script-runner-api timeout from environment variables"""

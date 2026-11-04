@@ -10,6 +10,8 @@ os.environ["OPENC3_API_PASSWORD"] = "password"
 
 os.environ["OPENC3_LOG_LEVEL"] = "INFO"
 os.environ["OPENC3_API_SCHEMA"] = "http"
+# API clients default to https; plaintext must be explicitly accepted (local development only)
+os.environ["OPENC3_ALLOW_PLAINTEXT_API"] = "true"
 os.environ["OPENC3_API_HOSTNAME"] = "127.0.0.1"
 os.environ["OPENC3_API_PORT"] = "2900"
 # This import must be after the os.environ settings

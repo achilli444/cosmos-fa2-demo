@@ -13,6 +13,7 @@
 
 require 'openc3/streams/web_socket_client_stream'
 require 'openc3/utilities/authentication'
+require 'openc3/utilities/api_schema'
 require 'openc3/io/json_rpc'
 
 module OpenC3
@@ -186,7 +187,7 @@ module OpenC3
     end
 
     def generate_url
-      schema = ENV['OPENC3_API_SCHEMA'] || 'http'
+      schema = ApiSchema.resolve_websocket('OPENC3_API_SCHEMA')
       hostname = ENV['OPENC3_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-cmd-tlm-api')
       port = ENV['OPENC3_API_CABLE_PORT'] || ENV['OPENC3_API_PORT'] || '3901'
       port = port.to_i
@@ -202,7 +203,7 @@ module OpenC3
     end
 
     def generate_url
-      schema = ENV['OPENC3_SCRIPT_API_SCHEMA'] || 'http'
+      schema = ApiSchema.resolve_websocket('OPENC3_SCRIPT_API_SCHEMA')
       hostname = ENV['OPENC3_SCRIPT_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-script-runner-api')
       port = ENV['OPENC3_SCRIPT_API_CABLE_PORT'] || ENV['OPENC3_SCRIPT_API_PORT'] || '3902'
       port = port.to_i

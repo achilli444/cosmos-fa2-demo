@@ -61,7 +61,7 @@ class OpenC3Authentication:
         return response.text
 
     def _generate_auth_url(self, endpoint=None):
-        schema = OPENC3_API_SCHEMA or "http"
+        schema = resolve_api_schema("OPENC3_API_SCHEMA")
         hostname = OPENC3_API_HOSTNAME or ("127.0.0.1" if OPENC3_DEVEL else "openc3-cosmos-cmd-tlm-api")
         port = OPENC3_API_PORT or "2901"
         port = int(port)
