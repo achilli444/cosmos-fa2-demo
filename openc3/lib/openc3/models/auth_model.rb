@@ -18,6 +18,7 @@
 require 'argon2'
 require 'securerandom'
 require 'openc3/utilities/store'
+require 'openc3/utilities/logger'
 
 module OpenC3
   class AuthModel
@@ -160,6 +161,7 @@ module OpenC3
         token = SESSION_PREFIX + token
       end
       Store.hset(SESSIONS_KEY, token, Time.now.iso8601)
+      audit("Session created", event: 'session_created', token_type: token_type(token))
       return token
     end
 
@@ -168,17 +170,36 @@ module OpenC3
       Store.del(SESSIONS_KEY)
       @@session_cache = nil
       @@session_cache_time = nil
+      audit("All sessions terminated", event: 'logout_all')
     end
 
     # Terminates the given session token.
     def self.terminate(token)
-      Store.hdel(SESSIONS_KEY, token)
+      removed = Store.hdel(SESSIONS_KEY, token)
       @@session_cache.delete(token) if @@session_cache
+      audit("Session terminated", event: 'session_terminated', token_type: token_type(token), existed: removed.to_i == 1)
     end
 
     # Terminates the session if the token is an OTP.
     def self.terminate_otp(token)
       terminate(token) if token.start_with?(OTP_PREFIX)
     end
+
+    # Classifies a token for audit records without revealing it.
+    # @return [String] 'session', 'otp' or 'unknown'
+    def self.token_type(token)
+      token = token.to_s
+      return 'otp' if token.start_with?(OTP_PREFIX)
+      return 'session' if token.start_with?(SESSION_PREFIX)
+
+      return 'unknown'
+    end
+
+    # Writes a structured audit record for a session lifecycle event. Only the
+    # event and token type are recorded, never the token itself.
+    def self.audit(message, **fields)
+      Logger.info(message, type: Logger::AUDIT, other: fields)
+    end
+    private_class_method :audit
   end
 end

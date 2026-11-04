@@ -72,6 +72,9 @@ module OpenC3
     NOTIFICATION = 'notification'
     ALERT = 'alert'
     EPHEMERAL = 'ephemeral'
+    # Security-relevant events (logon, session lifecycle) that must be
+    # reconstructable later. Never put credentials or tokens in these.
+    AUDIT = 'audit'
 
     # @return [Integer] Level named by the OPENC3_LOG_LEVEL env var.
     #   INFO if the var is unset or isn't a level name.

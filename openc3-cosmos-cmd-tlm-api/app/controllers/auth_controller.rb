@@ -36,6 +36,7 @@ class AuthController < ApplicationController
 
   def verify
     if user_rate_limited?
+      audit_login('rate_limited', 'password')
       head :too_many_requests
       return
     end
@@ -43,9 +44,11 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
         clear_user_bad_attempts
+        audit_login('success', 'password')
         render :plain => OpenC3::AuthModel.generate_session()
       else
         record_user_bad_attempt
+        audit_login('failure', 'password')
         head :unauthorized
       end
     rescue StandardError => e
@@ -71,14 +74,17 @@ class AuthController < ApplicationController
     # this also keeps an OTP token out of verify_no_service, which would consume
     # it.
     unless OpenC3::AuthModel.session_token?(params[:token])
+      audit_login('failure', 'session', reason: 'malformed_token')
       head :unauthorized
       return
     end
 
     begin
       if OpenC3::AuthModel.verify_no_service(params[:token], mode: :token)
+        audit_login('success', 'session')
         head :ok
       else
+        audit_login('failure', 'session')
         head :unauthorized
       end
     rescue StandardError => e
@@ -89,6 +95,7 @@ class AuthController < ApplicationController
 
   def verify_service
     if service_rate_limited?
+      audit_login('rate_limited', 'service')
       head :too_many_requests
       return
     end
@@ -96,9 +103,11 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
         clear_service_bad_attempts
+        audit_login('success', 'service')
         render :plain => OpenC3::AuthModel.generate_session()
       else
         record_service_bad_attempt
+        audit_login('failure', 'service')
         head :unauthorized
       end
     rescue StandardError => e
@@ -115,6 +124,7 @@ class AuthController < ApplicationController
 
   def set
     if user_rate_limited?
+      audit_login('rate_limited', 'password')
       head :too_many_requests
       return
     end
@@ -123,11 +133,12 @@ class AuthController < ApplicationController
       # Set throws an exception if it fails for any reason
       OpenC3::AuthModel.set(params[:password], params[:old_password])
       clear_user_bad_attempts
-      OpenC3::Logger.info("Password changed", user: username())
+      audit("Password changed", user: username(), event: 'password_changed', outcome: 'success')
       render :plain => OpenC3::AuthModel.generate_session()
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt
+        audit_login('failure', 'password', reason: 'old_password incorrect')
       end
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
@@ -136,29 +147,14 @@ class AuthController < ApplicationController
 
   private
 
-  # Identifies the client making the request so that bad attempt counters are
-  # scoped per client instead of globally. A global counter allows any
-  # unauthenticated client to lock out every operator by sending
-  # MAX_BAD_ATTEMPTS bad passwords, so everything that counts bad attempts must
-  # be namespaced by this value.
-  #
-  # This uses Rails request.remote_ip which honors X-Forwarded-For. COSMOS runs
-  # behind traefik, which discards any client supplied X-Forwarded-* headers and
-  # sets them from the real connection, so a client can't choose its own bucket.
-  # See the forwardedHeaders comments in openc3-traefik/traefik.yaml: if traefik
-  # is configured to trust a proxy that doesn't set X-Forwarded-For, every
-  # client collapses into that proxy's bucket.
-  def client_id
-    ip = begin
-      request.remote_ip
-    rescue StandardError
-      nil
-    end
-    ip ||= request.remote_addr
-    # Only allow ip address characters in the key and bound the length so the
-    # attacker controlled header can't be used to build arbitrary Redis keys
-    ip = ip.to_s.gsub(/[^0-9a-fA-F:.]/, '')[0, 45]
-    return ip.empty? ? 'unknown' : ip
+  # Audit record for a logon attempt (see ApplicationController#audit). Bad
+  # attempt counters are keyed by client_id (defined there) so a malicious
+  # client can only lock itself out rather than every operator.
+  # @param outcome [String] 'success', 'failure', 'rate_limited' or 'locked_out'
+  # @param token_type [String] what was presented: 'password', 'service' or 'session'
+  def audit_login(outcome, token_type, **fields)
+    level = outcome == 'success' ? :info : :warn
+    audit("Login #{outcome.tr('_', ' ')}", level: level, event: 'login', outcome: outcome, token_type: token_type, **fields)
   end
 
   def user_bad_attempts_key
@@ -218,13 +214,18 @@ class AuthController < ApplicationController
 
   def record_bad_attempt(key, type)
     begin
-      OpenC3::EphemeralStore.incr(key)
+      count = OpenC3::EphemeralStore.incr(key)
       # Refresh the TTL on every bad attempt so the window is measured from the
       # last bad attempt rather than the first. Note a client that is already
       # limited returns before getting here, so it can't extend its own lockout:
       # the lockout always ends BAD_ATTEMPTS_WINDOW after the attempt that
       # tripped it.
       OpenC3::EphemeralStore.expire(key, BAD_ATTEMPTS_WINDOW)
+      # Distinct record the moment the limit trips so external alerting can
+      # key on it without counting failures itself
+      if count.to_i == MAX_BAD_ATTEMPTS
+        audit_login('locked_out', type == 'service' ? 'service' : 'password', attempts: count.to_i, window_seconds: BAD_ATTEMPTS_WINDOW)
+      end
     rescue StandardError => error
       OpenC3::Logger.error("Redis error recording #{type} bad attempt: #{error.message}")
     end

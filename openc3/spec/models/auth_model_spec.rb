@@ -142,5 +142,47 @@ module OpenC3
           raise_error(/invalid password hash/)
       end
     end
+
+    describe "audit logging" do
+      before(:each) do
+        @records = []
+        allow(Logger).to receive(:info).and_wrap_original do |original, *args, **kwargs|
+          @records << { message: args[0] }.merge(kwargs[:other] || {}) if kwargs[:type] == Logger::AUDIT
+          original.call(*args, **kwargs)
+        end
+      end
+
+      it "audits session creation without the token" do
+        token = AuthModel.generate_session()
+        expect(@records.last).to include(message: "Session created", event: 'session_created', token_type: 'session')
+        otp = AuthModel.generate_session(otp: true)
+        expect(@records.last).to include(event: 'session_created', token_type: 'otp')
+        expect(@records.to_s).not_to include(token)
+        expect(@records.to_s).not_to include(otp)
+      end
+
+      it "audits session termination" do
+        token = AuthModel.generate_session()
+        AuthModel.terminate(token)
+        expect(@records.last).to include(message: "Session terminated", event: 'session_terminated', token_type: 'session', existed: true)
+        AuthModel.terminate(token)
+        expect(@records.last).to include(event: 'session_terminated', existed: false)
+        AuthModel.terminate('bogus')
+        expect(@records.last).to include(event: 'session_terminated', token_type: 'unknown', existed: false)
+        expect(@records.to_s).not_to include(token)
+      end
+
+      it "audits consuming an OTP" do
+        otp = AuthModel.generate_session(otp: true)
+        expect(AuthModel.verify_no_service(otp, mode: :token)).to be true
+        expect(@records.last).to include(event: 'session_terminated', token_type: 'otp', existed: true)
+      end
+
+      it "audits logging out every session" do
+        AuthModel.logout
+        expect(@records.last).to include(message: "All sessions terminated", event: 'logout_all')
+      end
+    end
+
   end
 end

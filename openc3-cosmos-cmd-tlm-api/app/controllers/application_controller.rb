@@ -22,6 +22,39 @@ class ApplicationController < ActionController::API
 
   private
 
+  # Identifies the client making the request, used to scope bad attempt
+  # counters per client and to tie audit records to a source address. A
+  # global counter allows any unauthenticated client to lock out every
+  # operator by sending MAX_BAD_ATTEMPTS bad passwords, so everything that
+  # counts bad attempts must be namespaced by this value.
+  #
+  # This uses Rails request.remote_ip which honors X-Forwarded-For. COSMOS runs
+  # behind traefik, which discards any client supplied X-Forwarded-* headers and
+  # sets them from the real connection, so a client can't choose its own bucket.
+  # See the forwardedHeaders comments in openc3-traefik/traefik.yaml: if traefik
+  # is configured to trust a proxy that doesn't set X-Forwarded-For, every
+  # client collapses into that proxy's bucket.
+  def client_id
+    ip = begin
+      request.remote_ip
+    rescue StandardError
+      nil
+    end
+    ip ||= request.remote_addr
+    # Only allow ip address characters in the key and bound the length so the
+    # attacker controlled header can't be used to build arbitrary Redis keys
+    ip = ip.to_s.gsub(/[^0-9a-fA-F:.]/, '')[0, 45]
+    return ip.empty? ? 'unknown' : ip
+  end
+
+  # Writes a structured audit record (OpenC3::Logger type 'audit') for a
+  # security relevant event on this request: client address, endpoint and the
+  # given outcome fields. Callers must never pass a password or token.
+  def audit(message, level: :info, user: nil, **fields)
+    other = { client_id: client_id, endpoint: "#{controller_name}##{action_name}" }.merge(fields)
+    OpenC3::Logger.public_send(level, message, user: user, type: OpenC3::Logger::AUDIT, other: other)
+  end
+
   def user_full_name()
     # For user_info see openc3/utilities/authorization and
     # openc3_enterprise/utilities/authorization

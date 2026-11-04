@@ -393,4 +393,136 @@ RSpec.describe AuthController, :type => :controller do
       end
     end
   end
+
+  describe "audit logging" do
+    # Every logon outcome must leave a structured record that ties the event
+    # to a source address and never contains what the client submitted.
+    SECRET = 'S3cretPw!'
+
+    def set_client_ip(ip)
+      request.remote_addr = ip
+      request.env.delete('action_dispatch.remote_ip')
+      request.instance_variable_set(:@remote_ip, nil)
+    end
+
+    before(:each) do
+      @records = []
+      [:info, :warn, :error].each do |level|
+        allow(OpenC3::Logger).to receive(level).and_wrap_original do |original, *args, **kwargs, &block|
+          if kwargs[:type] == OpenC3::Logger::AUDIT
+            @records << { level: level, message: args[0], user: kwargs[:user] }.merge(kwargs[:other] || {})
+          end
+          original.call(*args, **kwargs, &block)
+        end
+      end
+    end
+
+    after(:each) do
+      # Nothing we audit may contain the submitted password
+      expect(@records.to_s).not_to include(SECRET)
+      expect(@records.to_s).not_to include('BAD')
+    end
+
+    def login_records(outcome)
+      @records.select { |r| r[:event] == 'login' and r[:outcome] == outcome }
+    end
+
+    it "records a successful password login" do
+      post :set, params: { password: SECRET }
+      set_client_ip('1.2.3.4')
+      post :verify, params: { password: SECRET }
+      expect(response).to have_http_status(:ok)
+
+      record = login_records('success').last
+      expect(record).to include(level: :info, token_type: 'password', client_id: '1.2.3.4', endpoint: 'auth#verify')
+      # The session issued for the login is audited too, without the token
+      created = @records.select { |r| r[:event] == 'session_created' }.last
+      expect(created).to include(token_type: 'session')
+      expect(@records.to_s).not_to include(response.body)
+    end
+
+    it "records a failed password login as a warning" do
+      post :set, params: { password: SECRET }
+      set_client_ip('1.2.3.4')
+      post :verify, params: { password: 'BAD' }
+      expect(response).to have_http_status(:unauthorized)
+
+      record = login_records('failure').last
+      expect(record).to include(level: :warn, token_type: 'password', client_id: '1.2.3.4', endpoint: 'auth#verify')
+      expect(login_records('success')).to be_empty
+    end
+
+    it "records the lockout once when the limit trips and every rejected request after it" do
+      post :set, params: { password: SECRET }
+      set_client_ip('1.2.3.4')
+      9.times { post :verify, params: { password: 'BAD' } }
+      expect(login_records('locked_out')).to be_empty
+
+      post :verify, params: { password: 'BAD' }
+      expect(response).to have_http_status(:unauthorized)
+      locked = login_records('locked_out')
+      expect(locked.length).to eql 1
+      expect(locked[0]).to include(level: :warn, token_type: 'password', client_id: '1.2.3.4', attempts: 10, window_seconds: 120)
+
+      post :verify, params: { password: 'BAD' }
+      expect(response).to have_http_status(:too_many_requests)
+      post :verify, params: { password: SECRET }
+      expect(response).to have_http_status(:too_many_requests)
+      limited = login_records('rate_limited')
+      expect(limited.length).to eql 2
+      expect(limited[0]).to include(level: :warn, client_id: '1.2.3.4', endpoint: 'auth#verify')
+      expect(login_records('locked_out').length).to eql 1
+      expect(login_records('failure').length).to eql 10
+    end
+
+    it "records service password logins" do
+      set_client_ip('1.2.3.4')
+      post :verify_service, params: { password: 'BAD' }
+      expect(login_records('failure').last).to include(level: :warn, token_type: 'service', endpoint: 'auth#verify_service')
+
+      post :verify_service, params: { password: 'openc3service' }
+      expect(login_records('success').last).to include(level: :info, token_type: 'service', client_id: '1.2.3.4')
+      expect(@records.to_s).not_to include('openc3service')
+    end
+
+    it "records the service lockout" do
+      set_client_ip('1.2.3.4')
+      10.times { post :verify_service, params: { password: 'BAD' } }
+      expect(login_records('locked_out').last).to include(token_type: 'service', endpoint: 'auth#verify_service')
+      post :verify_service, params: { password: 'BAD' }
+      expect(login_records('rate_limited').last).to include(token_type: 'service')
+    end
+
+    it "records session token checks without the token" do
+      post :set, params: { password: SECRET }
+      token = response.body
+      set_client_ip('1.2.3.4')
+
+      post :verify_token, params: { token: token }
+      expect(login_records('success').last).to include(token_type: 'session', endpoint: 'auth#verify_token')
+
+      post :verify_token, params: { token: "ses_#{'A' * 22}" }
+      expect(login_records('failure').last).to include(token_type: 'session', endpoint: 'auth#verify_token')
+
+      post :verify_token, params: { token: 'garbage' }
+      expect(login_records('failure').last).to include(token_type: 'session', reason: 'malformed_token')
+      expect(@records.to_s).not_to include(token)
+      expect(@records.to_s).not_to include('garbage')
+    end
+
+    it "records password changes and bad old passwords" do
+      set_client_ip('1.2.3.4')
+      post :set, params: { password: SECRET }
+      changed = @records.select { |r| r[:event] == 'password_changed' }
+      expect(changed.length).to eql 1
+      expect(changed[0]).to include(user: 'anonymous', outcome: 'success', client_id: '1.2.3.4', endpoint: 'auth#set')
+      # Changing the password revokes every session, which is audited
+      expect(@records.select { |r| r[:event] == 'logout_all' }.length).to eql 1
+
+      post :set, params: { password: 'Another1!', old_password: 'BAD' }
+      expect(response).to have_http_status(:error)
+      expect(login_records('failure').last).to include(level: :warn, endpoint: 'auth#set', reason: 'old_password incorrect')
+      expect(@records.to_s).not_to include('Another1!')
+    end
+  end
 end
