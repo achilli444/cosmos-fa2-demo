@@ -118,6 +118,7 @@ module OpenC3
     # }
 
     REFRESH_OFFSET_SECONDS = 60
+    SENSITIVE_KEYS = %w(password refresh_token access_token id_token)
 
     attr_reader :refresh_token
 
@@ -217,17 +218,9 @@ module OpenC3
     def _make_request(headers, data)
       realm = ENV['OPENC3_KEYCLOAK_REALM'] || 'openc3'
       uri = URI("#{@url}/realms/#{realm}/protocol/openid-connect/token")
-      # Obfuscate password and refresh token in logs unless debug mode is enabled
-      if JsonDRb.debug?
-        log_data = data.inspect
-      else
-        # Create a copy of the hash with sensitive values obfuscated
-        log_data = data.dup
-        log_data['password'] = '***' if log_data.key?('password')
-        log_data['refresh_token'] = '***' if log_data.key?('refresh_token')
-        log_data = log_data.inspect
-      end
-      @log[0] = "request uri: #{uri} header: #{headers} body: #{log_data}"
+      # Credentials and tokens are always masked in logs and exception messages,
+      # regardless of debug mode
+      @log[0] = "request uri: #{uri} header: #{headers} body: #{_mask_sensitive(data).inspect}"
       STDOUT.puts @log[0] if JsonDRb.debug?
       saved_verbose = $VERBOSE; $VERBOSE = nil
       begin
@@ -235,7 +228,7 @@ module OpenC3
       ensure
         $VERBOSE = saved_verbose
       end
-      @log[1] = "response status: #{resp.status} header: #{resp.headers} body: #{resp.body}"
+      @log[1] = "response status: #{resp.status} header: #{resp.headers} body: #{_mask_response_body(resp.body)}"
       STDOUT.puts @log[1] if JsonDRb.debug?
       if resp.status >= 200 && resp.status <= 299
         return JSON.parse(resp.body, allow_nan: true, create_additions: true)
@@ -244,6 +237,24 @@ module OpenC3
       else
         raise OpenC3AuthenticationError, "authentication request failed #{@log[0]} ::: #{@log[1]}"
       end
+    end
+
+    # Returns a copy of the hash with authenticator values replaced by '***'
+    def _mask_sensitive(hash)
+      masked = hash.dup
+      SENSITIVE_KEYS.each { |key| masked[key] = '***' if masked.key?(key) }
+      masked
+    end
+
+    # Returns a loggable form of the token endpoint response body. JSON objects
+    # are masked field by field; anything else is omitted since it can't be masked.
+    def _mask_response_body(body)
+      parsed = JSON.parse(body)
+      return _mask_sensitive(parsed).inspect if parsed.is_a?(Hash)
+
+      "[non-object JSON body omitted]"
+    rescue JSON::ParserError, TypeError
+      "[non-JSON body omitted]"
     end
   end
 end

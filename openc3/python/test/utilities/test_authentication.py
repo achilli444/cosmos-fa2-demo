@@ -196,8 +196,8 @@ class TestOpenC3KeycloakAuthentication(unittest.TestCase):
     @patch("openc3.utilities.authentication.OPENC3_API_USER", "testuser")
     @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "testpassword")
     @patch("openc3.utilities.authentication.OPENC3_DEVEL", "true")
-    def test_password_shown_in_logs_when_debug_enabled(self):
-        """Shows actual password in error messages when debug is enabled"""
+    def test_password_obfuscated_in_logs_when_devel_enabled(self):
+        """Still obfuscates password in error messages when OPENC3_DEVEL is set"""
         auth = OpenC3KeycloakAuthentication(self.test_url)
         mock_response = Mock()
         mock_response.status_code = 401
@@ -209,8 +209,10 @@ class TestOpenC3KeycloakAuthentication(unittest.TestCase):
             auth.token()
 
         error_msg = str(context.exception)
-        # In debug mode, password should be visible
-        self.assertIn("testpassword", error_msg)
+        self.assertIn("'password': '***'", error_msg)
+        self.assertNotIn("testpassword", error_msg)
+        # Keycloak error details are still surfaced
+        self.assertIn("invalid_grant", error_msg)
 
     @patch("openc3.utilities.authentication.OPENC3_API_USER", None)
     @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", None)
@@ -237,8 +239,8 @@ class TestOpenC3KeycloakAuthentication(unittest.TestCase):
     @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", None)
     @patch("openc3.utilities.authentication.OPENC3_API_TOKEN", "test_refresh_token")
     @patch("openc3.utilities.authentication.OPENC3_DEVEL", "true")
-    def test_shows_refresh_token_when_debug_enabled(self):
-        """Shows actual refresh_token when debug is enabled"""
+    def test_obfuscates_refresh_token_when_devel_enabled(self):
+        """Still obfuscates refresh_token when OPENC3_DEVEL is set"""
         auth = OpenC3KeycloakAuthentication(self.test_url)
         mock_response = Mock()
         mock_response.status_code = 401
@@ -250,8 +252,58 @@ class TestOpenC3KeycloakAuthentication(unittest.TestCase):
             auth.token()
 
         error_msg = str(context.exception)
-        # In debug mode, refresh token should be visible
-        self.assertIn("test_refresh_token", error_msg)
+        self.assertIn("'refresh_token': '***'", error_msg)
+        self.assertNotIn("test_refresh_token", error_msg)
+
+    @patch("openc3.utilities.authentication.OPENC3_API_USER", "testuser")
+    @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "testpassword")
+    @patch("openc3.utilities.authentication.OPENC3_DEVEL", "true")
+    def test_obfuscates_tokens_in_response_log(self):
+        """Never records access, refresh or id tokens from the token response"""
+        auth = OpenC3KeycloakAuthentication(self.test_url)
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.text = json.dumps(
+            {
+                "access_token": "access_token_123",
+                "expires_in": 600,
+                "refresh_expires_in": 1800,
+                "refresh_token": "refresh_token_123",
+                "id_token": "id_token_123",
+                "token_type": "bearer",
+            }
+        )
+        auth.http.post = Mock(return_value=mock_response)
+
+        self.assertEqual(auth.token(), "Bearer access_token_123")
+        response_log = auth.log[1]
+        self.assertIn("response status: 200", response_log)
+        self.assertIn("'access_token': '***'", response_log)
+        self.assertIn("'refresh_token': '***'", response_log)
+        self.assertIn("'id_token': '***'", response_log)
+        self.assertIn("'token_type': 'bearer'", response_log)
+        for secret in ("access_token_123", "refresh_token_123", "id_token_123"):
+            self.assertNotIn(secret, response_log)
+
+    @patch("openc3.utilities.authentication.OPENC3_API_USER", "testuser")
+    @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "testpassword")
+    def test_omits_non_json_response_body(self):
+        """Non-JSON response bodies are omitted from exception messages"""
+        auth = OpenC3KeycloakAuthentication(self.test_url)
+        mock_response = Mock()
+        mock_response.status_code = 502
+        mock_response.headers = {}
+        mock_response.text = "<html>Bad Gateway</html>"
+        auth.http.post = Mock(return_value=mock_response)
+
+        with self.assertRaises(OpenC3AuthenticationRetryableError) as context:
+            auth.token()
+
+        error_msg = str(context.exception)
+        self.assertIn("response status: 502", error_msg)
+        self.assertIn("[non-JSON body omitted]", error_msg)
+        self.assertNotIn("<html>", error_msg)
 
     @patch("openc3.utilities.authentication.OPENC3_API_USER", "testuser")
     @patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "testpassword")
