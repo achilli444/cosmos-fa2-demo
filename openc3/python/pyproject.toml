@@ -47,6 +47,7 @@ dependencies = [
     "websockets (>=16.0,<17.0)",
     "pyserial>=3.5",
     "iroh (>=1.0.0,<2.0.0)",
+    "cryptography (>=44.0.0,<51.0.0)",
 ]
 
 [project.urls]

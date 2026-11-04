@@ -323,6 +323,32 @@
 # volumes:
 #   openc3-secrets-v: {}
 
+# -------------------------------------------------------------------------
+# Secrets encryption key
+# -------------------------------------------------------------------------
+# Secret values are encrypted at rest in Redis (AES-256-GCM). The key comes
+# from OPENC3_SECRETS_KEY (64 hex chars, generated into .env.local by openc3.sh
+# on first start) or from a file named by OPENC3_SECRETS_KEY_FILE. To use a
+# mounted key file instead of the env var, mount it read-only on every service
+# that reads or writes secrets and point the variable at it (same path on all):
+#
+# services:
+#   openc3-cosmos-cmd-tlm-api:
+#     environment:
+#       - OPENC3_SECRETS_KEY_FILE=/run/secrets/openc3_secrets_key
+#     secrets: [openc3_secrets_key]
+#   openc3-operator:
+#     environment:
+#       - OPENC3_SECRETS_KEY_FILE=/run/secrets/openc3_secrets_key
+#     secrets: [openc3_secrets_key]
+#   openc3-cosmos-init:
+#     environment:
+#       - OPENC3_SECRETS_KEY_FILE=/run/secrets/openc3_secrets_key
+#     secrets: [openc3_secrets_key]
+# secrets:
+#   openc3_secrets_key:
+#     file: /etc/openc3/secrets_key   # 64 hex chars from 'openssl rand -hex 32'
+
 # ---------------------------------------------------------------------------
 # Adding extra buckets / volumes
 # ---------------------------------------------------------------------------

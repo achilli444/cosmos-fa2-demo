@@ -22,7 +22,20 @@ The secret store used at runtime is selected by the `OPENC3_SECRET_BACKEND` envi
 
 If `OPENC3_SECRET_BACKEND` is not set it defaults to `redis`, which is what the Docker Compose deployment uses. The Helm chart sets it from the `secretsBackend` value, which defaults to `kubernetes`.
 
-With the `redis` backend, secret values live in the Valkey key `<SCOPE>__openc3__secrets`. They are stored as-is, not encrypted at rest, so they are only as protected as your Valkey deployment. Set a Valkey password and restrict network access to it — see [Security](../getting-started/security.md).
+With the `redis` backend, secret values live in the Valkey key `<SCOPE>__openc3__secrets`. Each value is encrypted with AES-256-GCM (OpenSSL) before it is written and decrypted when an interface or microservice reads it, so a Valkey dump, backup or read-only connection yields only ciphertext. The ciphertext is also bound to the secret's scope and name, so a value can't be copied under another name. Still set a Valkey password and restrict network access to it — see [Security](../getting-started/security.md).
+
+The encryption key is never stored in Valkey. It comes from one of two environment variables, which must be set to the same value on `openc3-cosmos-cmd-tlm-api`, `openc3-operator`, `openc3-cosmos-init` and (if scripts read secrets) `openc3-cosmos-script-runner-api`:
+
+| Variable                  | Value                                                           |
+| ------------------------- | --------------------------------------------------------------- |
+| `OPENC3_SECRETS_KEY`      | 64 hex characters (32 bytes), e.g. `openssl rand -hex 32`       |
+| `OPENC3_SECRETS_KEY_FILE` | Path inside the container to a file holding the hex key or 32 raw bytes (Docker/Kubernetes mounted secret) |
+
+`openc3.sh` generates a random `OPENC3_SECRETS_KEY` into `.env.local` the first time it runs if neither variable is set, and `compose.yaml` passes both through to the services above. On Windows, or when running Compose directly, generate the key yourself and put it in `.env.local`. Without a key, setting a secret fails with an error naming these variables rather than storing the value unencrypted.
+
+:::warning[Back Up the Key]
+Secrets can't be decrypted without the key. Back it up alongside Valkey and treat it like the Valkey password: a Valkey backup restored without the matching key has no usable secrets. Secrets created before encryption was introduced are still readable (a warning is logged on each read) and are encrypted the next time they are set.
+:::
 
 Secrets are scoped. A secret created in the DEFAULT scope is not visible to plugins installed in another scope (Enterprise supports multiple scopes).
 

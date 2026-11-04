@@ -19,6 +19,12 @@ module OpenC3
   describe SecretModel, type: :model do
     before(:each) do
       mock_redis()
+      @saved_key = ENV['OPENC3_SECRETS_KEY']
+      ENV['OPENC3_SECRETS_KEY'] = 'cd' * 32
+    end
+
+    after(:each) do
+      ENV['OPENC3_SECRETS_KEY'] = @saved_key
     end
 
     describe "secret" do
@@ -46,6 +52,41 @@ module OpenC3
       it "as_json" do
         model = SecretModel.new(name: 'secreter', value: 'silent', scope: 'DEFAULT')
         expect(model.as_json()['name']).to eq('secreter')
+      end
+
+      it "as_json encrypts the value" do
+        model = SecretModel.new(name: 'secreter', value: 'silent', scope: 'DEFAULT')
+        json = model.as_json()
+        expect(json['value']).to be_a(Hash)
+        expect(json['value']['alg']).to eq('aes-256-gcm')
+        expect(JSON.generate(json)).not_to include('silent')
+      end
+
+      it "round trips through set / get / all / get_model" do
+        SecretModel.set({ name: 'secret', value: 'tacit' }, scope: 'DEFAULT')
+        expect(SecretModel.get(name: 'secret', scope: 'DEFAULT')['value']).to eq('tacit')
+        expect(SecretModel.all(scope: 'DEFAULT')['secret']['value']).to eq('tacit')
+        expect(SecretModel.names(scope: 'DEFAULT')).to eq(['secret'])
+        model = SecretModel.get_model(name: 'secret', scope: 'DEFAULT')
+        expect(model.as_json()['value']['alg']).to eq('aes-256-gcm')
+        raw = JSON.parse(Store.hget('DEFAULT__openc3__secrets', 'secret'))
+        expect(raw['value']).to be_a(Hash)
+        expect(raw['value']).not_to include('tacit')
+      end
+
+      it "accepts a stored envelope as the value (from_json)" do
+        SecretModel.set({ name: 'secret', value: 'tacit' }, scope: 'DEFAULT')
+        raw = JSON.parse(Store.hget('DEFAULT__openc3__secrets', 'secret'))
+        model = SecretModel.new(name: 'secret', value: raw['value'], scope: 'DEFAULT')
+        model.create(force: true)
+        expect(SecretModel.get(name: 'secret', scope: 'DEFAULT')['value']).to eq('tacit')
+      end
+
+      it "reads legacy plaintext values" do
+        allow(Logger).to receive(:warn)
+        Store.hset('DEFAULT__openc3__secrets', 'old', JSON.generate({ 'name' => 'old', 'value' => 'legacy' }))
+        expect(SecretModel.get(name: 'old', scope: 'DEFAULT')['value']).to eq('legacy')
+        expect(SecretModel.all(scope: 'DEFAULT')['old']['value']).to eq('legacy')
       end
     end
   end
