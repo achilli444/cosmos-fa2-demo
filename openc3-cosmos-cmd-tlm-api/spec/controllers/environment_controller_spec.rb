@@ -59,6 +59,15 @@ RSpec.describe EnvironmentController, :type => :controller do
       expect(json["value"]).to eql('Jason')
     end
 
+    it "does not log the environment value" do
+      logged = []
+      allow(OpenC3::Logger).to receive(:info) { |message, **_kwargs| logged << message }
+      post :create, params: { 'scope' => 'DEFAULT', 'key' => 'API_PASSWORD', 'value' => 'hunter2_value' }
+      expect(response).to have_http_status(:created)
+      expect(logged.join).to include('API_PASSWORD')
+      expect(logged.join).not_to include('hunter2_value')
+    end
+
     it "requires scope" do
       post :create, params: { 'key' => 'NAME', 'value' => 'Jason' }
       expect(response).to have_http_status(401)
@@ -90,7 +99,7 @@ RSpec.describe EnvironmentController, :type => :controller do
       expect(response).to have_http_status(409)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json['status']).to eql('error')
-      expect(json['message']).to eql("Key: 'NAME' value: 'Jason' already exists")
+      expect(json['message']).to eql("Key: 'NAME' with this value already exists")
     end
 
     it "updates an existing value" do

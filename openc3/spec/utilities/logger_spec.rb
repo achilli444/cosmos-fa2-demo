@@ -324,6 +324,67 @@ module OpenC3
       end
     end
 
+    describe "scrub" do
+      it "redacts an Authorization header inside an inspected request hash" do
+        msg = 'post Request: http://api {:scope=>"DEFAULT", :headers=>{"User-Agent"=>"OpenC3", "Authorization"=>"abc123"}}'
+        scrubbed = Logger.scrub(msg)
+        expect(scrubbed).not_to include('abc123')
+        expect(scrubbed).to include('"Authorization"=>[REDACTED]')
+        expect(scrubbed).to include('"User-Agent"=>"OpenC3"')
+      end
+
+      it "redacts Ruby 3.4 style hash inspect output" do
+        scrubbed = Logger.scrub('{headers: {"Authorization" => "abc123", "X-Other" => "ok"}}')
+        expect(scrubbed).not_to include('abc123')
+        expect(scrubbed).to include('"X-Other" => "ok"')
+      end
+
+      it "redacts tokens and passwords in JSON, including escaped JSON inside a hash dump" do
+        scrubbed = Logger.scrub('{"access_token":"eyJ.abc","expires_in":600,"refresh_token":"r1"}')
+        expect(scrubbed).not_to include('eyJ.abc')
+        expect(scrubbed).not_to include('"r1"')
+        expect(scrubbed).to include('"expires_in":600')
+        scrubbed = Logger.scrub(':data=>"{\\"password\\":\\"p@ss w\\",\\"next\\":1}"')
+        expect(scrubbed).not_to include('p@ss')
+        expect(scrubbed).to include('next')
+      end
+
+      it "redacts form encoded bodies and HTTP auth schemes" do
+        expect(Logger.scrub('client_id=api&password=secret1&grant_type=password')).to eq('client_id=api&password=[REDACTED]&grant_type=password')
+        expect(Logger.scrub('Authorization: Bearer eyJ.abc, next')).to eq('Authorization: [REDACTED], next')
+      end
+
+      it "leaves prose and messages without credentials unchanged" do
+        expect(Logger.scrub('Unable to refresh token: connection refused')).to eq('Unable to refresh token: connection refused')
+        expect(Logger.scrub('Environment variable created: abc NAME1')).to eq('Environment variable created: abc NAME1')
+        expect(Logger.scrub(nil)).to be_nil
+        expect(Logger.scrub(5)).to eq(5)
+      end
+
+      it "deep redacts hashes by key with scrub_hash" do
+        result = Logger.scrub_hash({ 'HTTP_AUTHORIZATION' => 'pass', 'HTTP_HOST' => 'h', nested: { token: 't', list: ['password=x'] } })
+        expect(result).to eq({ 'HTTP_AUTHORIZATION' => '[REDACTED]', 'HTTP_HOST' => 'h', nested: { token: '[REDACTED]', list: ['password=[REDACTED]'] } })
+      end
+
+      it "scrubs every logged message and the other hash" do
+        stdout = StringIO.new('', 'r+')
+        saved_stdout = $stdout
+        $stdout = stdout
+        begin
+          Logger.level = Logger::INFO
+          Logger.info('API headers: {"HTTP_AUTHORIZATION"=>"secret_token_value"}', other: { password: 'hunter2', ok: 'yes' })
+        ensure
+          $stdout = saved_stdout
+        end
+        expect(stdout.string).not_to include('secret_token_value')
+        expect(stdout.string).not_to include('hunter2')
+        json = JSON.parse(stdout.string)
+        expect(json['message']).to include('"HTTP_AUTHORIZATION"=>[REDACTED]')
+        expect(json['password']).to eq('[REDACTED]')
+        expect(json['ok']).to eq('yes')
+      end
+    end
+
     describe "log_message with other parameter" do
       before(:each) do
         Logger.level = Logger::INFO

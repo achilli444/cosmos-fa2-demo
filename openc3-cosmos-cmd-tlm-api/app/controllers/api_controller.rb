@@ -36,7 +36,8 @@ class ApiController < ApplicationController
         begin
           # Intentionally log to the nil scope so we don't clog the CmdTlmServer log messages
           OpenC3::Logger.info("API data: #{request_data}", scope: nil, user: username())
-          OpenC3::Logger.debug("API headers: #{request_headers}", scope: nil, user: username())
+          # Redact HTTP_AUTHORIZATION / HTTP_COOKIE so the debug log never carries the credential
+          OpenC3::Logger.debug("API headers: #{OpenC3::Logger.scrub_hash(request_headers)}", scope: nil, user: username())
           status, content_type, body = handle_post(request_data, request_headers)
         rescue OpenC3::AuthError, OpenC3::ForbiddenError => e
           id = 1

@@ -73,6 +73,49 @@ module OpenC3
     ALERT = 'alert'
     EPHEMERAL = 'ephemeral'
 
+    # Replacement written in place of a credential or secret value
+    REDACTED = '[REDACTED]'
+
+    # Key names (matched case-insensitively as substrings, like Rails
+    # filter_parameters) whose values are never allowed into a log message.
+    # Covers session tokens, Keycloak bearer / refresh / id tokens, the service
+    # password, Redis secret values and API keys.
+    SENSITIVE_KEYS = %w(
+      authorization
+      password
+      passwd
+      passw
+      secret
+      token
+      api_key
+      apikey
+      cookie
+      otp
+      credential
+      private_key
+    ).freeze
+
+    SENSITIVE_KEY_REGEX = /(?:#{SENSITIVE_KEYS.join('|')})/i
+
+    # Matches a sensitive key followed by its value in the serializations that
+    # reach the logger: Ruby Hash#inspect ("key"=>"value", key: "value",
+    # "key" => "value"), JSON ("key":"value"), form / query (key=value) and
+    # HTTP header (Key: value) syntax. Values may be quoted or bare.
+    # The key is captured so the log still shows WHICH field was redacted.
+    # Quoted values may also be backslash-escaped (a JSON body inspected inside
+    # a Hash) and bare values may be an HTTP auth scheme followed by its token.
+    SENSITIVE_PATTERN = /
+      (?<key>(?:\\?["'])?[A-Za-z0-9_\-]*#{SENSITIVE_KEY_REGEX}[A-Za-z0-9_\-]*(?:\\?["'])?)
+      (?<sep>\s*(?:=>|:|=)\s*)
+      (?<value>
+        \\"(?:(?!\\").)*\\"
+        | "(?:[^"\\]|\\.)*"
+        | '(?:[^'\\]|\\.)*'
+        | (?:Bearer|Basic|Token)\s+[^\s,}\]&;]+
+        | [^\s,}\]&;]+
+      )
+    /xi
+
     # @return [Integer] Level named by the OPENC3_LOG_LEVEL env var.
     #   INFO if the var is unset or isn't a level name.
     def self.default_level
@@ -191,6 +234,68 @@ module OpenC3
       @@scope = scope
     end
 
+    # Redact credential values from a log message.
+    #
+    # This is the central scrubber every message passes through before it is
+    # written to stdout or the openc3_log_messages stream, so a credential that
+    # is interpolated into a message (an Authorization header in a request dump,
+    # a password in a form body, a token in a JSON response) is replaced by
+    # REDACTED instead of reaching the central log.
+    #
+    # @param message [String, Hash, Array, Object] The message to scrub.
+    #   Strings are scrubbed in place of key/value pairs, Hashes and Arrays are
+    #   scrubbed by key, anything else is returned unchanged.
+    # @return [Object] The scrubbed message
+    def self.scrub(message)
+      case message
+      when String
+        return message unless message.match?(SENSITIVE_KEY_REGEX)
+
+        message.gsub(SENSITIVE_PATTERN) do
+          m = Regexp.last_match
+          # Prose such as "Unable to refresh token: connection refused" is a bare
+          # key, a colon and a bare word. Serialized credentials always have a
+          # quoted key, a quoted value, a => or = separator, or an auth scheme.
+          if m[:key].match?(/["']/) || m[:sep].match?(/=/) || m[:value].match?(/\A(?:\\?["']|(?:Bearer|Basic|Token)\s)/i)
+            "#{m[:key]}#{m[:sep]}#{REDACTED}"
+          else
+            m[0]
+          end
+        end
+      when Hash, Array
+        scrub_hash(message)
+      else
+        message
+      end
+    end
+
+    # Deep copy a Hash (or Array of Hashes) replacing every value whose key
+    # matches SENSITIVE_KEYS with REDACTED. Non-sensitive String values are
+    # scrubbed with {scrub} so a serialized credential inside them is caught too.
+    #
+    # @param object [Hash, Array, Object] The object to scrub
+    # @return [Hash, Array, Object] A scrubbed copy
+    def self.scrub_hash(object)
+      case object
+      when Hash
+        object.each_with_object({}) do |(key, value), result|
+          result[key] = sensitive_key?(key) ? REDACTED : scrub_hash(value)
+        end
+      when Array
+        object.map { |value| scrub_hash(value) }
+      when String
+        scrub(object)
+      else
+        object
+      end
+    end
+
+    # @param key [String, Symbol] A hash key or header name
+    # @return [Boolean] Whether values under this key must be redacted
+    def self.sensitive_key?(key)
+      key.to_s.match?(SENSITIVE_KEY_REGEX)
+    end
+
     def build_log_data(log_level, message, user: nil, type: nil, url: nil, other: nil, &block)
       time = Time.now.utc
       # timestamp iso8601 with 6 decimal places to match the python output format
@@ -202,10 +307,10 @@ module OpenC3
         message = yield
       end
       data[:container_name] = @container_name
-      data[:message] = message if message
+      data[:message] = Logger.scrub(message) if message
       data[:type] = type if type
       data[:url] = url if url
-      data = data.merge(other) if other
+      data = data.merge(Logger.scrub_hash(other)) if other
       return data
     end
 

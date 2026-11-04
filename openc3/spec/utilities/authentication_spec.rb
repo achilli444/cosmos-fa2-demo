@@ -114,7 +114,7 @@ module OpenC3
             auth.token
           }.to raise_error(OpenC3AuthenticationError) do |error|
             # Error message should contain obfuscated password (works with both Ruby 3.2 and 3.3+ inspect formats)
-            expect(error.message).to match(/"password"\s*=>\s*"\*\*\*"/)
+            expect(error.message).to match(/"password"\s*=>\s*"\[REDACTED\]"/)
             # Error message should NOT contain actual password
             expect(error.message).not_to include('testpassword')
           end
@@ -157,7 +157,7 @@ module OpenC3
           allow(JsonDRb).to receive(:debug?).and_return(true)
         end
 
-        it "shows actual password in error messages when debug is enabled" do
+        it "still redacts the password when debug is enabled" do
           stdout = StringIO.new('', 'r+')
           saved_stdout = $stdout
           $stdout = stdout
@@ -173,8 +173,9 @@ module OpenC3
             OpenC3.disable_warnings { Object.const_set(:STDOUT, saved_stdout_const) }
           end
 
-          # In debug mode, STDOUT should contain the actual password (works with both Ruby 3.2 and 3.3+ inspect formats)
-          expect(stdout.string).to match(/"password"\s*=>\s*"testpassword"/)
+          # Debug mode must not bypass redaction: STDOUT never carries the password
+          expect(stdout.string).to match(/"password"\s*=>\s*"\[REDACTED\]"/)
+          expect(stdout.string).not_to include('testpassword')
         end
       end
 
@@ -193,13 +194,13 @@ module OpenC3
             auth.token
           }.to raise_error(OpenC3AuthenticationError) do |error|
             # Refresh token should be obfuscated (works with both Ruby 3.2 and 3.3+ inspect formats)
-            expect(error.message).to match(/"refresh_token"\s*=>\s*"\*\*\*"/)
+            expect(error.message).to match(/"refresh_token"\s*=>\s*"\[REDACTED\]"/)
             # Error message should NOT contain actual refresh token
             expect(error.message).not_to include('test_refresh_token')
           end
         end
 
-        it "shows actual refresh_token when debug is enabled" do
+        it "still redacts the refresh_token when debug is enabled" do
           allow(JsonDRb).to receive(:debug?).and_return(true)
 
           stdout = StringIO.new('', 'r+')
@@ -217,8 +218,9 @@ module OpenC3
             OpenC3.disable_warnings { Object.const_set(:STDOUT, saved_stdout_const) }
           end
 
-          # In debug mode, STDOUT should contain the actual refresh token (works with both Ruby 3.2 and 3.3+ inspect formats)
-          expect(stdout.string).to match(/"refresh_token"\s*=>\s*"test_refresh_token"/)
+          # Debug mode must not bypass redaction: STDOUT never carries the refresh token
+          expect(stdout.string).to match(/"refresh_token"\s*=>\s*"\[REDACTED\]"/)
+          expect(stdout.string).not_to include('test_refresh_token')
         end
       end
     end

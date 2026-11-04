@@ -17,6 +17,7 @@
 
 require 'openc3/version'
 require 'openc3/io/json_drb'
+require 'openc3/utilities/logger'
 require 'faraday'
 require 'uri'
 
@@ -217,16 +218,10 @@ module OpenC3
     def _make_request(headers, data)
       realm = ENV['OPENC3_KEYCLOAK_REALM'] || 'openc3'
       uri = URI("#{@url}/realms/#{realm}/protocol/openid-connect/token")
-      # Obfuscate password and refresh token in logs unless debug mode is enabled
-      if JsonDRb.debug?
-        log_data = data.inspect
-      else
-        # Create a copy of the hash with sensitive values obfuscated
-        log_data = data.dup
-        log_data['password'] = '***' if log_data.key?('password')
-        log_data['refresh_token'] = '***' if log_data.key?('refresh_token')
-        log_data = log_data.inspect
-      end
+      # Always redact the password and refresh token in the logged copy of the
+      # request, including in debug mode, so credentials never reach STDOUT or
+      # the exception messages below
+      log_data = Logger.scrub_hash(data).inspect
       @log[0] = "request uri: #{uri} header: #{headers} body: #{log_data}"
       STDOUT.puts @log[0] if JsonDRb.debug?
       saved_verbose = $VERBOSE; $VERBOSE = nil
@@ -235,7 +230,8 @@ module OpenC3
       ensure
         $VERBOSE = saved_verbose
       end
-      @log[1] = "response status: #{resp.status} header: #{resp.headers} body: #{resp.body}"
+      # The response body carries access_token / refresh_token / id_token
+      @log[1] = "response status: #{resp.status} header: #{resp.headers} body: #{Logger.scrub(resp.body)}"
       STDOUT.puts @log[1] if JsonDRb.debug?
       if resp.status >= 200 && resp.status <= 299
         return JSON.parse(resp.body, allow_nan: true, create_additions: true)
