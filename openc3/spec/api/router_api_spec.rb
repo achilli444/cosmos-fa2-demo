@@ -82,6 +82,26 @@ module OpenC3
     end
 
     describe "connect_router, disconnect_router" do
+      it "requires system_set and cmd authority on every mapped cmd target" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system_set', router_name: "ROUTE_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST", router_name: "ROUTE_INT")).and_call_original
+        @api.connect_router("ROUTE_INT")
+      end
+
+      it "does not connect or disconnect when cmd authority is denied" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_raise(AuthError.new("Unauthorized"))
+        expect(RouterTopic).not_to receive(:connect_router)
+        expect(RouterTopic).not_to receive(:disconnect_router)
+        expect { @api.connect_router("ROUTE_INT") }.to raise_error(AuthError)
+        expect { @api.disconnect_router("ROUTE_INT") }.to raise_error(AuthError)
+      end
+
+      it "raises when the router does not exist" do
+        expect(RouterTopic).not_to receive(:connect_router)
+        expect { @api.connect_router("NOPE") }.to raise_error(/Router 'NOPE' does not exist \(connect_router\)/)
+      end
+
       it "connects the router" do
         expect(@api.get_router("ROUTE_INT")['state']).to eql "CONNECTED"
         @api.disconnect_router("ROUTE_INT")
@@ -125,6 +145,13 @@ module OpenC3
     end
 
     describe "router_cmd" do
+      it "requires cmd authority on mapped targets" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST", router_name: "ROUTE_INT")).and_raise(AuthError.new("Unauthorized"))
+        expect(RouterTopic).not_to receive(:router_cmd)
+        expect { @api.router_cmd("ROUTE_INT", "cmd1") }.to raise_error(AuthError)
+      end
+
       it "sends a command to an router_cmd" do
         # Ultimately the router_cmd is still routed to interface_cmd on the interface
         expect_any_instance_of(OpenC3::Interface).to receive(:interface_cmd).with("cmd1")
@@ -136,6 +163,13 @@ module OpenC3
     end
 
     describe "router_protocol_cmd" do
+      it "requires cmd authority on mapped targets" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST", router_name: "ROUTE_INT")).and_raise(AuthError.new("Unauthorized"))
+        expect(RouterTopic).not_to receive(:protocol_cmd)
+        expect { @api.router_protocol_cmd("ROUTE_INT", "cmd1") }.to raise_error(AuthError)
+      end
+
       it "sends a command to an interface" do
         expect_any_instance_of(OpenC3::Interface).to receive(:protocol_cmd).with("cmd1", {index: -1, read_write: "READ_WRITE"})
         @api.router_protocol_cmd("ROUTE_INT", "cmd1")
@@ -146,6 +180,22 @@ module OpenC3
     end
 
     describe "map_target_to_router" do
+      it "requires cmd authority on the target being mapped and logs the user" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set', router_name: "ROUTE_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST2", router_name: "ROUTE_INT")).and_return({ 'username' => 'operator' })
+        expect_any_instance_of(RouterModel).to receive(:map_target).with("INST2", cmd_only: false, tlm_only: false, unmap_old: true)
+        allow(Logger).to receive(:info)
+        @api.map_target_to_router("INST2", "ROUTE_INT")
+        expect(Logger).to have_received(:info).with("Target INST2 mapped to Router ROUTE_INT by operator", scope: "DEFAULT", user: "operator")
+      end
+
+      it "does not remap when cmd authority on the target is denied" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST2")).and_raise(AuthError.new("Unauthorized"))
+        expect_any_instance_of(RouterModel).not_to receive(:map_target)
+        expect { @api.map_target_to_router("INST2", "ROUTE_INT") }.to raise_error(AuthError)
+      end
+
       it "successfully maps a single target to a router" do
         TargetModel.new(name: "INST", scope: "DEFAULT").create
         TargetModel.new(name: "INST2", scope: "DEFAULT").create
@@ -208,6 +258,22 @@ module OpenC3
     end
 
     describe "unmap_target_from_router" do
+      it "requires cmd authority on the target being unmapped and logs the user" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set', router_name: "ROUTE_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST", router_name: "ROUTE_INT")).and_return({ 'username' => 'operator' })
+        expect_any_instance_of(RouterModel).to receive(:unmap_target).with("INST", cmd_only: false, tlm_only: false)
+        allow(Logger).to receive(:info)
+        @api.unmap_target_from_router("INST", "ROUTE_INT")
+        expect(Logger).to have_received(:info).with("Target INST unmapped from Router ROUTE_INT by operator", scope: "DEFAULT", user: "operator")
+      end
+
+      it "does not unmap when cmd authority on the target is denied" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_raise(AuthError.new("Unauthorized"))
+        expect_any_instance_of(RouterModel).not_to receive(:unmap_target)
+        expect { @api.unmap_target_from_router("INST", "ROUTE_INT") }.to raise_error(AuthError)
+      end
+
       it "successfully unmaps a single target from a router" do
         TargetModel.new(name: "INST", scope: "DEFAULT").create
         TargetModel.new(name: "INST2", scope: "DEFAULT").create
