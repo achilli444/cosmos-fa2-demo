@@ -25,6 +25,16 @@
     <v-card-text>
       <v-form>
         <v-text-field
+          v-if="isSet && !reset"
+          v-model="username"
+          type="text"
+          label="Username"
+          placeholder="admin"
+          persistent-placeholder
+          autocomplete="username"
+          data-test="username"
+        />
+        <v-text-field
           v-if="isSet && reset"
           v-model="oldPassword"
           type="password"
@@ -87,6 +97,7 @@ export default {
   data() {
     return {
       isSet: true,
+      username: '',
       password: '',
       confirmPassword: '',
       oldPassword: '',
@@ -207,6 +218,7 @@ export default {
       this.showAlert = false
       Api.post('/openc3-api/auth/verify', {
         data: {
+          username: this.username,
           password: this.password,
         },
         ...this.options,
@@ -216,7 +228,7 @@ export default {
         })
         .catch((error) => {
           if (isUnauthorizedError(error)) {
-            this.alert = 'Incorrect password'
+            this.alert = 'Incorrect username or password'
           } else if (error?.status === 429 || error?.response?.status === 429) {
             this.alert = 'Please try again later'
           } else if (

@@ -18,6 +18,7 @@
 require 'openc3/version'
 require 'openc3/io/json_drb'
 require 'faraday'
+require 'json'
 require 'uri'
 
 module OpenC3
@@ -59,7 +60,11 @@ module OpenC3
     end
 
     def _make_auth_request(password)
-      Faraday.new.post(_generate_auth_url, '{"password": "' + password + '"}', {'Content-Type' => 'application/json'})
+      body = { 'password' => password }
+      # Named operator account (defaults to the built-in admin account when unset)
+      user = ENV.fetch('OPENC3_API_USER', nil)
+      body['username'] = user if user and !user.empty?
+      Faraday.new.post(_generate_auth_url, JSON.generate(body), {'Content-Type' => 'application/json'})
     end
 
     def _make_otp_request(scope: 'DEFAULT')

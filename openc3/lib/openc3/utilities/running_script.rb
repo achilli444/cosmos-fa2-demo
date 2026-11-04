@@ -542,7 +542,8 @@ class RunningScript
           raise "offline_access token invalid for script"
         end
       else
-        process.environment['OPENC3_API_USER'] = ENV.fetch('OPENC3_API_USER', nil)
+        # Attribute the script's commands to the operator who started it
+        process.environment['OPENC3_API_USER'] = ENV.fetch('OPENC3_API_USER', username == 'Anonymous' ? nil : username)
         if ENV['OPENC3_SERVICE_PASSWORD']
           process.environment['OPENC3_API_PASSWORD'] = ENV.fetch('OPENC3_SERVICE_PASSWORD')
         else

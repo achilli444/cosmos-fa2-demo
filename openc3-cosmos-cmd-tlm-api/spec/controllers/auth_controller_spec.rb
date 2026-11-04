@@ -35,6 +35,46 @@ RSpec.describe AuthController, :type => :controller do
     end
   end
 
+  describe "verify" do
+    before(:each) do
+      allow(OpenC3::AuthModel).to receive(:verify).and_call_original
+      allow(OpenC3::AuthModel).to receive(:verify_no_service).and_call_original
+      allow(OpenC3::AuthModel).to receive(:session_user).and_call_original
+      post :set, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "issues a session bound to the built-in admin when no username is given" do
+      post :verify, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.session_user(response.body)['username']).to eql 'admin'
+    end
+
+    it "issues a session bound to a named operator" do
+      OpenC3::AuthModel.add_user('alice', 'alicepass1', roles: ['viewer'])
+      post :verify, params: { username: 'alice', password: 'alicepass1' }
+      expect(response).to have_http_status(:ok)
+      user = OpenC3::AuthModel.session_user(response.body)
+      expect(user['username']).to eql 'alice'
+      expect(user['roles']).to eql ['viewer']
+
+      post :verify, params: { username: 'alice', password: 'PASSWORD' }
+      expect(response).to have_http_status(:unauthorized)
+      post :verify, params: { username: 'nobody', password: 'PASSWORD' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns the caller's identity from /auth/user" do
+      post :verify, params: { password: 'PASSWORD' }
+      request.headers['HTTP_AUTHORIZATION'] = response.body
+      get :user, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json['username']).to eql 'admin'
+      expect(json).not_to have_key('password_hash')
+    end
+  end
+
   describe "set" do
     it "requires old_password after initial set" do
       post :set, params: { password: 'PASSWORD' }
@@ -165,8 +205,7 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "does not consume an OTP token" do
-      user = 'anonymous'
-      otp = OpenC3::Authorization.generate_otp(user)
+      otp = OpenC3::Authorization.generate_otp(OpenC3::AuthModel.admin_user)
       post :verify_token, params: { token: otp }
       expect(response).to have_http_status(:unauthorized)
       # Still usable, i.e. verify_no_service never saw it

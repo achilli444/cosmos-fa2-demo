@@ -346,6 +346,18 @@ RSpec.configure do |config|
     allow(OpenC3::AuthModel).to receive(:verify_no_service) do |token, **kwargs|
       token == $openc3_token || token == $openc3_mock_token || token = $openc3_mock_otp || token == ENV['OPENC3_API_PASSWORD']
     end
+
+    # Mocked tokens map to a fully privileged operator so API specs exercise
+    # the real permission checks in Authorization#authorize
+    allow(OpenC3::AuthModel).to receive(:session_user) do |token|
+      if token == $openc3_token || token == $openc3_mock_token || token == $openc3_mock_otp || token == ENV['OPENC3_API_PASSWORD']
+        { 'username' => 'admin', 'name' => 'admin', 'roles' => ['admin', 'operator'], 'targets' => nil }
+      elsif token && token == ENV['OPENC3_SERVICE_PASSWORD']
+        OpenC3::AuthModel.service_user
+      else
+        nil
+      end
+    end
   end
 
   # Before each test make sure $stdout and STDOUT are set. They might be messed

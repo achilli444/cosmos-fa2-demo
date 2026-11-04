@@ -230,6 +230,7 @@ Rails.application.routes.draw do
     post "/auth/verify_service" => "auth#verify_service"
     post "/auth/set" => "auth#set"
     get "/auth/otp" => "auth#get_otp"
+    get "/auth/user" => "auth#user"
 
     get "/internal/health" => "internal_health#health"
     get "/internal/metrics" => "internal_metrics#index"
@@ -248,6 +249,9 @@ Rails.application.routes.draw do
     ##########################
     # COSMOS Enterprise Routes
     ##########################
+    get "/users" => "users#index"
+    post "/users" => "users#create"
+    delete "/users/:username", to: "users#destroy", username: /[^\/]+/
     get "/users/active" => "users#active"
     match "/users/logout/:user", to: "users#logout", id: /[^\/]+/, via: [:patch, :put]
 
