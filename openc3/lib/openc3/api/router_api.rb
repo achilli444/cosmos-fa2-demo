@@ -62,8 +62,8 @@ module OpenC3
     # @param router_name [String] Name of router
     # @param router_params [Array] Optional parameters to pass to the router
     def connect_router(router_name, *router_params, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      _authorize_router_cmd_targets(router_name, __method__, manual: manual, scope: scope, token: token)
       RouterTopic.connect_router(router_name, *router_params, scope: scope)
     end
 
@@ -71,8 +71,8 @@ module OpenC3
     #
     # @param router_name [String] Name of router
     def disconnect_router(router_name, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      _authorize_router_cmd_targets(router_name, __method__, manual: manual, scope: scope, token: token)
       RouterTopic.disconnect_router(router_name, scope: scope)
     end
 
@@ -124,14 +124,14 @@ module OpenC3
     end
 
     def router_cmd(router_name, cmd_name, *cmd_params, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      _authorize_router_cmd_targets(router_name, __method__, manual: manual, scope: scope, token: token)
       RouterTopic.router_cmd(router_name, cmd_name, *cmd_params, scope: scope)
     end
 
     def router_protocol_cmd(router_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
+      _authorize_router_cmd_targets(router_name, __method__, manual: manual, scope: scope, token: token)
       RouterTopic.protocol_cmd(router_name, cmd_name, *cmd_params, read_write: read_write, index: index, scope: scope)
     end
 
@@ -141,7 +141,6 @@ module OpenC3
     # @param target_name [String/Array] The name of the target(s)
     # @param router_name (see #connect_router)
     def map_target_to_router(target_name, router_name, cmd_only: false, tlm_only: false, unmap_old: true, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
       router = RouterModel.get_model(name: router_name, scope: scope)
       raise "Router '#{router_name}' does not exist (map_target_to_router)" unless router
@@ -151,9 +150,10 @@ module OpenC3
       else
         target_names = [target_name]
       end
+      username = _authorize_cmd_targets(target_names, router_name: router_name, manual: manual, scope: scope, token: token)
       target_names.each do |name|
         router.map_target(name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old)
-        Logger.info("Target #{name} mapped to Router #{router_name}", scope: scope)
+        Logger.info("Target #{name} mapped to Router #{router_name} by #{username}", scope: scope, user: username)
       end
       nil
     end
@@ -164,7 +164,6 @@ module OpenC3
     # @param target_name [String/Array] The name of the target(s)
     # @param router_name (see #connect_router)
     def unmap_target_from_router(target_name, router_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
       router = RouterModel.get_model(name: router_name, scope: scope)
       raise "Router '#{router_name}' does not exist (unmap_target_from_router)" unless router
@@ -174,9 +173,10 @@ module OpenC3
       else
         target_names = [target_name]
       end
+      username = _authorize_cmd_targets(target_names, router_name: router_name, manual: manual, scope: scope, token: token)
       target_names.each do |name|
         router.unmap_target(name, cmd_only: cmd_only, tlm_only: tlm_only)
-        Logger.info("Target #{name} unmapped from Router #{router_name}", scope: scope)
+        Logger.info("Target #{name} unmapped from Router #{router_name} by #{username}", scope: scope, user: username)
       end
       nil
     end
@@ -218,6 +218,18 @@ module OpenC3
     def router_details(router_name, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'system', router_name: router_name, manual: manual, scope: scope, token: token)
       RouterTopic.router_details(router_name, scope: scope)
+    end
+
+    # Routers relay commands from external clients to every target in
+    # cmd_target_names, so operating one requires command authority on each
+    def _authorize_router_cmd_targets(router_name, method_name, manual:, scope:, token:)
+      router = RouterModel.get(name: router_name, scope: scope)
+      raise "Router '#{router_name}' does not exist (#{method_name})" unless router
+
+      # Models created before cmd/tlm target lists were split only carry target_names
+      target_names = router['cmd_target_names']
+      target_names = router['target_names'] if target_names.nil? or target_names.empty?
+      _authorize_cmd_targets(target_names, router_name: router_name, manual: manual, scope: scope, token: token)
     end
   end
 end

@@ -82,6 +82,26 @@ module OpenC3
     end
 
     describe "connect_interface, disconnect_interface" do
+      it "requires system_set and cmd authority on every mapped cmd target" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system_set', interface_name: "INST_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST", interface_name: "INST_INT")).and_call_original
+        @api.connect_interface("INST_INT")
+      end
+
+      it "does not connect or disconnect when cmd authority is denied" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_raise(AuthError.new("Unauthorized"))
+        expect(InterfaceTopic).not_to receive(:connect_interface)
+        expect(InterfaceTopic).not_to receive(:disconnect_interface)
+        expect { @api.connect_interface("INST_INT") }.to raise_error(AuthError)
+        expect { @api.disconnect_interface("INST_INT") }.to raise_error(AuthError)
+      end
+
+      it "raises when the interface does not exist" do
+        expect(InterfaceTopic).not_to receive(:connect_interface)
+        expect { @api.connect_interface("NOPE") }.to raise_error(/Interface 'NOPE' does not exist \(connect_interface\)/)
+      end
+
       it "connects the interface" do
         expect(@api.get_interface("INST_INT")['state']).to eql "CONNECTED"
         @api.disconnect_interface("INST_INT")
@@ -152,6 +172,26 @@ module OpenC3
     end
 
     describe "map_target_to_interface" do
+      it "requires cmd authority on the target being mapped and logs the user" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set', interface_name: "INST_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST2", interface_name: "INST_INT")).and_return({ 'username' => 'operator' })
+        expect_any_instance_of(InterfaceModel).to receive(:map_target).with("INST2", cmd_only: false, tlm_only: false, unmap_old: true)
+        allow(Logger).to receive(:info)
+        @api.map_target_to_interface("INST2", "INST_INT")
+        expect(Logger).to have_received(:info).with("Target INST2 mapped to Interface INST_INT by operator", scope: "DEFAULT", user: "operator")
+      end
+
+      it "does not remap when cmd authority on the target is denied" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST2")).and_raise(AuthError.new("Unauthorized"))
+        expect_any_instance_of(InterfaceModel).not_to receive(:map_target)
+        expect { @api.map_target_to_interface("INST2", "INST_INT") }.to raise_error(AuthError)
+      end
+
+      it "raises when the interface does not exist" do
+        expect { @api.map_target_to_interface("INST", "NONEXISTENT_INT") }.to raise_error(/does not exist/)
+      end
+
       it "successfully maps a target to an interface" do
         TargetModel.new(name: "INST", scope: "DEFAULT").create
         TargetModel.new(name: "INST2", scope: "DEFAULT").create
@@ -176,6 +216,27 @@ module OpenC3
     end
 
     describe "unmap_target_from_interface" do
+      it "requires cmd authority on the target being unmapped and logs the user" do
+        model = InterfaceModel.get_model(name: "INST_INT", scope: "DEFAULT")
+        model.cmd_target_names = ["INST", "INST2"]
+        model.tlm_target_names = ["INST", "INST2"]
+        model.target_names = ["INST", "INST2"]
+        model.update
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set', interface_name: "INST_INT")).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST2", interface_name: "INST_INT")).and_return({ 'username' => 'operator' })
+        expect_any_instance_of(InterfaceModel).to receive(:unmap_target).with("INST2", cmd_only: false, tlm_only: false)
+        allow(Logger).to receive(:info)
+        @api.unmap_target_from_interface("INST2", "INST_INT")
+        expect(Logger).to have_received(:info).with("Target INST2 unmapped from Interface INST_INT by operator", scope: "DEFAULT", user: "operator")
+      end
+
+      it "does not unmap when cmd authority on the target is denied" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST")).and_raise(AuthError.new("Unauthorized"))
+        expect_any_instance_of(InterfaceModel).not_to receive(:unmap_target)
+        expect { @api.unmap_target_from_interface("INST", "INST_INT") }.to raise_error(AuthError)
+      end
+
       it "successfully unmaps a single target from an interface" do
         TargetModel.new(name: "INST", scope: "DEFAULT").create
         TargetModel.new(name: "INST2", scope: "DEFAULT").create
@@ -243,6 +304,13 @@ module OpenC3
     end
 
     describe "interface_cmd" do
+      it "requires cmd authority on mapped targets" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST", interface_name: "INST_INT")).and_raise(AuthError.new("Unauthorized"))
+        expect(InterfaceTopic).not_to receive(:interface_cmd)
+        expect { @api.interface_cmd("INST_INT", "cmd1") }.to raise_error(AuthError)
+      end
+
       it "sends a command to an interface" do
         expect_any_instance_of(OpenC3::Interface).to receive(:interface_cmd).with("cmd1")
         @api.interface_cmd("INST_INT", "cmd1")
@@ -253,6 +321,13 @@ module OpenC3
     end
 
     describe "interface_protocol_cmd" do
+      it "requires cmd authority on mapped targets" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', target_name: "INST", interface_name: "INST_INT")).and_raise(AuthError.new("Unauthorized"))
+        expect(InterfaceTopic).not_to receive(:protocol_cmd)
+        expect { @api.interface_protocol_cmd("INST_INT", "cmd1") }.to raise_error(AuthError)
+      end
+
       it "sends a command to an interface" do
         expect_any_instance_of(OpenC3::Interface).to receive(:protocol_cmd).with("cmd1", {index: -1, read_write: "READ_WRITE"})
         @api.interface_protocol_cmd("INST_INT", "cmd1")
