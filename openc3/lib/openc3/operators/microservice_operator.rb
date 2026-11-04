@@ -154,7 +154,7 @@ module OpenC3
         Logger.error("Microservice #{microservice_name} secret #{secret_name} file path is a symlink which is not allowed: #{path}")
         return
       end
-      File.open(path, File::WRONLY | File::CREAT | File::TRUNC | File::BINARY, SECRET_FILE_MODE) do |file|
+      File.open(path, 'wb', SECRET_FILE_MODE) do |file|
         # The mode passed to open only applies when the file is created (and is
         # still masked by umask) so chmod to cover pre-existing files as well.
         file.chmod(SECRET_FILE_MODE)
