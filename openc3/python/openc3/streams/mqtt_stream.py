@@ -79,9 +79,10 @@ class MqttStream:
         self.client.on_message = self.on_message
         self.client.user_data_set(self.pkt_queue)  # passed to on_message
 
-        if self.ssl:
+        if self.ssl and not self.ca_file:
             # Verifies the broker certificate (CERT_REQUIRED + hostname check)
-            # against the system certificate store unless CA_FILE is given below
+            # against the system certificate store. With CA_FILE, tls_set is
+            # called once below with ca_certs instead (Paho rejects a second call).
             self.client.tls_set()
         else:
             message = f"MqttStream: TLS disabled, connecting to {self.hostname}:{self.port} in plaintext"
