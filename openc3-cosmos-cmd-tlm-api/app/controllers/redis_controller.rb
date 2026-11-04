@@ -20,6 +20,19 @@ class RedisController < ApplicationController
     'AUTH' # Because changing the Redis ACL user will break cmd-tlm-api
   ]
 
+  # Commands whose first argument is a key name. Only the key name of these
+  # commands is written to the audit log; all other arguments and the command
+  # result are never logged because they may carry secrets, session tokens or
+  # other stored values (e.g. HGET <scope>__openc3__secrets <name>).
+  KEY_COMMANDS = %w[
+    GET SET DEL EXISTS EXPIRE TTL TYPE INCR DECR
+    HGET HGETALL HSET HDEL HKEYS HLEN HEXISTS
+    LRANGE LLEN LPUSH RPUSH LPOP RPOP
+    SADD SREM SMEMBERS SCARD SISMEMBER
+    ZADD ZRANGE ZREM ZCARD
+    XADD XRANGE XREVRANGE XLEN XINFO
+  ]
+
   def execute_raw
     return unless authorization('admin')
 
@@ -33,12 +46,33 @@ class RedisController < ApplicationController
     end
 
     db_shard = (params[:db_shard] || 0).to_i
-    if params[:ephemeral]
-      result = OpenC3::EphemeralStore.instance(db_shard: db_shard).public_send(command, args[1..-1])
-    else
-      result = OpenC3::Store.instance(db_shard: db_shard).public_send(command, args[1..-1])
+    store = params[:ephemeral] ? OpenC3::EphemeralStore : OpenC3::Store
+    audit = audit_description(command, args, store, db_shard)
+    begin
+      result = store.instance(db_shard: db_shard).public_send(command, args[1..-1])
+    rescue StandardError => e
+      OpenC3::Logger.info("Redis command failed (#{audit}): #{e.class}", user: username())
+      raise
     end
-    OpenC3::Logger.info("Redis command executed (db_shard #{db_shard}): #{args} - with result #{result}", user: username())
+    OpenC3::Logger.info("Redis command executed (#{audit}): result #{result_summary(result)}", user: username())
     render json: { :result => result }, status: :created
+  end
+
+  private
+
+  def audit_description(command, args, store, db_shard)
+    description = "#{store.name} db_shard #{db_shard}: #{command}"
+    description += " #{args[1]}" if KEY_COMMANDS.include?(command) && args[1]
+    description += " (#{args.length - 1} args)"
+    description
+  end
+
+  def result_summary(result)
+    case result
+    when nil then 'nil'
+    when String, Array, Hash then "#{result.class} (#{result.length})"
+    when Integer, true, false then result.to_s
+    else result.class.to_s
+    end
   end
 end
