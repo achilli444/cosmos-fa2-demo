@@ -31,6 +31,7 @@ from openc3.topics.decom_interface_topic import DecomInterfaceTopic
 from openc3.topics.interface_topic import InterfaceTopic
 from openc3.topics.topic import Topic
 from openc3.utilities.authorization import authorize
+from openc3.utilities.cmd_bypass import CMD_BYPASS_PERMISSION, cmd_bypass_requested
 from openc3.utilities.cmd_log import _build_cmd_output_string
 from openc3.utilities.extract import extract_fields_from_cmd_text
 from openc3.utilities.store import Store
@@ -609,6 +610,15 @@ def _cmd_implementation(
         scope=scope,
         manual=manual,
     )
+    if cmd_bypass_requested(range_check, hazardous_check):
+        # Disabling range or hazardous checks is a distinct, elevated privilege
+        authorize(
+            permission=CMD_BYPASS_PERMISSION,
+            target_name=target_name,
+            packet_name=cmd_name,
+            scope=scope,
+            manual=manual,
+        )
     if not user:
         user = {}
         user["username"] = os.environ.get("OPENC3_MICROSERVICE_NAME")

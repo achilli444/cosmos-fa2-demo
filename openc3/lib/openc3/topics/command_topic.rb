@@ -18,6 +18,7 @@
 require 'openc3/topics/topic'
 require 'openc3/utilities/store_queued'
 require 'openc3/utilities/open_telemetry'
+require 'openc3/utilities/authorization'
 
 module OpenC3
   class CommandTopic < Topic
@@ -71,6 +72,8 @@ module OpenC3
               raise_hazardous_error(msg_hash, command)
             elsif msg_hash["result"].include?("CriticalCmdError")
               raise_critical_cmd_error(msg_hash, command)
+            elsif msg_hash["result"].start_with?("ForbiddenError\n")
+              raise ForbiddenError.new(msg_hash["result"].split("\n", 2)[1])
             else
               raise msg_hash["result"]
             end

@@ -14,6 +14,7 @@ import time
 
 from openc3.top_level import CriticalCmdError, HazardousError
 from openc3.topics.topic import Topic
+from openc3.utilities.authorization import ForbiddenError
 from openc3.utilities.json import JsonEncoder
 from openc3.utilities.store import Store
 from openc3.utilities.store_queued import EphemeralStoreQueued
@@ -94,6 +95,8 @@ class CommandTopic(Topic):
                         cls.raise_hazardous_error(msg_hash, command)
                     elif "CriticalCmdError" in result:
                         cls.raise_critical_cmd_error(msg_hash, command)
+                    elif result.startswith("ForbiddenError\n"):
+                        raise ForbiddenError(result.split("\n", 1)[1])
                     else:
                         raise RuntimeError(result)
         raise RuntimeError(f"Timeout of {timeout}s waiting for cmd ack")

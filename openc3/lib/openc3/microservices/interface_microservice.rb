@@ -31,6 +31,7 @@ require 'openc3/topics/command_decom_topic'
 require 'openc3/topics/interface_topic'
 require 'openc3/topics/router_topic'
 require 'openc3/interfaces/interface'
+require 'openc3/utilities/cmd_bypass'
 
 begin
   require 'openc3-enterprise/models/critical_cmd_model'
@@ -287,6 +288,18 @@ module OpenC3
             end
             hazardous, hazardous_description = System.commands.cmd_pkt_hazardous?(command)
 
+            # A request to skip range or hazardous checks is only dispatched if the deployment
+            # allows it, or if the scope routes it through critical command approval
+            force_critical = false
+            if cmd_params and CmdBypass.requested?(range_check: range_check, hazardous_check: hazardous_check) and not release_critical and not CmdBypass.allowed?
+              if @critical_commanding and @critical_commanding != 'OFF'
+                force_critical = true
+              else
+                @logger.warn("Cmd bypass rejected: #{msg_hash['cmd_string']}", user: msg_hash['username'], scope: @scope)
+                next "ForbiddenError\n#{CmdBypass.rejection_message(msg_hash['cmd_string'])}"
+              end
+            end
+
             # Initial Are you sure? Hazardous check
             # Return back the error, description, and the formatted command
             # This allows the error handler to simply re-send the command
@@ -295,7 +308,7 @@ module OpenC3
             # Check for Critical Command
             if @critical_commanding and @critical_commanding != 'OFF' and not release_critical
               restricted = command.restricted
-              if hazardous or restricted or (@critical_commanding == 'ALL' and manual)
+              if hazardous or restricted or force_critical or (@critical_commanding == 'ALL' and manual)
                 cmd_type = 'NORMAL'
                 if hazardous
                   cmd_type = 'HAZARDOUS'

@@ -27,6 +27,7 @@ require 'openc3/topics/decom_interface_topic'
 require 'openc3/topics/interface_topic'
 require 'openc3/script/extract'
 require 'openc3/utilities/cmd_log'
+require 'openc3/utilities/cmd_bypass'
 
 module OpenC3
   module Api
@@ -482,6 +483,10 @@ module OpenC3
       cmd_name = cmd_name.upcase
       cmd_params = cmd_params.transform_keys(&:upcase)
       user = authorize(permission: 'cmd', target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      if CmdBypass.requested?(range_check: range_check, hazardous_check: hazardous_check)
+        # Disabling range or hazardous checks is a distinct, elevated privilege
+        authorize(permission: CmdBypass::PERMISSION, target_name: target_name, packet_name: cmd_name, manual: manual, scope: scope, token: token)
+      end
       if user.nil?
         user = {}
         user['username'] = ENV['OPENC3_MICROSERVICE_NAME']
