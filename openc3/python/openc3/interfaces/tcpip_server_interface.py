@@ -10,6 +10,7 @@
 # if purchased from OpenC3, Inc.
 
 import contextlib
+import ipaddress
 import queue
 import select
 import socket
@@ -54,8 +55,11 @@ class TcpipServerInterface(StreamInterface):
     # attr_accessor :read_connection_callback
     # @return [StreamLogPair] StreamLogPair instance or nil
     # attr_accessor :stream_log_pair
-    # @return [String] The ip address to bind to.  Default to ANY (0.0.0.0)
+    # @return [String] The ip address to bind to. Default to localhost (127.0.0.1)
     # attr_accessor :listen_address
+    # @return [list] Client addresses or CIDR ranges allowed to connect.
+    #   An empty list allows any client that can reach the listen address.
+    # attr_reader :allowed_clients
 
     # @param write_port [Integer] The server write port. Clients should connect
     #   and expect to receive data from this port.
@@ -121,7 +125,8 @@ class TcpipServerInterface(StreamInterface):
         self.stream_log_pair = None
         self.raw_logging_enabled = False
         self.connection_mutex = threading.Lock()
-        self.listen_address = "0.0.0.0"
+        self.listen_address = "127.0.0.1"
+        self.allowed_clients = []
 
         if not ConfigParser.handle_none(read_port):
             self.read_allowed = False
@@ -308,13 +313,34 @@ class TcpipServerInterface(StreamInterface):
         self._change_raw_logging("stop")
 
     # Supported Options
-    # LISTEN_ADDRESS - Ip address of the interface to accept connections on - Default: 0.0.0.0
+    # LISTEN_ADDRESS - Ip address of the interface to accept connections on - Default: 127.0.0.1
+    # ALLOWED_CLIENTS - Client IP addresses or CIDR ranges (e.g. 10.0.0.5 192.168.1.0/24) that
+    #   are allowed to connect. Connections from any other address are rejected.
+    #   Default: any client that can reach the listen address
     # (see Interface#set_option)
     def set_option(self, option_name, option_values):
         super().set_option(option_name, option_values)
         match option_name.upper():
             case "LISTEN_ADDRESS":
                 self.listen_address = option_values[0]
+            case "ALLOWED_CLIENTS":
+                allowed_clients = []
+                for value in option_values:
+                    try:
+                        allowed_clients.append(ipaddress.ip_network(value, strict=False))
+                    except ValueError as e:
+                        raise ValueError(f"Invalid ALLOWED_CLIENTS entry '{value}': {e}") from e
+                self.allowed_clients = allowed_clients
+
+    def client_allowed(self, host_ip):
+        """Whether a connecting client IP is permitted by ALLOWED_CLIENTS"""
+        if not self.allowed_clients:
+            return True
+        try:
+            ip = ipaddress.ip_address(host_ip)
+        except ValueError:
+            return False
+        return any(ip in network for network in self.allowed_clients)
 
     def _shutdown_interfaces(self, interface_infos):
         with self.connection_mutex:
@@ -380,6 +406,12 @@ class TcpipServerInterface(StreamInterface):
             if self.cancel_threads:
                 break
             host_ip, port = address
+            if not self.client_allowed(host_ip):
+                close_socket(client_socket)
+                Logger.warn(
+                    f"{self.name}: Tcpip server rejected connection from {host_ip}:{port} (not in ALLOWED_CLIENTS)"
+                )
+                continue
             try:
                 hostname, _, _ = socket.gethostbyaddr(host_ip)
             except Exception:
@@ -632,4 +664,5 @@ class TcpipServerInterface(StreamInterface):
         result["write_timeout"] = self.write_timeout
         result["read_timeout"] = self.read_timeout
         result["listen_address"] = self.listen_address
+        result["allowed_clients"] = [str(network) for network in self.allowed_clients]
         return result

@@ -25,6 +25,9 @@ module OpenC3
     class ScpiServerInterface < TcpipServerInterface
       def initialize(port)
         super(port.to_i, port.to_i, 5.0, nil, 'TERMINATED', '0xA', '0xA')
+        # Clients connect via the openc3-operator hostname (or a Kubernetes service),
+        # not loopback, so listen on all addresses like the pre-127.0.0.1 default
+        set_option('LISTEN_ADDRESS', ['0.0.0.0'])
       end
     end
 

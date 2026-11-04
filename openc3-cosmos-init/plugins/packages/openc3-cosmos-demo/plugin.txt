@@ -38,6 +38,10 @@ VARIABLE templated_port 5025
   VARIABLE_DESCRIPTION "Port for TEMPLATED target connection"
 VARIABLE inst_router_port 7779
   VARIABLE_DESCRIPTION "Port for INST router"
+VARIABLE inst_router_listen_address 0.0.0.0
+  VARIABLE_DESCRIPTION "Address the INST router listens on (0.0.0.0 so it is reachable from outside the container)"
+VARIABLE inst_router_allowed_clients ""
+  VARIABLE_DESCRIPTION "Space separated client IPs or CIDR ranges allowed to connect to the INST router (blank allows any)"
 VARIABLE log_retain_time 172800
   VARIABLE_DESCRIPTION "Raw log retention time in seconds (default: 48 hours)"
   VARIABLE_STATE "24 hours" 86400
@@ -159,6 +163,10 @@ VARIABLE inst2_throughput_port 7780
 <% if include_inst and include_inst_router %>
   ROUTER <%= inst_router_name %> tcpip_server_interface.rb <%= inst_router_port %> <%= inst_router_port %> 10.0 nil PREIDENTIFIED
     MAP_TARGET <%= inst_target_name %>
+    OPTION LISTEN_ADDRESS <%= inst_router_listen_address %>
+  <% if inst_router_allowed_clients.to_s.strip.length > 0 %>
+    OPTION ALLOWED_CLIENTS <%= inst_router_allowed_clients %>
+  <% end %>
 <% end %>
 
 <% if include_example_microservice %>

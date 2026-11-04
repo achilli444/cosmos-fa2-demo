@@ -26,6 +26,9 @@ module OpenC3
     class ExampleServerInterface < TcpipServerInterface
       def initialize(port)
         super(port.to_i, port.to_i, 5.0, nil, 'LENGTH', 0, 32, 4, 1, 'BIG_ENDIAN', 4, nil, nil, true)
+        # Clients connect via the openc3-operator hostname (or a Kubernetes service),
+        # not loopback, so listen on all addresses like the pre-127.0.0.1 default
+        set_option('LISTEN_ADDRESS', ['0.0.0.0'])
       end
     end
 
