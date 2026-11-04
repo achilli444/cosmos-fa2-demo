@@ -253,6 +253,17 @@ class QueuesController < ApplicationController
     end
   end
 
+  # Removes a command from the queue and sends it.
+  #
+  # Hazardous commands are NOT sent unless the client explicitly acknowledges
+  # the hazard with hazardous_ack: true. Without the acknowledgement the
+  # command is put back in the queue at its original id and the HazardousError
+  # is returned so the client can prompt the operator and re-request.
+  #
+  # name [String] the queue name, `QUEUE0`
+  # id [Float] optional id of the command to execute (default is the first command)
+  # hazardous_ack [Boolean] explicit operator acknowledgement to send a hazardous command
+  # scope [String] the scope of the queue, `TEST`
   def exec_command
     return unless authorization('cmd')
     begin
@@ -264,7 +275,19 @@ class QueuesController < ApplicationController
       id = params[:id]&.to_f
       command_data = model.remove_command(id)
       if command_data
-        hazardous = false
+        target_name, packet_name = command_target_and_packet(command_data)
+        unless target_name && packet_name
+          restore_command(model, command_data)
+          logger.error("Invalid command format in queue: #{command_data}")
+          render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
+          return
+        end
+        # Authorize against the queued command's target and packet, not just the generic 'cmd' permission
+        unless authorization('cmd', target_name: target_name, packet_name: packet_name)
+          restore_command(model, command_data)
+          return
+        end
+        hazardous_ack = [true, 'true'].include?(params[:hazardous_ack])
         token = get_token(username(), scope: params[:scope])
         begin
           # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
@@ -277,27 +300,36 @@ class QueuesController < ApplicationController
             else
               cmd_params = {}
             end
-            if hazardous
-              cmd_no_hazardous_check(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            else
-              cmd(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            end
-          elsif command_data['value']
-            # Legacy format: use single string parameter
-            if hazardous
-              cmd_no_hazardous_check(command_data['value'], queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            else
-              cmd(command_data['value'], queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            end
+            cmd_args = [command_data['target_name'], command_data['cmd_name'], cmd_params]
           else
-            log_error("Invalid command format in queue: #{command_data}")
-            render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
-            return
+            # Legacy format: use single string parameter
+            cmd_args = [command_data['value']]
           end
-        rescue HazardousError => e
-          # Rescue hazardous error and retry with cmd_no_hazardous_check
-          hazardous = true
-          retry
+          cmd_kwargs = { queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token }
+          begin
+            cmd(*cmd_args, **cmd_kwargs)
+          rescue HazardousError => e
+            unless hazardous_ack
+              # Put the command back where it was and make the client explicitly acknowledge the hazard
+              restore_command(model, command_data)
+              render json: {
+                status: 'error',
+                message: e.message,
+                type: e.class.to_s,
+                target_name: e.target_name,
+                cmd_name: e.cmd_name,
+                hazardous_description: e.hazardous_description,
+                id: command_data['id'],
+              }, status: :conflict
+              return
+            end
+            OpenC3::Logger.warn(
+              "Hazardous check bypassed for queue #{params[:name]} command #{target_name} #{packet_name} (id #{command_data['id']}): #{e.hazardous_description}",
+              scope: params[:scope],
+              user: username()
+            )
+            cmd_no_hazardous_check(*cmd_args, **cmd_kwargs)
+          end
         rescue StandardError => e
           log_error(e)
           render json: { status: 'error', message: "Failed to execute command: #{e.message}", type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
@@ -345,6 +377,28 @@ class QueuesController < ApplicationController
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
     end
+  end
+
+  # Returns [target_name, packet_name] for either queued command format
+  def command_target_and_packet(command_data)
+    if command_data['target_name'] && command_data['cmd_name']
+      return command_data['target_name'], command_data['cmd_name']
+    elsif command_data['value']
+      return command_data['value'].strip.split(' ')[0..1]
+    end
+    return nil, nil
+  end
+
+  # Re-insert a command that was removed by exec_command but not sent
+  def restore_command(model, command_data)
+    cmd_params = command_data['cmd_params']
+    cmd_params = JSON.parse(cmd_params, allow_nan: true) if cmd_params.is_a?(String)
+    model.insert_command(id: command_data['id'], username: command_data['username'],
+                         command: command_data['value'], target_name: command_data['target_name'],
+                         cmd_name: command_data['cmd_name'], cmd_params: cmd_params,
+                         validate: command_data['validate'], timeout: command_data['timeout'])
+  rescue StandardError => e
+    log_error(e)
   end
 
   def get_token(username, scope:)

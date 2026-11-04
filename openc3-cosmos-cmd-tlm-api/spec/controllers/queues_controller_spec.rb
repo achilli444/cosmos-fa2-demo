@@ -695,6 +695,156 @@ RSpec.describe QueuesController, type: :controller do
       expect(json["value"]).to eql("FRACTIONAL INDEX COMMAND")
     end
 
+    def hazardous_error(target_name, cmd_name)
+      error = HazardousError.new
+      error.target_name = target_name
+      error.cmd_name = cmd_name
+      error.cmd_params = {}
+      error.hazardous_description = "Clears the watchdog"
+      error.formatted = "cmd('#{target_name} #{cmd_name}')"
+      error
+    end
+
+    it "authorizes cmd against the queued command's target and packet (legacy format)" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "value" => "INST COLLECT with TYPE NORMAL", "timestamp" => 1000, "id" => 1.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(controller).to receive(:cmd)
+      allow(controller).to receive(:authorization).and_call_original
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+      expect(controller).to have_received(:authorization).with("cmd", target_name: "INST", packet_name: "COLLECT")
+    end
+
+    it "authorizes cmd against the queued command's target and packet (new format)" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "target_name" => "INST", "cmd_name" => "CLEAR", "cmd_params" => "{}", "timestamp" => 1000, "id" => 1.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(controller).to receive(:cmd)
+      allow(controller).to receive(:authorization).and_call_original
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+      expect(controller).to have_received(:authorization).with("cmd", target_name: "INST", packet_name: "CLEAR")
+    end
+
+    it "restores the command to the queue when target authorization fails" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "target_name" => "INST", "cmd_name" => "CLEAR", "cmd_params" => "{}", "validate" => true, "timeout" => 5, "timestamp" => 1000, "id" => 2.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(queue_model).to receive(:insert_command)
+      allow(controller).to receive(:cmd)
+      allow(controller).to receive(:authorization).with("cmd").and_return(true)
+      allow(controller).to receive(:authorization).with("cmd", target_name: "INST", packet_name: "CLEAR") do
+        controller.render json: {status: "error", message: "forbidden"}, status: :forbidden
+        false
+      end
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:forbidden)
+      expect(controller).not_to have_received(:cmd)
+      expect(queue_model).to have_received(:insert_command).with(id: 2.0, username: "user1", command: nil,
+        target_name: "INST", cmd_name: "CLEAR", cmd_params: {}, validate: true, timeout: 5)
+    end
+
+    it "does not send a hazardous command without hazardous_ack and restores it to the queue" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "value" => "INST CLEAR", "timestamp" => 1000, "id" => 3.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(queue_model).to receive(:insert_command)
+      allow(controller).to receive(:cmd).and_raise(hazardous_error("INST", "CLEAR"))
+      allow(controller).to receive(:cmd_no_hazardous_check)
+      allow(OpenC3::Logger).to receive(:warn)
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:conflict)
+      json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+      expect(json["status"]).to eql("error")
+      expect(json["type"]).to eql("HazardousError")
+      expect(json["target_name"]).to eql("INST")
+      expect(json["cmd_name"]).to eql("CLEAR")
+      expect(json["hazardous_description"]).to eql("Clears the watchdog")
+      expect(json["id"]).to eql(3.0)
+      expect(json["message"]).to include("is Hazardous")
+      expect(controller).not_to have_received(:cmd_no_hazardous_check)
+      expect(OpenC3::Logger).not_to have_received(:warn)
+      expect(queue_model).to have_received(:insert_command).with(id: 3.0, username: "user1", command: "INST CLEAR",
+        target_name: nil, cmd_name: nil, cmd_params: nil, validate: nil, timeout: nil)
+    end
+
+    it "does not send a hazardous command when hazardous_ack is false" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "value" => "INST CLEAR", "timestamp" => 1000, "id" => 3.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(queue_model).to receive(:insert_command)
+      allow(controller).to receive(:cmd).and_raise(hazardous_error("INST", "CLEAR"))
+      allow(controller).to receive(:cmd_no_hazardous_check)
+
+      post :exec_command, params: {name: "QUEUE1", hazardous_ack: false, scope: "DEFAULT"}
+      expect(response).to have_http_status(:conflict)
+      expect(controller).not_to have_received(:cmd_no_hazardous_check)
+      expect(queue_model).to have_received(:insert_command)
+    end
+
+    it "sends a hazardous command with hazardous_ack and logs the bypass with the user" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "target_name" => "INST", "cmd_name" => "CLEAR", "cmd_params" => "{}", "timestamp" => 1000, "id" => 4.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(queue_model).to receive(:insert_command)
+      allow(controller).to receive(:cmd).and_raise(hazardous_error("INST", "CLEAR"))
+      allow(controller).to receive(:cmd_no_hazardous_check)
+      allow(OpenC3::Logger).to receive(:warn)
+
+      post :exec_command, params: {name: "QUEUE1", hazardous_ack: true, scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+      expect(json["target_name"]).to eql("INST")
+      expect(controller).to have_received(:cmd_no_hazardous_check).with("INST", "CLEAR", {},
+        {queue: false, validate: true, timeout: nil, scope: "DEFAULT", token: anything})
+      expect(OpenC3::Logger).to have_received(:warn).with(
+        a_string_matching(/Hazardous check bypassed for queue QUEUE1 command INST CLEAR \(id 4.0\): Clears the watchdog/),
+        scope: "DEFAULT", user: "anonymous"
+      )
+      expect(queue_model).not_to have_received(:insert_command)
+    end
+
+    it "does not bypass the hazardous check for a non-hazardous command even with hazardous_ack" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "value" => "INST COLLECT", "timestamp" => 1000, "id" => 1.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(controller).to receive(:cmd)
+      allow(controller).to receive(:cmd_no_hazardous_check)
+      allow(OpenC3::Logger).to receive(:warn)
+
+      post :exec_command, params: {name: "QUEUE1", hazardous_ack: true, scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+      expect(controller).to have_received(:cmd).with("INST COLLECT", {queue: false, validate: true, timeout: nil, scope: "DEFAULT", token: anything})
+      expect(controller).not_to have_received(:cmd_no_hazardous_check)
+      expect(OpenC3::Logger).not_to have_received(:warn)
+    end
+
+    it "restores the command to the queue when the format is invalid" do
+      queue_model = double("QueueModel")
+      command_data = {"username" => "user1", "timestamp" => 1000, "id" => 1.0}
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      allow(queue_model).to receive(:insert_command)
+      allow(controller).to receive(:cmd)
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:bad_request)
+      expect(controller).not_to have_received(:cmd)
+      expect(queue_model).to have_received(:insert_command)
+    end
+
     it "returns 500 when an unexpected error occurs" do
       queue_model = double("QueueModel")
       allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)

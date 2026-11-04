@@ -74,11 +74,14 @@ def queue_disable(name, scope: str = OPENC3_SCOPE):
     return _make_request("disable queue", "post", f"/openc3-api/queues/{name}/disable", scope)
 
 
-def queue_exec(name, id=None, scope: str = OPENC3_SCOPE):
-    """Pop a value from the queue at the specified id or first value if no id"""
+def queue_exec(name, id=None, hazardous_ack: bool = False, scope: str = OPENC3_SCOPE):
+    """Pop a value from the queue at the specified id or first value if no id.
+    Hazardous commands are rejected by the server unless hazardous_ack is True, which is logged."""
     data = {}
     if id is not None:
         data["id"] = id
+    if hazardous_ack:
+        data["hazardous_ack"] = True
     return _make_request(
         "exec command",
         "post",
