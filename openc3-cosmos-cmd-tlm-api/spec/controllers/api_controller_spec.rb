@@ -101,6 +101,91 @@ RSpec.describe ApiController, type: :controller do
       expect(response.body).to eq(sample_error_responses[:method_not_found])
     end
 
+    describe "log redaction" do
+      let(:session_token) { "ses_0123456789abcdef_header" }
+      let(:body_token) { "ses_0123456789abcdef_body" }
+      let(:cmd_request) do
+        '{"jsonrpc":"2.0","method":"cmd","params":["INST","COLLECT",{"TYPE":"NORMAL","PASSWORD":"hunter2"}],' \
+        '"keyword_params":{"scope":"DEFAULT","token":"' + body_token + '"},"id":7}'
+      end
+
+      before(:each) do
+        allow(@json_drb).to receive(:process_request).and_return([sample_response, nil])
+      end
+
+      # Controller specs never populate rack.input, so stub the body stream the controller reads
+      def post_api(body)
+        allow_any_instance_of(Rack::Request).to receive(:body).and_return(StringIO.new(body))
+        post :api
+      end
+
+      it "does not log the Authorization header but still passes it to JsonDRb" do
+        request.env["HTTP_AUTHORIZATION"] = session_token
+        request.env["HTTP_COOKIE"] = "sid=cookie_secret"
+
+        post_api(sample_request)
+        expect(response).to have_http_status(:ok)
+        expect(@json_drb).to have_received(:process_request).with(
+          hash_including(request_headers: hash_including("HTTP_AUTHORIZATION" => session_token))
+        )
+        expect(OpenC3::Logger).to have_received(:debug).with(/HTTP_AUTHORIZATION.*\[FILTERED\]/, anything)
+        expect(OpenC3::Logger).to have_received(:debug).with(/HTTP_COOKIE.*\[FILTERED\]/, anything)
+        expect(OpenC3::Logger).not_to have_received(:debug).with(/#{session_token}|cookie_secret/, anything)
+        expect(OpenC3::Logger).not_to have_received(:info).with(/#{session_token}|cookie_secret/, anything)
+      end
+
+      it "logs only target and command names for command methods" do
+        post_api(cmd_request)
+        expect(response).to have_http_status(:ok)
+        expect(@json_drb).to have_received(:process_request).with(hash_including(request_data: cmd_request))
+        expect(OpenC3::Logger).to have_received(:info).with(
+          %r{"method":"cmd".*"target_name":"INST".*"cmd_name":"COLLECT".*"token":"\[FILTERED\]"}, anything
+        )
+        expect(OpenC3::Logger).not_to have_received(:info).with(/hunter2|NORMAL|#{body_token}/, anything)
+      end
+
+      it "extracts target and command names from the string form" do
+        body =
+          '{"jsonrpc":"2.0","method":"cmd_no_hazardous_check","params":["INST COLLECT with TYPE NORMAL, PASSWORD hunter2"],"id":8}'
+
+        post_api(body)
+        expect(OpenC3::Logger).to have_received(:info).with(
+          /"method":"cmd_no_hazardous_check".*"target_name":"INST".*"cmd_name":"COLLECT"/, anything
+        )
+        expect(OpenC3::Logger).not_to have_received(:info).with(/hunter2|NORMAL/, anything)
+      end
+
+      it "logs params of other methods with filter_parameters applied" do
+        body =
+          '{"jsonrpc":"2.0","method":"tlm","params":["INST HEALTH_STATUS TEMP1",{"secret":"shh","type":"RAW"}],' \
+          '"keyword_params":{"scope":"DEFAULT","token":"' + body_token + '"},"id":9}'
+
+        post_api(body)
+        expect(OpenC3::Logger).to have_received(:info).with(
+          /"method":"tlm".*INST HEALTH_STATUS TEMP1.*"secret":"\[FILTERED\]".*"type":"RAW".*"token":"\[FILTERED\]"/, anything
+        )
+        expect(OpenC3::Logger).not_to have_received(:info).with(/shh|#{body_token}/, anything)
+      end
+
+      it "logs a placeholder for unparseable bodies and still forwards them" do
+        post_api(sample_invalid_request)
+        expect(@json_drb).to have_received(:process_request).with(hash_including(request_data: sample_invalid_request))
+        expect(OpenC3::Logger).to have_received(:info).with(/unparseable JSON-RPC request \(12 bytes\)/, anything)
+        expect(OpenC3::Logger).not_to have_received(:info).with(/invalid json/, anything)
+      end
+
+      it "attaches the redacted request to the OpenTelemetry span" do
+        span = double("Span")
+        allow(OpenC3).to receive(:in_span).and_yield(span)
+
+        expect(span).to receive(:add_attributes) do |attrs|
+          expect(attrs["request_data"]).to include('"target_name":"INST"')
+          expect(attrs["request_data"]).not_to include("hunter2", body_token)
+        end
+        post_api(cmd_request)
+      end
+    end
+
     it "supports ignored errors header" do
       request.env["RAW_POST_DATA"] = sample_request
       request.env["HTTP_IGNORE_ERRORS"] = "500"
