@@ -148,6 +148,16 @@ The `OPENC3_SERVICE_PASSWORD` is a backend service account password that allows 
 
 Note: In COSMOS Enterprise with Keycloak, user offline access tokens can be used instead when available, but the service password serves as a fallback for automated operations.
 
+The service password is only accepted by the REST authentication endpoints (`/openc3-api/auth/verify_service` exchanges it for a session token). It is never accepted as a WebSocket credential: the cmd-tlm-api and script-runner-api cable endpoints reject it both as a subscription `token` and on the legacy URL path described below.
+
+### WebSocket Authentication
+
+| Variable                          | Default | Description                                                                                 |
+| --------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| `OPENC3_ALLOW_WEBSOCKET_URL_AUTH` | unset   | Set to `true` to re-enable the legacy `?authorization=<token>` WebSocket URL authentication |
+
+WebSocket clients (the browser tools, `OpenC3::StreamingWebSocketApi`, and the Python `StreamingWebSocketApi`) authenticate by passing the session token in the channel subscription parameters, which keeps it out of the WebSocket URL. Older clients that placed the token on the cable URL (`/openc3-api/cable?authorization=<token>`) are rejected by default, because URLs are recorded in browser history and reverse-proxy access logs. If you must support such a client, set `OPENC3_ALLOW_WEBSOCKET_URL_AUTH=true` in `.env.local` for `openc3-cosmos-cmd-tlm-api` and `openc3-cosmos-script-runner-api`, and make sure your proxy does not log query strings.
+
 ### Rails Application Secret
 
 | Variable          | Description                                                     |

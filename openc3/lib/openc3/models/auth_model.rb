@@ -63,6 +63,20 @@ module OpenC3
       Store.exists(key) == 1
     end
 
+    # Whether the value is the OPENC3_SERVICE_PASSWORD. The service password is
+    # a long-lived shared secret for internal service-to-service REST calls
+    # (exchanged for a session token via /auth/verify_service); callers on
+    # paths where it must never be presented directly (WebSocket channels) use
+    # this to reject it before verify.
+    # @param token [String] the value to check
+    # @return [Boolean] whether the value equals the configured service password
+    def self.service_password?(token)
+      service_password = ENV.fetch('OPENC3_SERVICE_PASSWORD', nil)
+      return false if service_password.nil? or service_password.empty? or token.nil?
+
+      service_password == token.to_s
+    end
+
     # Checks whether the provided token is a valid user password, service password, or session token.
     # @param token [String] the plaintext password or session token to check (required)
     # @param no_password [Boolean] enforces use of a session token or service password (default: true)

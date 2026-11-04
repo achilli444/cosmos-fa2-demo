@@ -25,28 +25,41 @@ module ApplicationCable
     # a channel's `subscribed` runs in a separate command.
     identified_by :url_authenticated
 
+    # Legacy clients put the token on the cable URL (`?authorization=<token>`).
+    # URLs end up in browser history and proxy access logs, so that path is
+    # rejected unless an operator opts in. Current clients authenticate per
+    # subscription via params[:token] (see ApplicationCable::Channel).
+    URL_AUTH_ENV = 'OPENC3_ALLOW_WEBSOCKET_URL_AUTH'
+
     def connect
       self.uuid = SecureRandom.uuid
       self.scope = request.query_parameters[:scope]
-      # When a token is supplied on the URL, authenticate the whole connection
-      # now (legacy path). Otherwise allow the connection and require each
-      # subscribing channel to authenticate via its own params — that keeps
-      # tokens out of WebSocket URLs (and therefore out of browser history /
-      # proxy logs).
-      if request.query_parameters[:authorization]
-        authorization('script_view')
-        self.url_authenticated = true
-      else
-        self.url_authenticated = false
+      self.url_authenticated = false
+      token = request.query_parameters[:authorization]
+      return unless token
+
+      unless self.class.url_auth_allowed?
+        logger.warn("Rejected WebSocket connection: token on the URL query string is disabled (set #{URL_AUTH_ENV}=true to allow the legacy path)")
+        reject_unauthorized_connection
       end
+      authorization('script_view', token)
+      self.url_authenticated = true
     end
 
-    def authorization(permission)
+    def self.url_auth_allowed?
+      %w[1 true].include?(ENV.fetch(URL_AUTH_ENV, '').strip.downcase)
+    end
+
+    def authorization(permission, token)
       begin
+        # The service password is only for internal REST calls and is never a
+        # valid WebSocket credential.
+        raise OpenC3::AuthError.new("Service password not accepted") if OpenC3::AuthModel.service_password?(token)
+
         authorize(
           permission: permission,
           scope: request.query_parameters[:scope],
-          token: request.query_parameters[:authorization],
+          token: token,
         )
       rescue OpenC3::AuthError, OpenC3::ForbiddenError
         reject_unauthorized_connection()
