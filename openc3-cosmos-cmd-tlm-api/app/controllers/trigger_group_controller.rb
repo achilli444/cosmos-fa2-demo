@@ -29,17 +29,12 @@ class TriggerGroupController < ApplicationController
   # @return [String] the array of triggers converted into json format
   def index
     return unless authorization('system')
-    begin
-      ret = []
-      trigger_groups = @model_class.all(scope: params[:scope])
-      trigger_groups.each do |_, trigger_group|
-        ret << trigger_group
-      end
-      render json: ret
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
+    ret = []
+    trigger_groups = @model_class.all(scope: params[:scope])
+    trigger_groups.each do |_, trigger_group|
+      ret << trigger_group
     end
+    render json: ret
   end
 
   # Returns a single trigger in json.
@@ -59,9 +54,6 @@ class TriggerGroupController < ApplicationController
     rescue OpenC3::TriggerGroupInputError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :bad_request
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
@@ -96,9 +88,6 @@ class TriggerGroupController < ApplicationController
     rescue OpenC3::TriggerGroupError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :unprocessable_entity
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
@@ -126,9 +115,6 @@ class TriggerGroupController < ApplicationController
     rescue OpenC3::TriggerGroupError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :bad_request
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 end

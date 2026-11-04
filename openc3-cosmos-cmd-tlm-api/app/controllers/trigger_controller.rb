@@ -32,17 +32,12 @@ class TriggerController < ApplicationController
   # @return [String] the array of triggers converted into json format
   def index
     return unless authorization('system')
-    begin
-      ret = []
-      triggers = @model_class.all(group: params[:group], scope: params[:scope])
-      triggers.each do |_, trigger|
-        ret << trigger
-      end
-      render json: ret
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
+    ret = []
+    triggers = @model_class.all(group: params[:group], scope: params[:scope])
+    triggers.each do |_, trigger|
+      ret << trigger
     end
+    render json: ret
   end
 
   # Returns a single trigger in json.
@@ -63,9 +58,6 @@ class TriggerController < ApplicationController
     rescue OpenC3::TriggerInputError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :bad_request
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
@@ -119,9 +111,6 @@ class TriggerController < ApplicationController
     rescue OpenC3::TriggerError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :unprocessable_entity
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
@@ -162,9 +151,6 @@ class TriggerController < ApplicationController
     rescue OpenC3::TriggerError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :unprocessable_entity
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
@@ -187,21 +173,16 @@ class TriggerController < ApplicationController
   #```
   def enable
     return unless authorization('script_run')
-    begin
-      model = @model_class.get(name: params[:name], group: params[:group], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
-        return
-      end
-      # Notify the TriggerGroupMicroservice to enable the TriggerModel
-      # We don't update directly here to avoid a race condition between the microservice
-      # updating state and an asynchronous user enabling the trigger
-      model.notify_enable()
-      render json: model.as_json()
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
+    model = @model_class.get(name: params[:name], group: params[:group], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
     end
+    # Notify the TriggerGroupMicroservice to enable the TriggerModel
+    # We don't update directly here to avoid a race condition between the microservice
+    # updating state and an asynchronous user enabling the trigger
+    model.notify_enable()
+    render json: model.as_json()
   end
 
   # Disable reaction
@@ -223,21 +204,16 @@ class TriggerController < ApplicationController
   #```
   def disable
     return unless authorization('script_run')
-    begin
-      model = @model_class.get(name: params[:name], group: params[:group], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
-        return
-      end
-      # Notify the TriggerGroupMicroservice to disable the TriggerModel
-      # We don't update directly here to avoid a race condition between the microservice
-      # updating state and an asynchronous user disabling the trigger
-      model.notify_disable()
-      render json: model.as_json()
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
+    model = @model_class.get(name: params[:name], group: params[:group], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
     end
+    # Notify the TriggerGroupMicroservice to disable the TriggerModel
+    # We don't update directly here to avoid a race condition between the microservice
+    # updating state and an asynchronous user disabling the trigger
+    model.notify_disable()
+    render json: model.as_json()
   end
 
   # group [String] the group name, `DEFAULT`
@@ -253,24 +229,19 @@ class TriggerController < ApplicationController
   #```
   def destroy
     return unless authorization('script_run')
-    begin
-      model = @model_class.get(name: params[:name], group: params[:group], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
-        return
-      end
-      unless model.dependents.empty?
-        render json: { status: 'error', message: "#{model.group}:#{model.name} has dependents: #{model.dependents}", type: 'TriggerError' }, status: :not_found
-        return
-      end
-      # Notify the TriggerGroupMicroservice to delete the TriggerModel
-      # We don't update directly here to avoid a race condition between the microservice
-      # updating state and an asynchronous user deleting the trigger
-      model.notify(kind: 'deleted')
-      render json: model.as_json()
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class, backtrace: e.backtrace }, status: :internal_server_error
+    model = @model_class.get(name: params[:name], group: params[:group], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
     end
+    unless model.dependents.empty?
+      render json: { status: 'error', message: "#{model.group}:#{model.name} has dependents: #{model.dependents}", type: 'TriggerError' }, status: :not_found
+      return
+    end
+    # Notify the TriggerGroupMicroservice to delete the TriggerModel
+    # We don't update directly here to avoid a race condition between the microservice
+    # updating state and an asynchronous user deleting the trigger
+    model.notify(kind: 'deleted')
+    render json: model.as_json()
   end
 end

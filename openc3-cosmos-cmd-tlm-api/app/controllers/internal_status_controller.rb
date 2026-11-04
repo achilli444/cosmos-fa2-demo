@@ -23,11 +23,6 @@ require 'openc3/models/ping_model'
 # working just that OpenC3 can talk to Redis.
 class InternalStatusController < ApplicationController
   def status
-    begin
-      render json: { status: OpenC3::PingModel.get() }
-    rescue => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
-    end
+    render json: { status: OpenC3::PingModel.get() }
   end
 end

@@ -66,8 +66,10 @@ RSpec.describe TriggerController, type: :controller do
       expect(response).to have_http_status(500)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -124,8 +126,10 @@ RSpec.describe TriggerController, type: :controller do
       expect(response).to have_http_status(:internal_server_error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -194,8 +198,10 @@ RSpec.describe TriggerController, type: :controller do
       expect(response).to have_http_status(:internal_server_error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -350,8 +356,10 @@ RSpec.describe TriggerController, type: :controller do
       expect(response).to have_http_status(:internal_server_error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -383,8 +391,10 @@ RSpec.describe TriggerController, type: :controller do
       expect(response).to have_http_status(:internal_server_error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -416,8 +426,10 @@ RSpec.describe TriggerController, type: :controller do
       expect(response).to have_http_status(:internal_server_error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 
@@ -468,8 +480,10 @@ RSpec.describe TriggerController, type: :controller do
       expect(response).to have_http_status(:internal_server_error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql("error")
-      expect(json["message"]).to eql("Unexpected error")
-      expect(json["type"]).to eql("StandardError")
+      expect(json["message"]).to eql(ApplicationController::GENERIC_ERROR_MESSAGE)
+      expect(json["request_id"]).to be_a(String)
+      expect(json).not_to have_key("type")
+      expect(json).not_to have_key("backtrace")
     end
   end
 end

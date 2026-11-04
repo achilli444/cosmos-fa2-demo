@@ -20,7 +20,29 @@ require 'openc3/utilities/authorization'
 class ApplicationController < ActionController::API
   include OpenC3::Authorization
 
+  GENERIC_ERROR_MESSAGE = 'An internal error occurred. Contact your administrator and provide the request_id.'
+
+  # Unexpected exceptions are logged server-side under the request id and
+  # rendered as a generic body so exception messages, classes and backtraces
+  # never reach the client (NIST 800-53 SI-11). Later handlers take precedence.
+  rescue_from StandardError, with: :render_internal_error
+  rescue_from ActionController::ParameterMissing, with: :render_parameter_missing
+
   private
+
+  def render_internal_error(e)
+    log_error(e)
+    render json: { status: 'error', message: GENERIC_ERROR_MESSAGE, request_id: request_id() }, status: :internal_server_error
+  end
+
+  def render_parameter_missing(e)
+    render json: { status: 'error', message: e.message, request_id: request_id() }, status: :bad_request
+  end
+
+  # Correlation id shared by the server log entry and the client response
+  def request_id()
+    @request_id ||= request.request_id || SecureRandom.uuid
+  end
 
   def user_full_name()
     # For user_info see openc3/utilities/authorization and
@@ -103,6 +125,6 @@ class ApplicationController < ActionController::API
       # Filter out backtrace to only application code
       filtered_backtrace = e.backtrace.select { |line| !line.include?('activesupport') && !line.include?('actionpack') && !line.include?('rspec') && !line.include?('bundler') }
     end
-    logger.error("#{e.message}\n#{filtered_backtrace.join("\n")}")
+    logger.error("[request_id=#{request_id()}] #{e.class}: #{e.message}\n#{filtered_backtrace.join("\n")}")
   end
 end

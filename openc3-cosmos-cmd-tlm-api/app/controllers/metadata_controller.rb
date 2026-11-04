@@ -265,14 +265,6 @@ class MetadataController < ApplicationController
                message: e.message,
                type: e.class,
              }, status: :bad_request
-    rescue StandardError => e
-      log_error(e)
-      render json: {
-               status: 'error',
-               message: e.message,
-               type: e.class,
-               backtrace: e.backtrace,
-             }, status: :bad_request
     end
   end
 end

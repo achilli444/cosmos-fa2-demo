@@ -48,9 +48,6 @@ class AuthController < ApplicationController
         record_user_bad_attempt
         head :unauthorized
       end
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
     end
   end
 
@@ -81,9 +78,6 @@ class AuthController < ApplicationController
       else
         head :unauthorized
       end
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
     end
   end
 
@@ -101,9 +95,6 @@ class AuthController < ApplicationController
         record_service_bad_attempt
         head :unauthorized
       end
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
     end
   end
 
@@ -125,12 +116,13 @@ class AuthController < ApplicationController
       clear_user_bad_attempts
       OpenC3::Logger.info("Password changed", user: username())
       render :plain => OpenC3::AuthModel.generate_session()
-    rescue StandardError => e
+    rescue OpenC3::AuthModel::PasswordError => e
+      # Deliberate validation messages from AuthModel.set are safe to echo;
+      # anything else is handled generically by ApplicationController.
       if e.message == "old_password incorrect"
         record_user_bad_attempt
       end
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
+      render json: { status: 'error', message: e.message }, status: :bad_request
     end
   end
 

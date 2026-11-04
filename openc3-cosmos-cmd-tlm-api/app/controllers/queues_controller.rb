@@ -33,28 +33,23 @@ class QueuesController < ApplicationController
   # @return [String] the array of queues converted into json format
   def index
     return unless authorization('cmd_info')
-    begin
-      models = @model_class.all(scope: params[:scope])
-      queues = []
-      models.each do |_, queue|
-        queues << queue
-      end
-      # Sort queues by name
-      queues.sort_by! { |queue| queue['name'] }
-      # If OPENC3_DEFAULT_QUEUE is set, move it to the front of the list
-      default_queue = ENV['OPENC3_DEFAULT_QUEUE']
-      if default_queue
-        default_index = queues.find_index { |queue| queue['name'] == default_queue }
-        if default_index
-          default_queue_obj = queues.delete_at(default_index)
-          queues.unshift(default_queue_obj)
-        end
-      end
-      render json: queues
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
+    models = @model_class.all(scope: params[:scope])
+    queues = []
+    models.each do |_, queue|
+      queues << queue
     end
+    # Sort queues by name
+    queues.sort_by! { |queue| queue['name'] }
+    # If OPENC3_DEFAULT_QUEUE is set, move it to the front of the list
+    default_queue = ENV['OPENC3_DEFAULT_QUEUE']
+    if default_queue
+      default_index = queues.find_index { |queue| queue['name'] == default_queue }
+      if default_index
+        default_queue_obj = queues.delete_at(default_index)
+        queues.unshift(default_queue_obj)
+      end
+    end
+    render json: queues
   end
 
   # Returns a queue in json.
@@ -74,9 +69,6 @@ class QueuesController < ApplicationController
     rescue OpenC3::QueueError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class.to_s }, status: :bad_request
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
@@ -100,26 +92,18 @@ class QueuesController < ApplicationController
     rescue OpenC3::QueueError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class.to_s }, status: :bad_request
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
   def list
     return unless authorization('cmd_info')
-    begin
-      model = @model_class.get_model(name: params[:name], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
-        return
-      end
-      list = model.list()
-      render json: list
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
+    model = @model_class.get_model(name: params[:name], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
     end
+    list = model.list()
+    render json: list
   end
 
   def hold
@@ -147,56 +131,46 @@ class QueuesController < ApplicationController
       return
     end
     return unless authorization('cmd', target_name: target_name, packet_name: packet_name)
-    begin
-      model = @model_class.get_model(name: params[:name], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+    model = @model_class.get_model(name: params[:name], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
+    end
+    if target_name && cmd_name
+      cmd_params = params[:cmd_params]
+      cmd_params = cmd_params.to_unsafe_h if cmd_params.respond_to?(:to_unsafe_h)
+      begin
+        OpenC3::DecomInterfaceTopic.build_cmd(target_name, cmd_name, cmd_params || {}, true, false, scope: params[:scope])
+      rescue StandardError => e
+        render json: { status: 'error', message: e.message, type: e.class.to_s }, status: :bad_request
         return
       end
-      if target_name && cmd_name
-        cmd_params = params[:cmd_params]
-        cmd_params = cmd_params.to_unsafe_h if cmd_params.respond_to?(:to_unsafe_h)
-        begin
-          OpenC3::DecomInterfaceTopic.build_cmd(target_name, cmd_name, cmd_params || {}, true, false, scope: params[:scope])
-        rescue StandardError => e
-          render json: { status: 'error', message: e.message, type: e.class.to_s }, status: :bad_request
-          return
-        end
-      end
-      id = params[:id]&.to_f
-      # If id is nil this means insert at the end
-      if target_name && cmd_name
-        model.insert_command(id: id, username: username(), target_name: target_name, cmd_name: cmd_name,
-                             cmd_params: params[:cmd_params], validate: params[:validate], timeout: params[:timeout])
-      else
-        model.insert_command(id: id, username: username(), command: command,
-                             validate: params[:validate], timeout: params[:timeout])
-      end
-      render json: { status: 'success', message: 'Command added to queue' }
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
     end
+    id = params[:id]&.to_f
+    # If id is nil this means insert at the end
+    if target_name && cmd_name
+      model.insert_command(id: id, username: username(), target_name: target_name, cmd_name: cmd_name,
+                           cmd_params: params[:cmd_params], validate: params[:validate], timeout: params[:timeout])
+    else
+      model.insert_command(id: id, username: username(), command: command,
+                           validate: params[:validate], timeout: params[:timeout])
+    end
+    render json: { status: 'success', message: 'Command added to queue' }
   end
 
   def remove_command
     return unless authorization('cmd')
-    begin
-      model = @model_class.get_model(name: params[:name], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
-        return
-      end
-      id = params[:id]&.to_f
-      command_data = model.remove_command(id)
-      if command_data
-        render json: command_data
-      else
-        render json: { status: 'error', message: 'Command not found in queue' }, status: :not_found
-      end
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
+    model = @model_class.get_model(name: params[:name], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
+    end
+    id = params[:id]&.to_f
+    command_data = model.remove_command(id)
+    if command_data
+      render json: command_data
+    else
+      render json: { status: 'error', message: 'Command not found in queue' }, status: :not_found
     end
   end
 
@@ -247,73 +221,61 @@ class QueuesController < ApplicationController
     rescue OpenC3::QueueError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class.to_s }, status: :bad_request
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
     end
   end
 
   def exec_command
     return unless authorization('cmd')
-    begin
-      model = @model_class.get_model(name: params[:name], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
-        return
-      end
-      id = params[:id]&.to_f
-      command_data = model.remove_command(id)
-      if command_data
-        hazardous = false
-        token = get_token(username(), scope: params[:scope])
-        begin
-          # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
-          validate = command_data.key?('validate') ? command_data['validate'] : true
-          timeout = command_data['timeout'] # Default is nil which means use system default timeout
-          if command_data['target_name'] && command_data['cmd_name']
-            # New format: use 3-parameter cmd() method
-            if command_data['cmd_params']
-              cmd_params = JSON.parse(command_data['cmd_params'], allow_nan: true, create_additions: true)
-            else
-              cmd_params = {}
-            end
-            if hazardous
-              cmd_no_hazardous_check(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            else
-              cmd(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            end
-          elsif command_data['value']
-            # Legacy format: use single string parameter
-            if hazardous
-              cmd_no_hazardous_check(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            else
-              cmd(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
-            end
+    model = @model_class.get_model(name: params[:name], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
+    end
+    id = params[:id]&.to_f
+    command_data = model.remove_command(id)
+    if command_data
+      hazardous = false
+      token = get_token(username(), scope: params[:scope])
+      begin
+        # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
+        validate = command_data.key?('validate') ? command_data['validate'] : true
+        timeout = command_data['timeout'] # Default is nil which means use system default timeout
+        if command_data['target_name'] && command_data['cmd_name']
+          # New format: use 3-parameter cmd() method
+          if command_data['cmd_params']
+            cmd_params = JSON.parse(command_data['cmd_params'], allow_nan: true, create_additions: true)
           else
-            log_error("Invalid command format in queue: #{command_data}")
-            render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
-            return
+            cmd_params = {}
           end
-        rescue HazardousError => e
-          # Rescue hazardous error and retry with cmd_no_hazardous_check
-          hazardous = true
-          retry
-        rescue StandardError => e
-          log_error(e)
-          render json: { status: 'error', message: "Failed to execute command: #{e.message}", type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
+          if hazardous
+            cmd_no_hazardous_check(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
+          else
+            cmd(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
+          end
+        elsif command_data['value']
+          # Legacy format: use single string parameter
+          if hazardous
+            cmd_no_hazardous_check(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
+          else
+            cmd(command_data['value'], queue: false, validate: validate, timeout: timeout, queue_username: command_data['username'], scope: params[:scope], token: token)
+          end
+        else
+          log_error("Invalid command format in queue: #{command_data}")
+          render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
           return
         end
-        render json: command_data
-      else
-        if id
-          render json: { status: 'error', message: "No command in queue #{params[:name]} at id #{id}" }, status: :not_found
-        else
-          render json: { status: 'error', message: "No commands in queue #{params[:name]}" }, status: :not_found
-        end
+      rescue HazardousError
+        # Rescue hazardous error and retry with cmd_no_hazardous_check
+        hazardous = true
+        retry
       end
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
+      render json: command_data
+    else
+      if id
+        render json: { status: 'error', message: "No command in queue #{params[:name]} at id #{id}" }, status: :not_found
+      else
+        render json: { status: 'error', message: "No commands in queue #{params[:name]}" }, status: :not_found
+      end
     end
   end
 
@@ -332,19 +294,14 @@ class QueuesController < ApplicationController
 
   def change_state(params, state)
     return unless authorization('cmd')
-    begin
-      model = @model_class.get_model(name: params[:name], scope: params[:scope])
-      if model.nil?
-        render json: { status: 'error', message: NOT_FOUND }, status: :not_found
-        return
-      end
-      model.state = state
-      model.update()
-      render json: model.as_json()
-    rescue StandardError => e
-      log_error(e)
-      render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
+    model = @model_class.get_model(name: params[:name], scope: params[:scope])
+    if model.nil?
+      render json: { status: 'error', message: NOT_FOUND }, status: :not_found
+      return
     end
+    model.state = state
+    model.update()
+    render json: model.as_json()
   end
 
   def get_token(username, scope:)
