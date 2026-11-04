@@ -22,6 +22,8 @@ require 'rubygems'
 require 'rubygems/uninstaller'
 require 'tempfile'
 require 'openc3/utilities/process_manager'
+require 'openc3/utilities/package_integrity'
+require 'openc3/utilities/rubygems_url'
 require 'openc3/api/api'
 require 'pathname'
 
@@ -75,26 +77,59 @@ module OpenC3
       else
         gem_file_path = get(name_or_path)
       end
+      # The gem is executable code: it must be allow-listed (SHA-256) before anything is installed
+      PackageIntegrity.verify!(gem_file_path)
       begin
         rubygems_url = get_setting('rubygems_url', scope: scope)
       rescue
         # If Redis isn't running try the ENV, then simply rubygems.org
         rubygems_url = ENV['RUBYGEMS_URL']
-        rubygems_url ||= 'https://rubygems.org'
+        rubygems_url ||= RubygemsUrl::DEFAULT_URL
       end
-      Gem.sources = [rubygems_url] if rubygems_url
+      # rubygems_url is user-writable (Admin Settings) or from ENV so it must be validated (https only)
+      Gem.sources = [RubygemsUrl.validate(rubygems_url)] if rubygems_url
       Gem.done_installing_hooks.clear
+      install_options = { build_args: ['--no-document, --without development,test'], prerelease: true }
+      policy = security_policy
+      install_options[:security_policy] = policy if policy
       begin
         # Look for local gems only first, this avoids lengthy timeouts when checking rubygems in airgap env
-        Gem.install(gem_file_path, "> 0.pre", build_args: ['--no-document, --without development,test'], prerelease: true, domain: :local)
+        Gem.install(gem_file_path, "> 0.pre", **install_options, domain: :local)
       rescue Gem::Exception => e
-        # If there is a failure look for both local and remote gems
-        Gem.install(gem_file_path, "> 0.pre", build_args: ['--no-document, --without development,test'], prerelease: true, domain: :both)
+        # Resolving dependencies from the remote source installs code that was never
+        # uploaded or allow-listed, so it is opt-in (OPENC3_GEM_REMOTE_DEPENDENCIES=1)
+        raise e unless remote_dependencies_allowed?
+        Logger.warn "Local install of #{File.basename(gem_file_path)} failed (#{e.message}); resolving dependencies from #{Gem.sources.to_a.join(', ')}"
+        Gem.install(gem_file_path, "> 0.pre", **install_options, domain: :both)
       end
     rescue => e
       message = "Gem file #{gem_file_path} error installing to #{ENV['GEM_HOME']}\n#{e.formatted}"
       Logger.error message
       raise e
+    end
+
+    # Names accepted by OPENC3_GEM_SECURITY_POLICY. HighSecurity requires every
+    # gem to be signed by a certificate in the Gem trust store (`gem cert --add`).
+    SECURITY_POLICIES = {
+      'HighSecurity' => Gem::Security::HighSecurity,
+      'MediumSecurity' => Gem::Security::MediumSecurity,
+      'LowSecurity' => Gem::Security::LowSecurity,
+    }.freeze
+
+    # @return [Gem::Security::Policy, nil] the signature trust policy applied to
+    #   Gem.install, or nil when OPENC3_GEM_SECURITY_POLICY is unset
+    def self.security_policy
+      name = ENV['OPENC3_GEM_SECURITY_POLICY'].to_s.strip
+      return nil if name.empty?
+      policy = SECURITY_POLICIES[name]
+      unless policy
+        raise ArgumentError, "Unknown OPENC3_GEM_SECURITY_POLICY #{name.inspect}; expected one of #{SECURITY_POLICIES.keys.join(', ')}"
+      end
+      policy
+    end
+
+    def self.remote_dependencies_allowed?
+      ENV['OPENC3_GEM_REMOTE_DEPENDENCIES'].to_s.strip == '1'
     end
 
     def self.destroy(name, log_and_raise_needed_errors: true)

@@ -17,13 +17,17 @@ require 'openc3/utilities/pypi_url'
 module OpenC3
   describe PypiUrl do
     describe "self.valid?" do
-      it "accepts http and https URLs with a host" do
+      it "accepts https URLs with a host" do
         expect(PypiUrl.valid?('https://pypi.org')).to be true
-        expect(PypiUrl.valid?('http://pypi.org')).to be true
         expect(PypiUrl.valid?('https://mirror.example.com')).to be true
         expect(PypiUrl.valid?('https://mirror.example.com:8443/repository/pypi-proxy')).to be true
-        expect(PypiUrl.valid?('http://10.0.0.5:3141/root/pypi')).to be true
+        expect(PypiUrl.valid?('https://10.0.0.5:3141/root/pypi')).to be true
         expect(PypiUrl.valid?('https://mirror.example.com/pypi%20mirror')).to be true
+      end
+
+      it "rejects cleartext http URLs" do
+        expect(PypiUrl.valid?('http://pypi.org')).to be false
+        expect(PypiUrl.valid?('http://10.0.0.5:3141/root/pypi')).to be false
       end
 
       it "rejects nil and non-string values" do

@@ -13,6 +13,8 @@
 
 require 'fileutils'
 require 'openc3/utilities/process_manager'
+require 'openc3/utilities/package_integrity'
+require 'openc3/utilities/pypi_url'
 require 'openc3/api/api'
 require 'pathname'
 
@@ -69,29 +71,28 @@ module OpenC3
         package_file_path = get(name_or_path)
       end
       package_filename = File.basename(package_file_path)
+      # The package is executable code: it must be allow-listed (SHA-256) before anything is installed
+      PackageIntegrity.verify!(package_file_path)
       begin
         pypi_url = get_setting('pypi_url', scope: scope)
-        if pypi_url
-          pypi_url += '/simple'
-        end
       rescue => e
         Logger.error("Failed to retrieve pypi_url: #{e.formatted}")
-      ensure
-        if pypi_url.nil?
-          # If Redis isn't running try the ENV, then simply pypi.org/simple
-          pypi_url = ENV['PYPI_URL']
-          if pypi_url
-            pypi_url += '/simple'
-          end
-          pypi_url ||= 'https://pypi.org/simple'
-        end
+      end
+      # If Redis isn't running try the ENV, then simply pypi.org
+      pypi_url ||= ENV['PYPI_URL'] || PypiUrl::DEFAULT_URL
+      # pypi_url is user-writable (Admin Settings) so it must be validated (https only)
+      # and passed to the subprocess as a discrete argument, never a shell string
+      index_url = PypiUrl.index_url(pypi_url)
+      if index_url.nil?
+        message = "Invalid pypi_url #{pypi_url.inspect}: must be an https URL with no userinfo or shell metacharacters"
+        Logger.error message
+        raise message
       end
       Logger.info "Installing python package: #{name_or_path}"
-      if ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
-        pip_args = ["-i", pypi_url, package_file_path]
-      else
-        pip_args = ["-i", pypi_url, "--trusted-host", URI.parse(pypi_url).host, package_file_path]
-      end
+      # --no-deps: only the verified file is installed. Dependencies are not pulled
+      # from the index unverified; upload and allow-list them individually.
+      # --trusted-host is never passed: the index certificate must be trusted by the container.
+      pip_args = ["-i", index_url, "--no-deps", package_file_path]
       result = OpenC3::ProcessManager.instance.spawn(["/openc3/bin/pipinstall"] + pip_args, "package_install", package_filename, Time.now + 3600.0, scope: scope)
       return result.name
     end

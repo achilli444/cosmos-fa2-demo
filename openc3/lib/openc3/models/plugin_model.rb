@@ -21,6 +21,7 @@ require 'openc3'
 require 'openc3/utilities/bucket'
 require 'openc3/utilities/store'
 require 'openc3/utilities/pypi_url'
+require 'openc3/utilities/package_integrity'
 require 'openc3/config/config_parser'
 require 'openc3/models/model'
 require 'openc3/models/gem_model'
@@ -92,6 +93,9 @@ module OpenC3
             raise EmptyGemFileError, "Gem file is empty: #{gem_file_path}"
           end
 
+          # Reject gems that are not allow-listed up front so the API caller gets the
+          # error immediately. GemModel.install verifies again before installing.
+          PackageIntegrity.verify!(gem_file_path) unless validate_only
           # Load gem to internal gem server
           OpenC3::GemModel.put(gem_file_path, gem_install: false, scope: scope) unless validate_only
         else
@@ -263,32 +267,39 @@ module OpenC3
           index_url = PypiUrl.index_url(pypi_url)
           unless validate_only
             if index_url.nil?
-              Logger.error "Invalid pypi_url #{pypi_url.inspect}: must be an http(s) URL with no userinfo or shell metacharacters. " \
+              Logger.error "Invalid pypi_url #{pypi_url.inspect}: must be an https URL with no userinfo or shell metacharacters. " \
                            "Skipping Python package installation. Plugin Python microservices may not function correctly."
             else
-              pip_args = ['-i', index_url]
-              pip_args += ['--trusted-host', URI.parse(index_url).host] unless ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
-              if File.exist?(pyproject_path)
-                Logger.info "Installing python packages from pyproject.toml with pypi_url=#{index_url}"
-                pip_args << gem_path
-              else
+              # --trusted-host is never passed: the index certificate must be trusted by the container.
+              # --require-hashes: every requirement must be pinned with a --hash so the
+              # packages fetched from the index are verified against the plugin's manifest
+              # (generate with `uv pip compile --generate-hashes requirements.in`).
+              pip_args = ['-i', index_url, '--require-hashes']
+              if File.exist?(requirements_path)
                 Logger.info "Installing python packages from requirements.txt with pypi_url=#{index_url}"
                 pip_args += ['-r', requirements_path]
+              else
+                Logger.error "pyproject.toml dependencies cannot be hash-verified. Ship a requirements.txt with --hash entries " \
+                             "(uv pip compile --generate-hashes pyproject.toml -o requirements.txt). " \
+                             "Skipping Python package installation. Plugin Python microservices may not function correctly."
+                pip_args = nil
               end
               # Capture output and check exit code so failures surface as a warning
               # rather than silently succeeding. pipinstall is non-fatal: the plugin
               # continues to install even if Python packages fail so that non-Python
               # functionality still works.
-              begin
-                output, status = Open3.capture2e('/openc3/bin/pipinstall', *pip_args)
-                puts output
-                success = status.success?
-              rescue SystemCallError => e
-                Logger.error("Failed to run pipinstall: #{e.message}")
-                success = false
-              end
-              unless success
-                Logger.warn "Python package installation failed. Plugin Python microservices may not function correctly."
+              if pip_args
+                begin
+                  output, status = Open3.capture2e('/openc3/bin/pipinstall', *pip_args)
+                  puts output
+                  success = status.success?
+                rescue SystemCallError => e
+                  Logger.error("Failed to run pipinstall: #{e.message}")
+                  success = false
+                end
+                unless success
+                  Logger.warn "Python package installation failed. Plugin Python microservices may not function correctly."
+                end
               end
             end
           end
