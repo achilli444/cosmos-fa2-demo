@@ -434,6 +434,7 @@ module OpenC3
         event = @api.get_limits_events()[-1][1]
         expect(event['type']).to eql "LIMITS_SET"
         expect(event['username']).to eql username
+        @api.set_limits_set("DEFAULT") # Restore so later specs see the DEFAULT limits
       end
     end
 
