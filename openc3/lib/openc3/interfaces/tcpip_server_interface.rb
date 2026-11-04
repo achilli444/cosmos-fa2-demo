@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'socket'
+require 'ipaddr'
 require 'timeout' # For Timeout::Error
 require 'openc3/interfaces/stream_interface'
 require 'openc3/streams/tcpip_socket_stream'
@@ -52,6 +53,12 @@ module OpenC3
     attr_accessor :stream_log_pair
     # @return [String] The ip address to bind to.  Default to ANY (0.0.0.0)
     attr_accessor :listen_address
+    # @return [Array<IPAddr>|nil] Client addresses / CIDR ranges allowed to connect.
+    #   nil (default) accepts any client.
+    attr_reader :allowed_clients
+    # @return [Integer|nil] Maximum number of simultaneously connected clients.
+    #   nil (default) means unlimited.
+    attr_reader :max_clients
 
     # @param write_port [Integer] The server write port. Clients should connect
     #   and expect to receive data from this port.
@@ -105,6 +112,8 @@ module OpenC3
       @raw_logging_enabled = false
       @connection_mutex = Mutex.new
       @listen_address = "0.0.0.0"
+      @allowed_clients = nil
+      @max_clients = nil
 
       @read_allowed = false unless ConfigParser.handle_nil(read_port)
       @write_allowed = false unless ConfigParser.handle_nil(write_port)
@@ -284,15 +293,66 @@ module OpenC3
 
     # Supported Options
     # LISTEN_ADDRESS - Ip address of the interface to accept connections on - Default: 0.0.0.0
+    # ALLOWED_CLIENTS - Space separated list of client IP addresses or CIDR ranges
+    #   (e.g. 10.0.0.5 192.168.1.0/24) allowed to connect. Connections from any
+    #   other address are closed and logged. Default: any client
+    # MAX_CLIENTS - Maximum number of simultaneously connected clients. Additional
+    #   connections are closed and logged. Default: unlimited
     # (see Interface#set_option)
     def set_option(option_name, option_values)
       super(option_name, option_values)
-      if option_name.upcase == 'LISTEN_ADDRESS'
+      case option_name.upcase
+      when 'LISTEN_ADDRESS'
         @listen_address = option_values[0]
+      when 'ALLOWED_CLIENTS'
+        @allowed_clients = parse_allowed_clients(option_values)
+      when 'MAX_CLIENTS'
+        @max_clients = parse_max_clients(option_values[0])
       end
     end
 
+    # @param host_ip [String] Client IP address
+    # @return [Boolean] Whether the client is permitted by ALLOWED_CLIENTS
+    def client_allowed?(host_ip)
+      return true unless @allowed_clients
+
+      begin
+        addr = IPAddr.new(host_ip)
+      rescue IPAddr::Error
+        return false
+      end
+      @allowed_clients.any? { |allowed| allowed.include?(addr) }
+    end
+
     # protected
+
+    def parse_allowed_clients(option_values)
+      # Allow a single space or comma separated value as well as multiple values
+      values = option_values.flat_map { |value| value.to_s.split(/[\s,]+/) }.reject(&:empty?)
+      raise ArgumentError, "ALLOWED_CLIENTS requires at least one IP address or CIDR range" if values.empty?
+
+      values.map do |value|
+        begin
+          IPAddr.new(value)
+        rescue IPAddr::Error => e
+          raise ArgumentError, "ALLOWED_CLIENTS invalid address or CIDR '#{value}': #{e.message}"
+        end
+      end
+    end
+
+    def parse_max_clients(value)
+      max = Integer(value)
+      raise ArgumentError, "MAX_CLIENTS must be a positive integer, got '#{value}'" if max < 1
+
+      max
+    rescue ArgumentError, TypeError
+      raise ArgumentError, "MAX_CLIENTS must be a positive integer, got '#{value}'"
+    end
+
+    def reject_connection(socket, host_ip, port, reason)
+      OpenC3.close_socket(socket)
+      Logger.warn "#{@name}: Tcpip server rejected connection from #{host_ip}:#{port} (#{reason})"
+    end
 
     def shutdown_interfaces(interface_infos)
       @connection_mutex.synchronize do
@@ -372,17 +432,21 @@ module OpenC3
       end
 
       port, host_ip = Socket.unpack_sockaddr_in(address)
+
+      # Enforce the client allow list before doing any work (including DNS) for the peer
+      unless client_allowed?(host_ip)
+        reject_connection(socket, host_ip, port, "not in ALLOWED_CLIENTS")
+        return
+      end
+
+      # Enforce the connection cap before spawning a stream, interface and read thread
+      if @max_clients and num_clients >= @max_clients
+        reject_connection(socket, host_ip, port, "MAX_CLIENTS #{@max_clients} reached")
+        return
+      end
+
       hostname = ''
       hostname = Socket.lookup_hostname_from_ip(host_ip)
-      # if System.instance.acl
-      #   addr = ["AF_INET", 10, "lc630", host_ip.to_s]
-      #   if not System.instance.acl.allow_addr?(addr)
-      #     # Reject connection
-      #     OpenC3.close_socket(socket)
-      #     Logger.info "#{@name}: Tcpip server rejected connection from #{hostname}(#{host_ip}):#{port}"
-      #     return
-      #   end
-      # end
 
       # Configure TCP_NODELAY option
       socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
@@ -629,6 +693,8 @@ module OpenC3
       result['write_timeout'] = @write_timeout
       result['read_timeout'] = @read_timeout
       result['listen_address'] = @listen_address
+      result['allowed_clients'] = @allowed_clients ? @allowed_clients.map { |a| "#{a}/#{a.prefix}" } : nil
+      result['max_clients'] = @max_clients
       return result
     end
   end
