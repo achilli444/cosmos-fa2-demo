@@ -163,7 +163,12 @@ module OpenC3
         @read_extra = read_length_field_followed_by_string(4)
         return :STOP if @read_extra == :STOP
 
-        @read_extra = JSON.parse(@read_extra, allow_nan: true, create_additions: true)
+        # Extra comes from the remote peer: never let json_class instantiate objects
+        @read_extra = JSON.parse(@read_extra, allow_nan: true, create_additions: false)
+        unless @read_extra.is_a?(Hash)
+          reset() # Drop the bad frame rather than resuming mid-field
+          raise "Extra field received was a #{@read_extra.class} but must be a JSON object"
+        end
         @reduction_state = :FLAGS_REMOVED
       end
 
