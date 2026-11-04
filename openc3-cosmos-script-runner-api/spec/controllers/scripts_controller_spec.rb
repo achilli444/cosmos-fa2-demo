@@ -365,6 +365,48 @@ RSpec.describe ScriptsController, type: :controller do
 
         expect(response).to have_http_status(:ok)
       end
+
+      it "denies a runner-only user an unapproved script" do
+        allow(controller).to receive(:authorization).and_call_original
+        expect(controller).to receive(:authorization).with('script_edit').and_wrap_original do |_m, *_args|
+          controller.render json: { status: 'error', message: 'forbidden' }, status: :forbidden
+          false
+        end
+        expect(Script).not_to receive(:run)
+
+        post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+        expect(response).to have_http_status(:forbidden)
+      end
+
+      context "when the lifecycle lookup fails" do
+        before(:each) do
+          expect(Script).to receive(:lifecycle).with("DEFAULT", "INST/procedures/test.rb").and_raise("git unavailable")
+          allow(OpenC3::Logger).to receive(:error)
+          allow(OpenC3::Logger).to receive(:warn)
+        end
+
+        it "fails closed for a runner-only user" do
+          expect(controller).to receive(:authorized?).with('script_edit').and_return(false)
+          expect(Script).not_to receive(:run)
+
+          post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+          expect(response).to have_http_status(:service_unavailable)
+          json = JSON.parse(response.body)
+          expect(json["message"]).to match(/could not be verified: git unavailable/)
+          expect(OpenC3::Logger).to have_received(:warn).with(/Script run denied, lifecycle unavailable: INST\/procedures\/test.rb/, hash_including(scope: "DEFAULT"))
+        end
+
+        it "still allows a user with script_edit" do
+          expect(controller).to receive(:authorized?).with('script_edit').and_return(true)
+          expect(Script).to receive(:run).and_return(1)
+
+          post :run, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+
+          expect(response).to have_http_status(:ok)
+        end
+      end
     end
 
     it "does not check the lifecycle when the feature is disabled" do
