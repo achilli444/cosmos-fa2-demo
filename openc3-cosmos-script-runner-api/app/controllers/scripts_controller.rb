@@ -22,6 +22,8 @@ require 'openc3/models/setting_model'
 require 'openc3/models/target_model'
 
 class ScriptsController < ApplicationController
+  # Returned by lifecycle_state when the caller may proceed without a state
+  LIFECYCLE_UNAVAILABLE = :unavailable
   # This REGEX is also found in running_script.rb
   # Matches the following test cases:
   # class  MySuite  <  TestSuite
@@ -188,9 +190,13 @@ class ScriptsController < ApplicationController
     scope, name = sanitize_params([:scope, :name], :allow_forward_slash => true)
     return unless scope
     return unless authorize_overlay_write(name)
-    if lifecycle_enabled?() and lifecycle_state(scope, name) == 'approved'
-      render json: { status: 'error', message: 'Script is approved and cannot be modified. Move it back to review to edit.' }, status: :forbidden
-      return
+    if lifecycle_enabled?()
+      state = lifecycle_state(scope, name)
+      return unless state
+      if state == 'approved'
+        render json: { status: 'error', message: 'Script is approved and cannot be modified. Move it back to review to edit.' }, status: :forbidden
+        return
+      end
     end
     args = params.permit(:text, breakpoints: [])
     args[:scope] = scope
@@ -228,9 +234,14 @@ class ScriptsController < ApplicationController
     target_name = name.split('/')[0]
     return unless authorization('script_run', target_name: target_name)
     # Users with only the script_run (runner) permission may only run
-    # approved scripts. Users who can edit may run any lifecycle state.
-    if lifecycle_enabled?() and (state = lifecycle_state(scope, name)) and state != 'approved' and !authorization('script_edit')
-      return
+    # approved scripts. Users who can edit may run any lifecycle state, so
+    # only they may proceed when the lifecycle store cannot be consulted.
+    if lifecycle_enabled?()
+      state = lifecycle_state(scope, name, allow_unavailable: authorized?('script_edit'))
+      return unless state
+      if state != 'approved' and state != LIFECYCLE_UNAVAILABLE and !authorization('script_edit')
+        return
+      end
     end
     # TODO 7.0: Should suiteRunner be snake case?
     suite_runner = params[:suiteRunner] ? params[:suiteRunner].as_json() : nil
@@ -281,9 +292,13 @@ class ScriptsController < ApplicationController
     scope, name = sanitize_params([:scope, :name], :allow_forward_slash => true)
     return unless scope
     return unless authorize_overlay_write(name)
-    if lifecycle_enabled?() and lifecycle_state(scope, name) == 'approved'
-      render json: { status: 'error', message: 'Script is approved and cannot be deleted. Move it back to review to delete.' }, status: :forbidden
-      return
+    if lifecycle_enabled?()
+      state = lifecycle_state(scope, name)
+      return unless state
+      if state == 'approved'
+        render json: { status: 'error', message: 'Script is approved and cannot be deleted. Move it back to review to delete.' }, status: :forbidden
+        return
+      end
     end
     Script.destroy(scope, name)
     # Enterprise-only: record the deletion in git history.
@@ -411,14 +426,25 @@ class ScriptsController < ApplicationController
   end
 
   # Current lifecycle state for the create/run/destroy gates. The lookup hits
-  # git (VersionStore); a transient backend error must not 500 the hottest
-  # paths (especially run), so we log and fail OPEN by returning nil. Every
-  # gate treats nil as "no restriction" (nil != 'approved', nil is falsey), so
-  # an outage never blocks work — approval enforcement resumes once git heals.
-  def lifecycle_state(scope, name)
-    Script.lifecycle(scope, name)['state']
+  # git (VersionStore); when it errors the gate must fail CLOSED, because an
+  # unknown state would otherwise let runners execute unapproved scripts and
+  # editors overwrite approved ones. By default a backend error renders 503
+  # and returns nil so the caller bails out. Callers that may legitimately
+  # proceed without the state (editors running a script) pass
+  # allow_unavailable: true and get LIFECYCLE_UNAVAILABLE back instead; the
+  # bypass is logged with user and script so it is auditable.
+  def lifecycle_state(scope, name, allow_unavailable: false)
+    data = Script.lifecycle(scope, name)
+    raise "lifecycle store returned no state" unless data.is_a?(Hash) and data['state']
+    data['state']
   rescue => e
     log_error(e)
+    if allow_unavailable
+      OpenC3::Logger.warn("Script lifecycle unavailable (#{e.message}); #{name} allowed for user with script_edit without approval check", scope: scope, user: username())
+      return LIFECYCLE_UNAVAILABLE
+    end
+    OpenC3::Logger.warn("Script lifecycle unavailable (#{e.message}); refusing #{action_name} of #{name}", scope: scope, user: username())
+    render json: { status: 'error', message: "Script lifecycle state is unavailable; #{name} cannot be #{action_name == 'run' ? 'run' : 'modified'} until the lifecycle store recovers" }, status: :service_unavailable
     nil
   end
 
