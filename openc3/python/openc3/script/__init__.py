@@ -9,7 +9,7 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
-import threading
+import time
 
 from openc3.environment import OPENC3_KEYCLOAK_URL
 from openc3.script.server_proxy import ApiServerProxy, ScriptServerProxy
@@ -204,7 +204,7 @@ def prompt_for_critical_cmd(uuid, _username, _target_name, _cmd_name, _cmd_param
             return
         elif status == "REJECTED":
             raise RuntimeError("Critical command rejected")
-        threading.sleep(0.1)
+        time.sleep(0.1)
 
 
 # Define all the WHITELIST methods
