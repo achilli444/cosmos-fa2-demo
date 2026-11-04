@@ -232,6 +232,8 @@ services:
       - OPENC3_DEFAULT_QUEUE
       - OPENC3_AUTH_RATE_LIMIT_TO
       - OPENC3_AUTH_RATE_LIMIT_WITHIN
+      - OPENC3_SESSION_IDLE_TIMEOUT
+      - OPENC3_SESSION_MAX_AGE
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
       - OPENC3_LOG_LEVEL
@@ -307,6 +309,8 @@ services:
       - OPENC3_LOCAL_MODE=${OPENC3_LOCAL_MODE}
       - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
       # Optional: bare pass-through (only forwarded if set in host env or .env)
+      - OPENC3_SESSION_IDLE_TIMEOUT
+      - OPENC3_SESSION_MAX_AGE
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
       - OPENC3_LOG_LEVEL
@@ -389,6 +393,8 @@ services:
       - OPENC3_LOCAL_MODE=${OPENC3_LOCAL_MODE}
       - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
       # Optional: bare pass-through (only forwarded if set in host env or .env)
+      - OPENC3_SESSION_IDLE_TIMEOUT
+      - OPENC3_SESSION_MAX_AGE
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
       - OPENC3_LOG_LEVEL

@@ -106,11 +106,12 @@ module OpenC3
         expect(AuthModel.verify(stale)).to eq(false)
       end
 
-      it "never reads the entire session hash" do
+      it "never enumerates the stored sessions" do
         # verify_token is unauthenticated, so a caller must not be able to make
-        # us pull every session ever created on every request. Nothing prunes
-        # the sessions hash short of a logout, so it only grows.
+        # us walk every session on every request.
         expect(Store).not_to receive(:hgetall)
+        expect(Store).not_to receive(:scan_each)
+        expect(Store).not_to receive(:keys)
 
         token = AuthModel.generate_session
         expect(AuthModel.verify(token)).to eq(true) # reads just this token
@@ -126,7 +127,7 @@ module OpenC3
         expect(AuthModel.verify(token)).to eq(true)
 
         # Delete it behind the cache's back, the way another process would
-        @redis.hdel(AuthModel::SESSIONS_KEY, token)
+        @redis.del("#{AuthModel::SESSION_KEY_PREFIX}#{token}")
         expect(AuthModel.verify(token)).to eq(true)
 
         # Past SESSION_CACHE_TIMEOUT the cache is dropped and the token is gone.
@@ -134,6 +135,112 @@ module OpenC3
         future = Time.now + AuthModel::SESSION_CACHE_TIMEOUT + 1
         allow(Time).to receive(:now).and_return(future)
         expect(AuthModel.verify(token)).to eq(false)
+      end
+
+      describe "session lifetime" do
+        def session_key(token)
+          "#{AuthModel::SESSION_KEY_PREFIX}#{token}"
+        end
+
+        after(:each) do
+          ENV.delete('OPENC3_SESSION_IDLE_TIMEOUT')
+          ENV.delete('OPENC3_SESSION_MAX_AGE')
+        end
+
+        it "defaults to a 15 minute idle timeout and 12 hour max age" do
+          expect(AuthModel.session_idle_timeout).to eq(900)
+          expect(AuthModel.session_max_age).to eq(43_200)
+        end
+
+        it "reads the limits from the environment" do
+          ENV['OPENC3_SESSION_IDLE_TIMEOUT'] = '300'
+          ENV['OPENC3_SESSION_MAX_AGE'] = '3600'
+          expect(AuthModel.session_idle_timeout).to eq(300)
+          expect(AuthModel.session_max_age).to eq(3600)
+        end
+
+        it "refuses limits that would disable expiry" do
+          ['0', '-5', 'never', '1.5'].each do |bad|
+            ENV['OPENC3_SESSION_IDLE_TIMEOUT'] = bad
+            expect { AuthModel.session_idle_timeout }.to raise_error(ArgumentError, /OPENC3_SESSION_IDLE_TIMEOUT/)
+            ENV.delete('OPENC3_SESSION_IDLE_TIMEOUT')
+            ENV['OPENC3_SESSION_MAX_AGE'] = bad
+            expect { AuthModel.session_max_age }.to raise_error(ArgumentError, /OPENC3_SESSION_MAX_AGE/)
+            ENV.delete('OPENC3_SESSION_MAX_AGE')
+          end
+        end
+
+        it "stores every new session with the idle timeout as its TTL" do
+          token = AuthModel.generate_session
+          otp = AuthModel.generate_session(otp: true)
+          expect(@redis.ttl(session_key(token))).to be_between(899, 900)
+          expect(@redis.ttl(session_key(otp))).to be_between(899, 900)
+        end
+
+        it "resets the idle timer each time the session is used" do
+          ENV['OPENC3_SESSION_IDLE_TIMEOUT'] = '600'
+          token = AuthModel.generate_session
+          # Simulate 9 minutes of inactivity by shortening the TTL directly
+          @redis.expire(session_key(token), 60)
+          expect(AuthModel.verify(token)).to eq(true)
+          expect(@redis.ttl(session_key(token))).to be_between(599, 600)
+        end
+
+        it "rejects a session once it idles out" do
+          token = AuthModel.generate_session
+          expect(AuthModel.verify(token)).to eq(true)
+          # Redis expires the key; another process sees no session at all
+          @redis.del(session_key(token))
+          future = Time.now + AuthModel::SESSION_CACHE_TIMEOUT + 1
+          allow(Time).to receive(:now).and_return(future)
+          expect(AuthModel.verify(token)).to eq(false)
+        end
+
+        it "never lets a refresh push the TTL past the absolute lifetime" do
+          ENV['OPENC3_SESSION_IDLE_TIMEOUT'] = '900'
+          ENV['OPENC3_SESSION_MAX_AGE'] = '1000'
+          token = AuthModel.generate_session
+          expect(@redis.ttl(session_key(token))).to be_between(899, 900)
+
+          # 700s in, only 300s of lifetime remain so the TTL is capped there
+          later = Time.now + 700
+          allow(Time).to receive(:now).and_return(later)
+          expect(AuthModel.verify(token)).to eq(true)
+          expect(@redis.ttl(session_key(token))).to be_between(299, 300)
+        end
+
+        it "rejects and removes a session older than the max age even if recently used" do
+          ENV['OPENC3_SESSION_MAX_AGE'] = '3600'
+          token = AuthModel.generate_session
+          expect(AuthModel.verify(token)).to eq(true)
+
+          # Still in the in-process cache, but past the absolute limit
+          expired = Time.now + 3600
+          allow(Time).to receive(:now).and_return(expired)
+          expect(AuthModel.verify(token)).to eq(false)
+          expect(@redis.exists(session_key(token))).to eq(0)
+
+          # And when it comes from Redis rather than the cache
+          token2 = AuthModel.generate_session
+          @redis.set(session_key(token2), (expired - 3600).iso8601)
+          allow(Time).to receive(:now).and_return(expired + AuthModel::SESSION_CACHE_TIMEOUT + 1)
+          expect(AuthModel.verify(token2)).to eq(false)
+          expect(@redis.exists(session_key(token2))).to eq(0)
+        end
+
+        it "treats an unparseable stored session as no session" do
+          token = AuthModel.generate_session
+          @redis.set(session_key(token), 'garbage')
+          expect(AuthModel.verify(token)).to eq(false)
+        end
+
+        it "logout removes every session key and the legacy sessions hash" do
+          tokens = 3.times.map { AuthModel.generate_session }
+          @redis.hset(AuthModel::LEGACY_SESSIONS_KEY, 'ses_old', Time.now.iso8601)
+          AuthModel.logout
+          tokens.each { |t| expect(@redis.exists(session_key(t))).to eq(0) }
+          expect(@redis.exists(AuthModel::LEGACY_SESSIONS_KEY)).to eq(0)
+        end
       end
 
       it "raises when stored password hash is SHA256" do
