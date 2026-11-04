@@ -95,6 +95,11 @@ module OpenC3
       return process_definition, work_dir, env, scope, container
     end
 
+    # FILE type secrets are only ever read by the microservice running as the
+    # operator user, so nothing else needs access to them or their directories.
+    SECRET_FILE_MODE = 0o600
+    SECRET_DIR_MODE = 0o700
+
     # Writes a FILE type secret to disk. The path is first validated lexically
     # (see Secrets.validate_file_path) and then checked against the filesystem to
     # make sure no symlink redirects the write outside of Secrets.secret_file_dir.
@@ -135,7 +140,7 @@ module OpenC3
         return
       end
 
-      FileUtils.mkdir_p(dir)
+      FileUtils.mkdir_p(dir, mode: SECRET_DIR_MODE)
       # Re-check after creating the directories in case one was created through a
       # symlink or the tree changed underneath us.
       real_dir = File.realpath(dir)
@@ -149,7 +154,10 @@ module OpenC3
         Logger.error("Microservice #{microservice_name} secret #{secret_name} file path is a symlink which is not allowed: #{path}")
         return
       end
-      File.open(path, 'wb') do |file|
+      # Owner-only permissions regardless of the process umask. fchmod on the
+      # open descriptor also tightens a pre-existing file left by an earlier run.
+      File.open(path, 'wb', SECRET_FILE_MODE) do |file|
+        file.chmod(SECRET_FILE_MODE)
         file.write(secret_value)
       end
     end
