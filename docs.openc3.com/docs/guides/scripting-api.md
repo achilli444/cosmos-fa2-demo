@@ -869,7 +869,7 @@ cmd("INST ABORT", timeout: 10, log_message: false, validate: false)
 
 <span class="badge badge--secondary since-heading">Since 5.0.0</span>
 
-Sends a specified command without performing range checking on its parameters. This should only be used when it is necessary to intentionally send a bad command parameter to test a target.
+Sends a specified command without performing range checking on its parameters. This should only be used when it is necessary to intentionally send a bad command parameter to test a target. In COSMOS Enterprise this requires the `cmd_no_checks` permission in addition to `cmd` (or `cmd_raw` for the raw variant) and the bypass is logged as a warning.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Syntax">
@@ -924,7 +924,7 @@ cmd_no_range_check("INST", "COLLECT", "DURATION" => 11, "TYPE" => "NORMAL")
 
 <span class="badge badge--secondary since-heading">Since 5.0.0</span>
 
-Sends a specified command without performing the notification if it is a hazardous command. This should only be used when it is necessary to fully automate testing involving hazardous commands.
+Sends a specified command without performing the notification if it is a hazardous command. This should only be used when it is necessary to fully automate testing involving hazardous commands. In COSMOS Enterprise this requires the `cmd_no_checks` permission in addition to `cmd` (or `cmd_raw` for the raw variant) and the bypass is logged as a warning.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Syntax">
@@ -979,7 +979,7 @@ cmd_no_hazardous_check("INST", "CLEAR")
 
 <span class="badge badge--secondary since-heading">Since 5.0.0</span>
 
-Sends a specified command without performing the parameter range checks or notification if it is a hazardous command. This should only be used when it is necessary to fully automate testing involving hazardous commands that intentionally have invalid parameters.
+Sends a specified command without performing the parameter range checks or notification if it is a hazardous command. This should only be used when it is necessary to fully automate testing involving hazardous commands that intentionally have invalid parameters. In COSMOS Enterprise this requires the `cmd_no_checks` permission in addition to `cmd` (or `cmd_raw` for the raw variant) and the bypass is logged as a warning.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Syntax">

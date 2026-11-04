@@ -250,6 +250,57 @@ module OpenC3
       end
     end
 
+    describe "authorization" do
+      def expect_authorized(method, permission)
+        expect(@api).to receive(:authorize).with(hash_including(permission: permission, target_name: 'INST', packet_name: 'COLLECT')).once.and_return(nil)
+        @api.send(method, "INST COLLECT with TYPE #{method.include?('raw') ? 0 : 'NORMAL'}, DURATION 5")
+      end
+
+      it "requires cmd for checked commands" do
+        expect(@api).not_to receive(:authorize).with(hash_including(permission: 'cmd_no_checks'))
+        expect(@api).not_to receive(:authorize).with(hash_including(permission: 'cmd_raw'))
+        expect_authorized('cmd', 'cmd')
+      end
+
+      it "requires cmd_raw for raw commands" do
+        expect(@api).not_to receive(:authorize).with(hash_including(permission: 'cmd_no_checks'))
+        expect(@api).not_to receive(:authorize).with(hash_including(permission: 'cmd'))
+        expect_authorized('cmd_raw', 'cmd_raw')
+      end
+
+      %w(cmd_no_range_check cmd_no_hazardous_check cmd_no_checks).each do |method|
+        it "requires cmd and cmd_no_checks for #{method}" do
+          expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd_no_checks', target_name: 'INST', packet_name: 'COLLECT')).once.and_return(nil)
+          expect_authorized(method, 'cmd')
+        end
+      end
+
+      %w(cmd_raw_no_range_check cmd_raw_no_hazardous_check cmd_raw_no_checks).each do |method|
+        it "requires cmd_raw and cmd_no_checks for #{method}" do
+          expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd_no_checks', target_name: 'INST', packet_name: 'COLLECT')).once.and_return(nil)
+          expect_authorized(method, 'cmd_raw')
+        end
+      end
+
+      it "does not send a bypass command when cmd_no_checks is denied" do
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd')).and_return(nil)
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'cmd_no_checks')).and_raise(OpenC3::AuthError, "forbidden")
+        expect(CommandTopic).not_to receive(:send_command)
+        expect { @api.cmd_no_hazardous_check("INST CLEAR") }.to raise_error(OpenC3::AuthError)
+      end
+
+      it "logs a warning when checks are bypassed" do
+        allow(@api).to receive(:authorize).and_return({ 'username' => 'operator' })
+        expect(Logger).to receive(:warn).with(/cmd_no_checks: operator bypassed range check and hazardous check for INST COLLECT/, hash_including(scope: 'DEFAULT'))
+        @api.cmd_no_checks("INST COLLECT with TYPE NORMAL, DURATION 5")
+      end
+
+      it "does not log a bypass warning for checked commands" do
+        expect(Logger).not_to receive(:warn)
+        @api.cmd("INST COLLECT with TYPE NORMAL, DURATION 5")
+      end
+    end
+
     describe "build_cmd" do
       before(:each) do
         model = MicroserviceModel.new(name: "DEFAULT__DECOM__INST_INT", scope: "DEFAULT",
