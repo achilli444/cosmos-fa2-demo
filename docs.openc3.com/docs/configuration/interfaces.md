@@ -350,7 +350,7 @@ INTERFACE INTERFACE_NAME http_client_interface.rb myserver.com 80
 
 ### HTTP Server Interface
 
-The HTTP server interface creates a simple unencrypted, unauthenticated HTTP server. This interface is commonly used with the [HttpAccessor](accessors#http-accessor) and [JsonAccessor](accessors#json-accessor). See the [openc3-cosmos-http-example](https://github.com/OpenC3/cosmos/tree/main/examples/openc3-cosmos-http-example) for more information.
+The HTTP server interface creates a HTTP server that turns requests into telemetry. It listens on loopback only by default, and supports a shared bearer token, HTTPS, and client certificate (mutual TLS) authentication through options. This interface is commonly used with the [HttpAccessor](accessors#http-accessor) and [JsonAccessor](accessors#json-accessor). See the [openc3-cosmos-http-example](https://github.com/OpenC3/cosmos/tree/main/examples/openc3-cosmos-http-example) for more information.
 
 | Parameter | Description                                       | Required | Default |
 | --------- | ------------------------------------------------- | -------- | ------- |
@@ -358,14 +358,36 @@ The HTTP server interface creates a simple unencrypted, unauthenticated HTTP ser
 
 #### LISTEN_ADDRESS
 
-IP address to accept connections on. Default: `0.0.0.0`.
+IP address to accept connections on. Default: `127.0.0.1` (loopback). Set to `0.0.0.0` to accept connections from other hosts or containers; COSMOS logs a warning when the server is exposed this way without `AUTH_TOKEN` or `SSL_CA_FILE`.
+
+#### AUTH_TOKEN
+
+Shared secret that every request must present as `Authorization: Bearer <token>`. Requests without a matching token receive `401 Unauthorized` and are not stored as telemetry. Set it with the [SECRET](plugins#secret) keyword so the token is not stored in the plugin configuration.
+
+#### SSL_CERT
+
+PEM server certificate (contents, or a path to a PEM file). Enables HTTPS (TLS 1.2+) together with `SSL_KEY`.
+
+#### SSL_KEY
+
+PEM server private key (contents, or a path to a PEM file). Typically provided with the [SECRET](plugins#secret) keyword.
+
+#### SSL_CA_FILE
+
+PEM certificate authority bundle (contents, or a path to a PEM file). When set, clients must present a certificate signed by this CA (mutual TLS); connections without a valid client certificate are refused.
+
+The `Authorization`, `Proxy-Authorization` and `Cookie` request headers are never copied into the telemetry packet's `HTTP_HEADERS`.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python">
 
 ```cosmos
 INTERFACE INTERFACE_NAME openc3/interfaces/http_server_interface.py 88
-  LISTEN_ADDRESS 127.0.0.1
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  # Secrets created in Admin / Secrets, passed to the interface as options
+  SECRET ENV HTTP_TOKEN HTTP_SERVER_TOKEN AUTH_TOKEN
+  SECRET FILE HTTP_CERT "/tmp/HTTP/cert.pem" SSL_CERT
+  SECRET FILE HTTP_KEY "/tmp/HTTP/key.pem" SSL_KEY
 ```
 
 </TabItem>
@@ -373,7 +395,11 @@ INTERFACE INTERFACE_NAME openc3/interfaces/http_server_interface.py 88
 
 ```cosmos
 INTERFACE INTERFACE_NAME http_server_interface.rb 88
-  LISTEN_ADDRESS 127.0.0.1
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  # Secrets created in Admin / Secrets, passed to the interface as options
+  SECRET ENV HTTP_TOKEN HTTP_SERVER_TOKEN AUTH_TOKEN
+  SECRET FILE HTTP_CERT "/tmp/HTTP/cert.pem" SSL_CERT
+  SECRET FILE HTTP_KEY "/tmp/HTTP/key.pem" SSL_KEY
 ```
 
 </TabItem>

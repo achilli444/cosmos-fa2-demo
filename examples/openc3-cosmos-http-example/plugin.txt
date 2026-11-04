@@ -13,6 +13,10 @@ INTERFACE RUBY_CLIENT_INT http_client_interface.rb <%= client_hostname %> <%= cl
 TARGET RUBY_SERVER RUBY_SERVER
 INTERFACE RUBY_SERVER_INT http_server_interface.rb <%= ruby_server_port %>
   MAP_TARGET RUBY_SERVER
+  # The server listens on loopback by default; 0.0.0.0 is needed to reach it through the compose port mapping
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  # Create a secret named HTTP_TOKEN in Admin / Secrets to require "Authorization: Bearer <token>"
+  # SECRET ENV HTTP_TOKEN RUBY_SERVER_TOKEN AUTH_TOKEN
 
 TARGET PYTHON_CLIENT PYTHON_CLIENT
 INTERFACE PYTHON_CLIENT_INT openc3/interfaces/http_client_interface.py <%= client_hostname %> <%= client_port %> <%= client_protocol %> 5.0 5.0
@@ -23,3 +27,7 @@ INTERFACE PYTHON_CLIENT_INT openc3/interfaces/http_client_interface.py <%= clien
 TARGET PYTHON_SERVER PYTHON_SERVER
 INTERFACE PYTHON_SERVER_INT openc3/interfaces/http_server_interface.py <%= python_server_port %>
   MAP_TARGET PYTHON_SERVER
+  # The server listens on loopback by default; 0.0.0.0 is needed to reach it through the compose port mapping
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  # Create a secret named HTTP_TOKEN in Admin / Secrets to require "Authorization: Bearer <token>"
+  # SECRET ENV HTTP_TOKEN PYTHON_SERVER_TOKEN AUTH_TOKEN

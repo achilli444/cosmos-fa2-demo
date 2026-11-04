@@ -15,36 +15,74 @@ require 'openc3/interfaces/interface'
 require 'openc3/config/config_parser'
 require 'openc3/accessors/http_accessor'
 require 'webrick'
+require 'webrick/https'
+require 'openssl'
+require 'tempfile'
 
 module OpenC3
   class HttpServerInterface < Interface
+    # Request headers that carry credentials and must never be copied into
+    # packet.extra (which is published and logged with the telemetry)
+    SENSITIVE_HEADERS = %w(authorization proxy-authorization cookie).freeze
+    LOOPBACK_ADDRESSES = %w(127.0.0.1 ::1 localhost).freeze
+
     # @param port [Integer] HTTP port
     def initialize(port = 80)
       super()
-      @listen_address = '0.0.0.0' # Default to ANY
+      @listen_address = '127.0.0.1' # Default to loopback, LISTEN_ADDRESS 0.0.0.0 to expose
       @port = Integer(port)
       @server = nil
       @request_queue = Queue.new
+      @auth_token = nil
+      @ssl_cert = nil
+      @ssl_key = nil
+      @ssl_ca_file = nil
     end
 
     # Supported Options
     # LISTEN_ADDRESS - Ip address of the interface to accept connections on
+    # AUTH_TOKEN - Shared secret clients must present as "Authorization: Bearer <token>"
+    # SSL_CERT - PEM server certificate (contents or path), enables HTTPS with SSL_KEY
+    # SSL_KEY - PEM server private key (contents or path)
+    # SSL_CA_FILE - PEM CA bundle (contents or path), requires and verifies client certificates
     # (see Interface#set_option)
     def set_option(option_name, option_values)
       super(option_name, option_values)
-      if option_name.upcase == 'LISTEN_ADDRESS'
+      case option_name.upcase
+      when 'LISTEN_ADDRESS'
         @listen_address = option_values[0]
+      when 'AUTH_TOKEN'
+        token = option_values[0].to_s
+        @auth_token = token.empty? ? nil : token
+      when 'SSL_CERT'
+        @ssl_cert = read_pem(option_values[0])
+      when 'SSL_KEY'
+        @ssl_key = read_pem(option_values[0])
+      when 'SSL_CA_FILE'
+        # WEBrick wants the CA as a file
+        @ssl_ca_file = Tempfile.new('ca_file')
+        @ssl_ca_file.write(read_pem(option_values[0]))
+        @ssl_ca_file.close
       end
     end
 
+    def ssl?
+      return !!(@ssl_cert or @ssl_key or @ssl_ca_file)
+    end
+
     def connection_string
-      return "listening on #{@listen_address}:#{@port}"
+      string = "listening on #{@listen_address}:#{@port}"
+      string += " (ssl)" if ssl?
+      return string
     end
 
     # Connects the interface to its target(s)
     def connect
-      @server = WEBrick::HTTPServer.new(:BindAddress => @listen_address, :Port => @port)
+      @server = WEBrick::HTTPServer.new(server_config)
       @request_queue = Queue.new
+      unless LOOPBACK_ADDRESSES.include?(@listen_address) or @auth_token or @ssl_ca_file
+        Logger.warn("#{@name}: listening on #{@listen_address}:#{@port} without AUTH_TOKEN or SSL_CA_FILE, any host that can reach the port can inject telemetry")
+      end
 
       # Create a response hook for every command packet
       @target_names.each do |target_name|
@@ -59,6 +97,14 @@ module OpenC3
           end
           if path
             @server.mount_proc path do |req, res|
+              unless authorized?(req)
+                Logger.warn("#{@name}: rejected unauthenticated request for #{path} from #{peer_address(req)}")
+                res.status = 401
+                res['WWW-Authenticate'] = 'Bearer'
+                res.body = ''
+                next
+              end
+
               # Build the Response
               begin
                 status = packet.read('HTTP_STATUS')
@@ -98,7 +144,10 @@ module OpenC3
                 if headers
                   extra['HTTP_HEADERS'] = {}
                   headers.each do |key, value|
-                    extra['HTTP_HEADERS'][key.downcase] = value
+                    key = key.downcase
+                    next if SENSITIVE_HEADERS.include?(key)
+
+                    extra['HTTP_HEADERS'][key] = value
                   end
                 end
 
@@ -188,8 +237,63 @@ module OpenC3
       result = super()
       result['listen_address'] = @listen_address
       result['port'] = @port
+      result['ssl'] = ssl?
+      result['client_cert_required'] = !!@ssl_ca_file
+      result['auth_token_required'] = !!@auth_token
       result['request_queue_length'] = @request_queue.length
       return result
+    end
+
+    protected
+
+    # @return [Boolean] true if no AUTH_TOKEN is configured or the request
+    #   carries a matching "Authorization: Bearer <token>" header
+    def authorized?(req)
+      return true unless @auth_token
+
+      header = req['Authorization'].to_s
+      scheme, presented = header.split(' ', 2)
+      return false unless scheme and scheme.casecmp?('Bearer') and presented
+
+      presented = presented.strip
+      return false unless presented.bytesize == @auth_token.bytesize
+
+      return OpenSSL.secure_compare(presented, @auth_token)
+    end
+
+    def peer_address(req)
+      addr = req.peeraddr
+      return addr ? addr[3] : 'unknown'
+    rescue
+      return 'unknown'
+    end
+
+    # Accepts either PEM contents (e.g. from SECRET ... option) or a path to a PEM file
+    def read_pem(value)
+      value = value.to_s
+      return File.read(value) if !value.include?("\n") and File.file?(value)
+
+      return value
+    end
+
+    def server_config
+      config = { :BindAddress => @listen_address, :Port => @port }
+      return config unless ssl?
+
+      unless @ssl_cert and @ssl_key
+        raise "#{@name}: SSL_CERT and SSL_KEY must both be set to enable HTTPS"
+      end
+
+      config[:SSLEnable] = true
+      config[:SSLCertificate] = OpenSSL::X509::Certificate.new(@ssl_cert)
+      config[:SSLPrivateKey] = OpenSSL::PKey.read(@ssl_key)
+      # TLS 1.2 or newer only
+      config[:SSLOptions] = OpenSSL::SSL::OP_NO_SSLv3 | OpenSSL::SSL::OP_NO_TLSv1 | OpenSSL::SSL::OP_NO_TLSv1_1
+      if @ssl_ca_file
+        config[:SSLCACertificateFile] = @ssl_ca_file.path
+        config[:SSLVerifyClient] = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+      end
+      return config
     end
   end
 end

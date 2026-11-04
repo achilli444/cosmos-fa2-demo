@@ -10,7 +10,11 @@
 # if purchased from OpenC3, Inc.
 
 import contextlib
+import hmac
+import os
 import queue
+import ssl
+import tempfile
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
@@ -22,6 +26,12 @@ from openc3.system.system import System
 from openc3.utilities.logger import Logger
 
 
+# Request headers that carry credentials and must never be copied into
+# packet.extra (which is published and logged with the telemetry)
+SENSITIVE_HEADERS = ("authorization", "proxy-authorization", "cookie")
+LOOPBACK_ADDRESSES = ("127.0.0.1", "::1", "localhost")
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa
         self.handle_request()
@@ -29,9 +39,28 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa
         self.handle_request()
 
+    def authorized(self):
+        token = self.server.auth_token
+        if not token:
+            return True
+        scheme, _, presented = self.headers.get("Authorization", "").partition(" ")
+        if scheme.lower() != "bearer":
+            return False
+        return hmac.compare_digest(presented.strip().encode(), token.encode())
+
     def handle_request(self):
         base = self.path.split("?")[0]
         if self.server.lookup.get(base):
+            if not self.authorized():
+                Logger.warn(
+                    f"{self.server.interface_name}: rejected unauthenticated request for {base} from {self.client_address[0]}"
+                )
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", "Bearer")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
             packets = self.server.lookup[base]
             status = 200
 
@@ -71,7 +100,10 @@ class Handler(BaseHTTPRequestHandler):
                     if self.headers:
                         extra["HTTP_HEADERS"] = {}
                         for key, value in self.headers.items():
-                            extra["HTTP_HEADERS"][key.lower()] = value
+                            key = key.lower()
+                            if key in SENSITIVE_HEADERS:
+                                continue
+                            extra["HTTP_HEADERS"][key] = value
 
                     queries = {}
                     if "?" in self.path:
@@ -92,9 +124,13 @@ class HttpServerInterface(Interface):
     # @param port [Integer] HTTP port
     def __init__(self, port=80):
         super().__init__()
-        self.listen_address = "0.0.0.0"  # Default to ANY
+        self.listen_address = "127.0.0.1"  # Default to loopback, LISTEN_ADDRESS 0.0.0.0 to expose
         self.port = int(port)
         self.server = None
+        self.auth_token = None
+        self.ssl_cert = None
+        self.ssl_key = None
+        self.ssl_ca_file = None
 
     def build_path_lookup(self):
         self.lookup = {}
@@ -115,22 +151,70 @@ class HttpServerInterface(Interface):
 
     # Supported Options
     # LISTEN_ADDRESS - Ip address of the interface to accept connections on
+    # AUTH_TOKEN - Shared secret clients must present as "Authorization: Bearer <token>"
+    # SSL_CERT - PEM server certificate (contents or path), enables HTTPS with SSL_KEY
+    # SSL_KEY - PEM server private key (contents or path)
+    # SSL_CA_FILE - PEM CA bundle (contents or path), requires and verifies client certificates
     # (see Interface#set_option)
     def set_option(self, option_name, option_values):
         super().set_option(option_name, option_values)
-        if option_name.upper() == "LISTEN_ADDRESS":
-            self.listen_address = option_values[0]
+        match option_name.upper():
+            case "LISTEN_ADDRESS":
+                self.listen_address = option_values[0]
+            case "AUTH_TOKEN":
+                self.auth_token = str(option_values[0]) or None
+            case "SSL_CERT":
+                self.ssl_cert = self._pem_file("cert", option_values[0])
+            case "SSL_KEY":
+                self.ssl_key = self._pem_file("key", option_values[0])
+            case "SSL_CA_FILE":
+                self.ssl_ca_file = self._pem_file("ca_file", option_values[0])
+
+    # Accepts either PEM contents (e.g. from SECRET ... option) or a path to a PEM file
+    # and returns a path the ssl module can load
+    def _pem_file(self, name, value):
+        value = str(value)
+        if "\n" not in value and os.path.isfile(value):
+            return value
+        with tempfile.NamedTemporaryFile(mode="w+", prefix=name, delete=False) as file:
+            file.write(value)
+        return file.name
+
+    def is_ssl(self):
+        return bool(self.ssl_cert or self.ssl_key or self.ssl_ca_file)
 
     def connection_string(self):
-        return f"listening on {self.listen_address}:{self.port}"
+        string = f"listening on {self.listen_address}:{self.port}"
+        if self.is_ssl():
+            string += " (ssl)"
+        return string
+
+    def _ssl_context(self):
+        if not (self.ssl_cert and self.ssl_key):
+            raise RuntimeError(f"{self.name}: SSL_CERT and SSL_KEY must both be set to enable HTTPS")
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(certfile=self.ssl_cert, keyfile=self.ssl_key)
+        if self.ssl_ca_file:
+            context.verify_mode = ssl.CERT_REQUIRED
+            context.load_verify_locations(cafile=self.ssl_ca_file)
+        return context
 
     # Connects the interface to its target(s)
     def connect(self):
         # Can't build the lookup until after init because the target_names are not set
         self.build_path_lookup()
         self.server = ThreadingHTTPServer((self.listen_address, self.port), Handler)
+        if self.is_ssl():
+            self.server.socket = self._ssl_context().wrap_socket(self.server.socket, server_side=True)
         self.server.request_queue = queue.Queue()
         self.server.lookup = self.lookup
+        self.server.auth_token = self.auth_token
+        self.server.interface_name = self.name
+        if self.listen_address not in LOOPBACK_ADDRESSES and not self.auth_token and not self.ssl_ca_file:
+            Logger.warn(
+                f"{self.name}: listening on {self.listen_address}:{self.port} without AUTH_TOKEN or SSL_CA_FILE, any host that can reach the port can inject telemetry"
+            )
         self.server_thread = Thread(target=self.server.serve_forever)
         self.server_thread.start()
         super().connect()
@@ -183,6 +267,9 @@ class HttpServerInterface(Interface):
         result = super().details()
         result["listen_address"] = self.listen_address
         result["port"] = self.port
+        result["ssl"] = self.is_ssl()
+        result["client_cert_required"] = bool(self.ssl_ca_file)
+        result["auth_token_required"] = bool(self.auth_token)
         if self.server is not None:
             result["request_queue_length"] = self.server.request_queue.qsize()
         else:
