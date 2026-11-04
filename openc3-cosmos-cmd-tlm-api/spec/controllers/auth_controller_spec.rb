@@ -14,6 +14,10 @@
 require 'rails_helper'
 
 RSpec.describe AuthController, :type => :controller do
+  # Must satisfy OpenC3::AuthModel.check_password_policy
+  PASSWORD1 = 'Ctrl-Test!Credential-1'
+  PASSWORD2 = 'Ctrl-Test!Credential-2'
+
   before(:each) do
     mock_redis()
   end
@@ -23,9 +27,9 @@ RSpec.describe AuthController, :type => :controller do
       get :token_exists
       expect(response).to have_http_status(:ok)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
-      expect(json).to eql({"result" => false})
+      expect(json).to eql({ "result" => false })
 
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       get :token_exists
@@ -36,23 +40,54 @@ RSpec.describe AuthController, :type => :controller do
   end
 
   describe "set" do
-    it "requires old_password after initial set" do
-      post :set, params: { password: 'PASSWORD' }
+    it "rejects passwords that fail policy with 422 and the rule broken" do
+      post :set, params: { password: 'password' }
+      expect(response).to have_http_status(:unprocessable_entity)
+      json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+      expect(json["status"]).to eql 'error'
+      expect(json["message"]).to eql 'password must be at least 15 characters'
+      expect(json["type"]).to eql 'OpenC3::AuthModel::PasswordPolicyError'
+
+      get :token_exists
+      json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+      expect(json).to eql({ "result" => false })
+
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
-      post :set, params: { password: 'PASSWORD2' }
+      post :set, params: { password: PASSWORD1, old_password: PASSWORD1 }
+      expect(response).to have_http_status(:unprocessable_entity)
+      json = JSON.parse(response.body, allow_nan: true, create_additions: true)
+      expect(json["message"]).to eql 'password must be different from the current password'
+    end
+
+    it "does not count a policy rejection as a bad password attempt" do
+      post :set, params: { password: PASSWORD1 }
+      expect(response).to have_http_status(:ok)
+      max = ENV['OPENC3_AUTH_RATE_LIMIT_TO'].to_i
+      (max + 1).times do
+        post :set, params: { password: 'Password12345!!', old_password: PASSWORD1 }
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+
+    it "requires old_password after initial set" do
+      post :set, params: { password: PASSWORD1 }
+      expect(response).to have_http_status(:ok)
+
+      post :set, params: { password: PASSWORD2 }
       expect(response).to have_http_status(:error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql 'error'
       expect(json["message"]).to eql 'old_password must not be nil or empty'
 
-      post :set, params: { password: 'PASSWORD2', old_password: 'BAD' }
+      post :set, params: { password: PASSWORD2, old_password: 'BAD' }
       expect(response).to have_http_status(:error)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json["status"]).to eql 'error'
       expect(json["message"]).to eql 'old_password incorrect'
 
-      post :set, params: { password: 'PASSWORD2', old_password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD2, old_password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
     end
   end
@@ -60,13 +95,13 @@ RSpec.describe AuthController, :type => :controller do
   describe "set" do
     it "revokes old sessions and issues a new token on password change" do
       # Set initial password and get a session token
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
       old_token = response.body
       expect(old_token).not_to be_empty
 
       # Change password
-      post :set, params: { password: 'PASSWORD2', old_password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD2, old_password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
       new_token = response.body
       expect(new_token).not_to be_empty
@@ -86,10 +121,10 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "validates the set password" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       post :verify, params: { password: 'BAD' }
@@ -112,7 +147,7 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "validates a session token" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
       token = response.body
 
@@ -124,10 +159,10 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "does not accept the password" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
-      post :verify_token, params: { token: 'PASSWORD' }
+      post :verify_token, params: { token: PASSWORD1 }
       expect(response).to have_http_status(:unauthorized)
     end
 
@@ -140,7 +175,7 @@ RSpec.describe AuthController, :type => :controller do
       expect(OpenC3::AuthModel).not_to receive(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        PASSWORD1,
         'otp_something',
         'nope',
         'ses_',
@@ -177,7 +212,7 @@ RSpec.describe AuthController, :type => :controller do
     # token in localStorage on mount, fall back to the password form, then check
     # the new token on the next page load.
     it "accepts a token the moment verify hands it out" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       # Page load with a stale token in localStorage
@@ -186,7 +221,7 @@ RSpec.describe AuthController, :type => :controller do
       expect(response).to have_http_status(:unauthorized)
 
       # User types the password and gets a fresh token
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
       token = response.body
 
@@ -207,7 +242,7 @@ RSpec.describe AuthController, :type => :controller do
       redis = mock_redis()
       expect(redis).not_to receive(:hgetall)
 
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
       token = response.body
 
@@ -221,7 +256,7 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "does not count a stale token as a bad password attempt" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       # A stale token in localStorage must not eat into the password rate limit
@@ -231,7 +266,7 @@ RSpec.describe AuthController, :type => :controller do
       end
       expect(OpenC3::EphemeralStore.get('openc3__auth_bad_attempts__user')).to be_nil
 
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
     end
   end
@@ -251,7 +286,7 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "rate limits bad password attempts from the same client" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       set_client_ip('1.2.3.4')
@@ -262,12 +297,12 @@ RSpec.describe AuthController, :type => :controller do
       post :verify, params: { password: 'BAD' }
       expect(response).to have_http_status(:too_many_requests)
       # Even the correct password is rejected for this client
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:too_many_requests)
     end
 
     it "does not rate limit other clients when one client sends bad passwords" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       set_client_ip('1.2.3.4')
@@ -278,12 +313,12 @@ RSpec.describe AuthController, :type => :controller do
 
       # A different client can still log in with the correct password
       set_client_ip('5.6.7.8')
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
     end
 
     it "rate limits based on X-Forwarded-For when behind a proxy" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       # Simulate traefik forwarding two different browsers from the same proxy
@@ -295,12 +330,12 @@ RSpec.describe AuthController, :type => :controller do
       expect(response).to have_http_status(:too_many_requests)
 
       set_client_ip('5.6.7.8', forwarded: true)
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
     end
 
     it "clears the bad attempt counter after a successful attempt" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       set_client_ip('1.2.3.4')
@@ -308,7 +343,7 @@ RSpec.describe AuthController, :type => :controller do
         post :verify, params: { password: 'BAD' }
         expect(response).to have_http_status(:unauthorized)
       end
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       # Counter was reset so 9 more bad attempts don't trip the limit
@@ -316,12 +351,12 @@ RSpec.describe AuthController, :type => :controller do
         post :verify, params: { password: 'BAD' }
         expect(response).to have_http_status(:unauthorized)
       end
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
     end
 
     it "refreshes the window on each bad attempt" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       set_client_ip('1.2.3.4')
@@ -333,7 +368,7 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "gives the counter a window if it somehow has no expiration" do
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       # Simulate incr succeeding but expire failing, which would otherwise lock
@@ -341,7 +376,7 @@ RSpec.describe AuthController, :type => :controller do
       key = "openc3__auth_bad_attempts__user__1.2.3.4"
       OpenC3::EphemeralStore.set(key, 100)
       set_client_ip('1.2.3.4')
-      post :verify, params: { password: 'PASSWORD' }
+      post :verify, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:too_many_requests)
       expect(OpenC3::EphemeralStore.ttl(key)).to be_between(1, 120)
     end
@@ -384,11 +419,11 @@ RSpec.describe AuthController, :type => :controller do
 
     it "does not rate limit successful password attempts" do
       # Note: testing rate limit for bad attempts is done in Playwright
-      post :set, params: { password: 'PASSWORD' }
+      post :set, params: { password: PASSWORD1 }
       expect(response).to have_http_status(:ok)
 
       20.times do
-        post :verify, params: { password: 'PASSWORD' }
+        post :verify, params: { password: PASSWORD1 }
         expect(response).to have_http_status(:ok)
       end
     end

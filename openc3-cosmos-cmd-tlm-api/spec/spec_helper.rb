@@ -67,7 +67,7 @@ ENV['OPENC3_REDIS_PORT'] = '6379'
 ENV['OPENC3_REDIS_EPHEMERAL_HOSTNAME'] = '127.0.0.1'
 ENV['OPENC3_REDIS_EPHEMERAL_PORT'] = '6380'
 # Set some usernames / passwords
-ENV['OPENC3_API_PASSWORD'] = 'password'
+ENV['OPENC3_API_PASSWORD'] = 'Unit-Test!Credential-2026' # must satisfy AuthModel.check_password_policy
 ENV['OPENC3_SERVICE_PASSWORD'] = 'openc3service'
 ENV['OPENC3_REDIS_USERNAME'] = 'openc3'
 ENV['OPENC3_REDIS_PASSWORD'] = 'openc3password'
@@ -79,7 +79,7 @@ ENV['OPENC3_AUTH_RATE_LIMIT_TO'] ||= '10'
 ENV['OPENC3_AUTH_RATE_LIMIT_WITHIN'] ||= '120'
 
 $openc3_scope = ENV.fetch('OPENC3_SCOPE', 'DEFAULT')
-$openc3_token = ENV.fetch('OPENC3_API_PASSWORD', 'password')
+$openc3_token = ENV.fetch('OPENC3_API_PASSWORD', 'Unit-Test!Credential-2026')
 $openc3_mock_token = 'mock_token'
 
 # Mock the HTTP request for OpenC3Authentication

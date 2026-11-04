@@ -412,7 +412,7 @@ Usage: xtce_converter [options] --import input_xtce_filename --output output_dir
 
 Sets the initial COSMOS password from the `OPENC3_API_PASSWORD` environment variable. This allows you to skip the password creation screen in the web interface, which is useful for automated or scripted deployments.
 
-The password must be at least 8 characters. This command will fail if a password has already been set — use the web interface to change an existing password.
+The password must meet the COSMOS password policy: at least 15 characters (raise the minimum with the `OPENC3_MIN_PASSWORD_LENGTH` environment variable), upper and lower case letters, a number and a symbol, and it must not be or contain a commonly used password. COSMOS checks a bundled list of common passwords; add your organization's own list with `OPENC3_PASSWORD_BLOCKLIST_FILE` (one password per line). The same policy applies when changing the password in the web interface, which also rejects reusing the current password. This command will fail if a password has already been set — use the web interface to change an existing password.
 
 ```bash
 % openc3.sh cli setpassword
