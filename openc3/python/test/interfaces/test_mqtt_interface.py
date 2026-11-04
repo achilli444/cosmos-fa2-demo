@@ -23,12 +23,23 @@ class TestMqttInterface(unittest.TestCase):
         setup_system()
 
     def test_sets_all_the_instance_variables(self):
-        i = MqttInterface("localhost", "1883")
+        i = MqttInterface("localhost", "1883", False)
         self.assertEqual(i.name, "MqttInterface")
         self.assertEqual(i.hostname, "localhost")
         self.assertFalse(i.ssl)
         self.assertEqual(i.port, 1883)
         self.assertEqual(i.ack_timeout, 5.0)
+
+    def test_defaults_to_tls_on_8883(self):
+        i = MqttInterface("localhost")
+        self.assertTrue(i.ssl)
+        self.assertEqual(i.port, 8883)
+        i = MqttInterface("localhost", None, False)
+        self.assertFalse(i.ssl)
+        self.assertEqual(i.port, 1883)
+        i = MqttInterface("localhost", "1883")
+        self.assertTrue(i.ssl)
+        self.assertEqual(i.port, 1883)
 
     def test_builds_a_human_readable_connection_string(self):
         i = MqttInterface("localhost", "1883", False)

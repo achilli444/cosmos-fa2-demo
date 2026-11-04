@@ -20,12 +20,32 @@ from openc3.config.config_parser import ConfigParser
 from openc3.utilities.logger import Logger
 
 
+MQTT_DEFAULT_PORT = 1883
+MQTT_DEFAULT_SSL_PORT = 8883
+
+
+def resolve_mqtt_ssl(ssl):
+    """TLS is on unless the interface definition explicitly disables it"""
+    ssl = ConfigParser.handle_none(ssl)
+    return True if ssl is None else ConfigParser.handle_true_false(ssl)
+
+
+def resolve_mqtt_port(port, ssl):
+    """Port from the interface definition, or the conventional MQTT port for the TLS setting"""
+    port = ConfigParser.handle_none(port)
+    if port is None:
+        return MQTT_DEFAULT_SSL_PORT if ssl else MQTT_DEFAULT_PORT
+    return int(port)
+
+
 class MqttStream:
+    # @param port [Integer] MQTT port (defaults to 8883 with ssl, 1883 without)
+    # @param ssl [Boolean] Whether to use TLS (default True, broker certificate always verified)
     def __init__(
         self,
         hostname,
-        port=1883,
-        ssl=False,
+        port=None,
+        ssl=True,
         write_topic=None,
         read_topic=None,
         ack_timeout=5,
@@ -33,8 +53,8 @@ class MqttStream:
         super().__init__()
 
         self.hostname = hostname
-        self.port = int(port)
-        self.ssl = ConfigParser.handle_true_false(ssl)
+        self.ssl = resolve_mqtt_ssl(ssl)
+        self.port = resolve_mqtt_port(port, self.ssl)
         self.write_topic = ConfigParser.handle_none(write_topic)
         self.read_topic = ConfigParser.handle_none(read_topic)
         self.ack_timeout = float(ack_timeout)
@@ -60,7 +80,14 @@ class MqttStream:
         self.client.user_data_set(self.pkt_queue)  # passed to on_message
 
         if self.ssl:
+            # Verifies the broker certificate (CERT_REQUIRED + hostname check)
+            # against the system certificate store unless CA_FILE is given below
             self.client.tls_set()
+        else:
+            message = f"MqttStream: TLS disabled, connecting to {self.hostname}:{self.port} in plaintext"
+            if self.username or self.password:
+                message += " (MQTT credentials will be sent unencrypted)"
+            Logger.warn(message)
         if self.username and self.password:
             self.client.username_pw_set(self.username, self.password)
         # You still need the ca_file if you're using your own cert and key
