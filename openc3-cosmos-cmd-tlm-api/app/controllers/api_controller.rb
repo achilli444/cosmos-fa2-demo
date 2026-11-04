@@ -18,6 +18,18 @@
 require 'openc3/utilities/open_telemetry'
 
 class ApiController < ApplicationController
+  # Request headers that carry an authenticator (session token, service password,
+  # cookies). Their values are replaced before anything is written to the log stream.
+  FILTERED_HEADER_PATTERN = /AUTHORIZATION|COOKIE|TOKEN|PASSWORD|PASSWD|SECRET|API_KEY/i
+  FILTERED = '[FILTERED]'.freeze
+  # JSON-RPC methods whose positional params are command parameter values. Only the
+  # target and command names are logged here; the command pipeline logs the command
+  # itself with OBFUSCATE parameters masked.
+  CMD_METHODS = %w[
+    cmd cmd_raw cmd_no_range_check cmd_raw_no_range_check cmd_no_hazardous_check
+    cmd_raw_no_hazardous_check cmd_no_checks cmd_raw_no_checks build_cmd build_command
+  ].freeze
+
   def ping
     render plain: 'OK'
   end
@@ -29,14 +41,15 @@ class ApiController < ApplicationController
       if request.post?
         request_headers = Hash[*request.env.select {|k,_v| k.start_with? 'HTTP_'}.sort.flatten]
         request_data = req.body.read
-        span.add_attributes({ "request_data" => request_data }) if span and request_data.length <= 1000
+        loggable_data = loggable_request(request_data)
+        span.add_attributes({ "request_data" => loggable_data }) if span and loggable_data.length <= 1000
         status = nil
         content_type = nil
         body = nil
         begin
           # Intentionally log to the nil scope so we don't clog the CmdTlmServer log messages
-          OpenC3::Logger.info("API data: #{request_data}", scope: nil, user: username())
-          OpenC3::Logger.debug("API headers: #{request_headers}", scope: nil, user: username())
+          OpenC3::Logger.info("API data: #{loggable_data}", scope: nil, user: username())
+          OpenC3::Logger.debug("API headers: #{loggable_headers(request_headers)}", scope: nil, user: username())
           status, content_type, body = handle_post(request_data, request_headers)
         rescue OpenC3::AuthError, OpenC3::ForbiddenError => e
           id = 1
@@ -115,5 +128,51 @@ class ApiController < ApplicationController
       status = 200 # OK
     end
     return status, "application/json-rpc", response_data
+  end
+
+  private
+
+  def loggable_headers(request_headers)
+    request_headers.to_h do |key, value|
+      [key, key.to_s.match?(FILTERED_HEADER_PATTERN) ? FILTERED : value]
+    end
+  end
+
+  # Log representation of a JSON-RPC request: method and id always, target and
+  # command names for command methods, and params passed through the Rails
+  # filter_parameters list (token, password, secret, ...) for everything else.
+  def loggable_request(request_data)
+    hash = JSON.parse(request_data, allow_nan: true)
+    return "<JSON-RPC request is not an object>" unless hash.is_a?(Hash)
+
+    method = hash['method'].to_s
+    summary = { 'method' => method, 'id' => hash['id'] }
+    params = hash['params']
+    if CMD_METHODS.include?(method.downcase)
+      summary['target_name'], summary['cmd_name'] = cmd_target_and_name(params)
+    elsif params
+      summary['params'] = parameter_filter.filter('params' => params)['params']
+    end
+    if hash['keyword_params'].is_a?(Hash)
+      summary['keyword_params'] = parameter_filter.filter(hash['keyword_params'])
+    end
+    summary.to_json(allow_nan: true)
+  rescue StandardError
+    "<unparseable JSON-RPC request (#{request_data.to_s.bytesize} bytes)>"
+  end
+
+  # Supports both cmd("TGT CMD with ...") and cmd("TGT", "CMD", {...})
+  def cmd_target_and_name(params)
+    return [nil, nil] unless params.is_a?(Array) and params[0].is_a?(String)
+
+    if params[1].is_a?(String)
+      params[0, 2]
+    else
+      params[0].split[0, 2]
+    end
+  end
+
+  def parameter_filter
+    @parameter_filter ||= ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
   end
 end
