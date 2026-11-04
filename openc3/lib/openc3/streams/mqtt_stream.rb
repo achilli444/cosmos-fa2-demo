@@ -27,6 +27,7 @@ module OpenC3
     attr_accessor :cert
     attr_accessor :key
     attr_accessor :ca_file
+    attr_accessor :allow_insecure
 
     def initialize(hostname, port = 1883, ssl = false, write_topic = nil, read_topic = nil, ack_timeout = 5)
       super()
@@ -43,6 +44,7 @@ module OpenC3
       @cert = nil
       @key = nil
       @ca_file = nil
+      @allow_insecure = false
 
       # Mutex on write is needed to protect from commands coming in from more than one tool
       @write_mutex = Mutex.new
@@ -66,6 +68,12 @@ module OpenC3
         @client.ssl = true
         @client.ca_file = @ca_file.path
       end
+      ssl = (@ssl or (@cert and @key) or @ca_file) ? true : false
+      MqttSecurity.apply(@client,
+                         ssl: ssl,
+                         credentials: (@username or @password) ? true : false,
+                         allow_insecure: @allow_insecure,
+                         name: 'MqttStream')
       @client.connect
       @client.subscribe(@read_topic) if @read_topic
     end

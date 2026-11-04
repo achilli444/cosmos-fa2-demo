@@ -83,6 +83,38 @@ end
 $VERBOSE = saved_verbose
 
 module OpenC3
+  # TLS and credential policy shared by MqttInterface and MqttStream.
+  # ruby-mqtt only verifies the broker certificate when a CA_FILE is given and
+  # happily sends USERNAME/PASSWORD over a plaintext socket, so both are
+  # tightened here unless the plugin explicitly opts out with ALLOW_INSECURE.
+  module MqttSecurity
+    # @param client [MQTT::Client] Client with ssl, username and password already set
+    # @param ssl [Boolean] Whether the connection will use TLS
+    # @param credentials [Boolean] Whether a USERNAME or PASSWORD is configured
+    # @param allow_insecure [Boolean] Explicit opt-in to plaintext credentials or unverified TLS
+    # @param name [String] Name used in log and error messages
+    def self.apply(client, ssl:, credentials:, allow_insecure:, name:)
+      if ssl
+        if allow_insecure
+          Logger.warn "#{name}: ALLOW_INSECURE set, MQTT broker certificate will not be verified"
+          client.ssl_context.verify_mode = OpenSSL::SSL::VERIFY_NONE
+          client.verify_host = false
+        else
+          # Verify the broker chain against CA_FILE if given, otherwise the system trust store
+          client.ssl_context.set_params(verify_mode: OpenSSL::SSL::VERIFY_PEER)
+        end
+      elsif credentials
+        if allow_insecure
+          Logger.warn "#{name}: ALLOW_INSECURE set, sending MQTT USERNAME/PASSWORD without SSL"
+        else
+          raise "#{name}: Refusing to send MQTT USERNAME/PASSWORD without SSL. Enable SSL (or set CERT/KEY or CA_FILE) or set OPTION ALLOW_INSECURE true"
+        end
+      else
+        Logger.warn "#{name}: Connecting to MQTT broker without SSL, traffic is unencrypted"
+      end
+    end
+  end
+
   # Base class for interfaces that send and receive messages over MQTT
   class MqttInterface < Interface
     # @param hostname [String] MQTT server to connect to
@@ -99,6 +131,7 @@ module OpenC3
       @cert = nil
       @key = nil
       @ca_file = nil
+      @allow_insecure = false
 
       @write_topics = []
       @read_topics = []
@@ -142,6 +175,11 @@ module OpenC3
         @client.ssl = true
         @client.ca_file = @ca_file.path
       end
+      MqttSecurity.apply(@client,
+                         ssl: ssl_enabled?,
+                         credentials: (@username or @password) ? true : false,
+                         allow_insecure: @allow_insecure,
+                         name: @name)
       @client.connect
       @read_packets_by_topic.each do |topic, _|
         Logger.info "#{@name}: Subscribing to #{topic}"
@@ -228,6 +266,7 @@ module OpenC3
     # CERT - Public Key for Client Cert Auth
     # KEY - Private Key for Client Cert Auth
     # CA_FILE - Certificate Authority for Client Cert Auth
+    # ALLOW_INSECURE - Permit USERNAME/PASSWORD without SSL and skip broker certificate verification
     # (see Interface#set_option)
     def set_option(option_name, option_values)
       super(option_name, option_values)
@@ -253,6 +292,8 @@ module OpenC3
         @ca_file = Tempfile.new('ca_file')
         @ca_file.write(option_values[0])
         @ca_file.close
+      when 'ALLOW_INSECURE'
+        @allow_insecure = ConfigParser.handle_true_false(option_values[0])
       end
     end
 
@@ -261,6 +302,7 @@ module OpenC3
       result['hostname'] = @hostname
       result['port'] = @port
       result['ssl'] = @ssl
+      result['allow_insecure'] = @allow_insecure
       result['ack_timeout'] = @ack_timeout
       result['username'] = @username
       result['password'] = 'Set' if @password
@@ -273,6 +315,13 @@ module OpenC3
       result['options'].delete('CA_FILE')
       result['read_packets_by_topic'] = @read_packets_by_topic
       return result
+    end
+
+    protected
+
+    # CERT/KEY and CA_FILE force SSL on in connect
+    def ssl_enabled?
+      return (@ssl or (@cert and @key) or @ca_file) ? true : false
     end
   end
 end

@@ -38,6 +38,7 @@ module OpenC3
       @cert = nil
       @key = nil
       @ca_file = nil
+      @allow_insecure = false
     end
 
     def connection_string
@@ -57,6 +58,7 @@ module OpenC3
       @stream.cert = @cert if @cert
       @stream.key = @key if @key
       @stream.ca_file = @ca_file if @ca_file
+      @stream.allow_insecure = @allow_insecure
       super()
     end
 
@@ -66,6 +68,7 @@ module OpenC3
     # CERT - Public Key for Client Cert Auth
     # KEY - Private Key for Client Cert Auth
     # CA_FILE - Certificate Authority for Client Cert Auth
+    # ALLOW_INSECURE - Permit USERNAME/PASSWORD without SSL and skip broker certificate verification
     # (see Interface#set_option)
     def set_option(option_name, option_values)
       super(option_name, option_values)
@@ -91,6 +94,8 @@ module OpenC3
         @ca_file = Tempfile.new('ca_file')
         @ca_file.write(option_values[0])
         @ca_file.close
+      when 'ALLOW_INSECURE'
+        @allow_insecure = ConfigParser.handle_true_false(option_values[0])
       end
     end
 
@@ -99,6 +104,7 @@ module OpenC3
       result['hostname'] = @hostname
       result['port'] = @port
       result['ssl'] = @ssl
+      result['allow_insecure'] = @allow_insecure
       result['write_topic'] = @write_topic
       result['read_topic'] = @read_topic
       result['ack_timeout'] = @ack_timeout

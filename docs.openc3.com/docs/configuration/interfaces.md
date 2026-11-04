@@ -391,6 +391,10 @@ The MQTT interface is typically used for connecting to Internet of Things (IoT) 
 
 Options are added directly beneath the interface definition as shown in the example.
 
+:::note Credentials require SSL (Ruby)
+The Ruby MQTT interfaces refuse to connect when USERNAME or PASSWORD is set and SSL is off (and no CERT/KEY or CA_FILE forces it on), and they verify the broker certificate against CA_FILE or the system trust store whenever SSL is on. Set `OPTION ALLOW_INSECURE true` to deliberately override both checks, e.g. for a local development broker.
+:::
+
 #### ACK_TIMEOUT
 
 Time to wait when connecting to the MQTT broker.
@@ -419,6 +423,10 @@ Password to decrypt the CERT and KEY files (Python only).
 
 Certificate Authority certificate filename that is to be treated as trusted by this client.
 
+#### ALLOW_INSECURE
+
+Allow USERNAME / PASSWORD to be sent without SSL and skip broker certificate verification when SSL is enabled (Ruby only). Defaults to false. Only set this for brokers on a trusted network such as a local development broker.
+
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python">
 This example uses the [SECRET](plugins#secret) keyword to set the PASSWORD option in the Interface.
@@ -437,7 +445,7 @@ INTERFACE MQTT_INT openc3/interfaces/mqtt_interface.py test.mosquitto.org 8884
 This example uses the [SECRET](plugins#secret) keyword to set the PASSWORD option in the Interface.
 
 ```cosmos
-INTERFACE MQTT_INT mqtt_interface.rb test.mosquitto.org 8884
+INTERFACE MQTT_INT mqtt_interface.rb test.mosquitto.org 8884 true
   OPTION USERNAME rw
   # Create an env variable called MQTT_PASSWORD with the secret named PASSWORD
   # and set an OPTION called PASSWORD with the secret value
@@ -482,7 +490,7 @@ The MQTT streaming interface is typically used for connecting to Internet of Thi
 | Protocol Type      | See Protocols.                                                                          | No       |
 | Protocol Arguments | See Protocols for the arguments each stream protocol takes.                             | No       |
 
-Options are added directly beneath the interface definition as shown in the example. Same options as the [MQTT Interface](#mqtt-interface): ACK_TIMEOUT, USERNAME, PASSWORD, CERT, KEY, KEYFILE_PASSWORD, CA_FILE.
+Options are added directly beneath the interface definition as shown in the example. Same options as the [MQTT Interface](#mqtt-interface): ACK_TIMEOUT, USERNAME, PASSWORD, CERT, KEY, KEYFILE_PASSWORD, CA_FILE, ALLOW_INSECURE.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python">
@@ -502,7 +510,7 @@ INTERFACE MQTT_INT openc3/interfaces/mqtt_stream_interface.py test.mosquitto.org
 This example uses the [SECRET](plugins#secret) keyword to set the PASSWORD option in the Interface.
 
 ```cosmos
-INTERFACE MQTT_INT mqtt_stream_interface.rb test.mosquitto.org 8884 false write read
+INTERFACE MQTT_INT mqtt_stream_interface.rb test.mosquitto.org 8884 true write read
   OPTION USERNAME rw
   # Create an env variable called MQTT_PASSWORD with the secret named PASSWORD
   # and set an OPTION called PASSWORD with the secret value
