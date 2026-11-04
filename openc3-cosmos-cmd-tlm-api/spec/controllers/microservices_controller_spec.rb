@@ -85,6 +85,40 @@ RSpec.describe MicroservicesController, type: :controller do
   end
 
   describe "GET traefik" do
+    before(:each) do
+      request.headers["Authorization"] = ENV["OPENC3_SERVICE_PASSWORD"]
+    end
+
+    it "rejects requests without a service token" do
+      request.headers["Authorization"] = nil
+
+      get :traefik
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(JSON.parse(response.body)["message"]).to eq("Service token is required")
+    end
+
+    it "rejects user session tokens" do
+      allow(OpenC3::AuthModel).to receive(:verify_no_service).and_return(true)
+      request.headers["Authorization"] = "user-session-token"
+
+      get :traefik
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(OpenC3::AuthModel).not_to have_received(:verify_no_service)
+    end
+
+    it "fails closed when no service password is configured" do
+      allow(ENV).to receive(:[]).and_call_original
+      allow(ENV).to receive(:[]).with("OPENC3_SERVICE_PASSWORD").and_return(nil)
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("OPENC3_SERVICE_PASSWORD", nil).and_return(nil)
+
+      get :traefik
+
+      expect(response).to have_http_status(:unauthorized)
+    end
+
     it "generates traefik configuration" do
       get :traefik
 
