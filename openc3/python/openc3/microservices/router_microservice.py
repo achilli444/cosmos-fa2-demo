@@ -13,6 +13,7 @@ import os
 import sys
 import traceback
 
+from openc3.config.config_parser import ConfigParser
 from openc3.microservices.interface_microservice import InterfaceMicroservice
 from openc3.models.router_status_model import RouterStatusModel
 from openc3.system.system import System
@@ -70,10 +71,37 @@ class RouterMicroservice(InterfaceMicroservice):
                 except Exception:
                     self.logger.error(f"Problem formatting command from router=\n{traceback.format_exc()}")
 
-                RouterTopic.route_command(packet, self.interface.cmd_target_names, scope=self.scope)
+                # Routers are an alternate command path with no interactive user to confirm
+                # hazardous commands so they are rejected unless the router explicitly allows them
+                hazardous_check = not self.allow_hazardous()
+                if hazardous_check and packet.identified():
+                    hazardous, hazardous_description = System.commands.cmd_pkt_hazardous(packet)
+                    if hazardous:
+                        self.logger.error(
+                            f"{self.interface.name}: Hazardous command {packet.target_name} {packet.packet_name} rejected: {hazardous_description}. "
+                            "Set OPTION ALLOW_HAZARDOUS TRUE on the router to allow hazardous commands.",
+                            user=self.name,
+                            scope=self.scope,
+                        )
+                        return
+                # Stamp the router's service identity as the username so the command log records who sent it
+                RouterTopic.route_command(
+                    packet,
+                    self.interface.cmd_target_names,
+                    username=self.name,
+                    hazardous_check=hazardous_check,
+                    scope=self.scope,
+                )
             except Exception as error:
                 self.error = error
                 self.logger.error(f"Error routing command from {self.interface.name}\n{traceback.format_exc()}")
+
+    def allow_hazardous(self):
+        """OPTION ALLOW_HAZARDOUS TRUE on the router permits forwarding hazardous commands"""
+        option = self.interface.options.get("ALLOW_HAZARDOUS")
+        if not option:
+            return False
+        return ConfigParser.handle_true_false(option[0])
 
 
 if os.path.basename(__file__) == os.path.basename(sys.argv[0]):

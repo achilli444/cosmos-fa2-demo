@@ -249,6 +249,8 @@ module OpenC3
             hazardous_check = ConfigParser.handle_true_false(msg_hash['hazardous_check'])
           elsif msg_hash['cmd_buffer']
             cmd_buffer = msg_hash['cmd_buffer']
+            # Routers stamp hazardous_check so the hazardous commands they forward are rejected
+            hazardous_check = ConfigParser.handle_true_false(msg_hash['hazardous_check']) if msg_hash.key?('hazardous_check')
           end
 
           begin
@@ -303,7 +305,11 @@ module OpenC3
             # Initial Are you sure? Hazardous check
             # Return back the error, description, and the formatted command
             # This allows the error handler to simply re-send the command
-            next "HazardousError\n#{hazardous_description}\n#{msg_hash['cmd_string']}" if hazardous_check and hazardous and not release_critical
+            if hazardous_check and hazardous and not release_critical
+              # Raw (router) commands have no interactive user to confirm so log the rejection
+              @logger.warn("#{@interface.name}: Hazardous command #{command.target_name} #{command.packet_name} rejected: #{hazardous_description}", user: msg_hash['username'], scope: @scope) if cmd_buffer
+              next "HazardousError\n#{hazardous_description}\n#{msg_hash['cmd_string']}"
+            end
 
             # Check for Critical Command
             if @critical_commanding and @critical_commanding != 'OFF' and not release_critical

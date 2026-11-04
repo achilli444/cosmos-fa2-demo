@@ -2515,7 +2515,7 @@ Removes a command from the queue and executes it.
 <TabItem value="python" label="Python Syntax">
 
 ```python
-queue_exec('<Queue Name>', '<Optional Index>')
+queue_exec('<Queue Name>', '<Optional Index>', hazardous_confirmed=False)
 ```
 
 </TabItem>
@@ -2523,16 +2523,17 @@ queue_exec('<Queue Name>', '<Optional Index>')
 <TabItem value="ruby" label="Ruby Syntax">
 
 ```ruby
-queue_exec('<Queue Name>', '<Optional Index>')
+queue_exec('<Queue Name>', '<Optional Index>', hazardous_confirmed: false)
 ```
 
 </TabItem>
 </Tabs>
 
-| Parameter  | Description                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------- |
-| Queue Name | Case sensitive name of the queue                                                                                |
-| Index      | Remove and execute at the specified index. If the index is not given the first command is removed and executed. |
+| Parameter           | Description                                                                                                                                                                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Queue Name          | Case sensitive name of the queue                                                                                                                                                                                                                               |
+| Index               | Remove and execute at the specified index. If the index is not given the first command is removed and executed.                                                                                                                                                |
+| hazardous_confirmed | Hazardous commands are not executed and the request fails with HTTP 409 unless this is true, which sends the command with `cmd_no_hazardous_check` and requires the `cmd_no_hazardous_check` [permission](/docs/guides/roles-permissions). Default is false. |
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Example">

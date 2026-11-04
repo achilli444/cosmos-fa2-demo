@@ -327,6 +327,39 @@ module OpenC3
         expect(captured.extra['queue_username']).to eql("DEFAULT__MULTI__INST")
       end
 
+      it "rejects hazardous raw (router) commands stamped with hazardous_check" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        expect(CommandDecomTopic).not_to receive(:write_packet)
+        capture_io do |stdout|
+          Thread.new { im.run }
+          sleep 0.01
+          buffer = System.commands.build_cmd("INST", "CLEAR", {}, false, false).buffer(false)
+          Topic.write_topic("{DEFAULT__CMD}TARGET__INST", { 'target_name' => 'INST', 'cmd_name' => 'CLEAR', 'cmd_buffer' => buffer,
+            'hazardous_check' => 'true', 'username' => 'DEFAULT__ROUTER__INST_ROUTER' }, '*', 100)
+          sleep 0.1
+          im.shutdown
+          expect(stdout.string).to include("Hazardous command INST CLEAR rejected")
+        end
+      end
+
+      it "sends hazardous raw (router) commands when hazardous_check is false and records the router identity" do
+        im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+        captured = nil
+        allow(CommandDecomTopic).to receive(:write_packet) do |command, _scope|
+          captured = command
+        end
+        Thread.new { im.run }
+        sleep 0.01
+        buffer = System.commands.build_cmd("INST", "CLEAR", {}, false, false).buffer(false)
+        Topic.write_topic("{DEFAULT__CMD}TARGET__INST", { 'target_name' => 'INST', 'cmd_name' => 'CLEAR', 'cmd_buffer' => buffer,
+          'hazardous_check' => 'false', 'username' => 'DEFAULT__ROUTER__INST_ROUTER' }, '*', 100)
+        sleep 0.1
+        im.shutdown
+        expect(captured).to_not be_nil
+        expect(captured.packet_name).to eql("CLEAR")
+        expect(captured.extra['username']).to eql("DEFAULT__ROUTER__INST_ROUTER")
+      end
+
       it "handles obfuscated params" do
         im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
         all = InterfaceStatusModel.all(scope: "DEFAULT")

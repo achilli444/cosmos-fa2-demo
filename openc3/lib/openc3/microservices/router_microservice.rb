@@ -74,12 +74,31 @@ module OpenC3
             @logger.error "Problem formatting command from router:\n#{err.formatted}"
           end
 
-          RouterTopic.route_command(packet, @interface.cmd_target_names, scope: @scope)
+          # Routers are an alternate command path with no interactive user to confirm
+          # hazardous commands so they are rejected unless the router explicitly allows them
+          hazardous_check = !allow_hazardous?
+          if hazardous_check and packet.identified?
+            hazardous, hazardous_description = System.commands.cmd_pkt_hazardous?(packet)
+            if hazardous
+              @logger.error("#{@interface.name}: Hazardous command #{packet.target_name} #{packet.packet_name} rejected: #{hazardous_description}. Set OPTION ALLOW_HAZARDOUS TRUE on the router to allow hazardous commands.", user: @name, scope: @scope)
+              return
+            end
+          end
+          # Stamp the router's service identity as the username so the command log records who sent it
+          RouterTopic.route_command(packet, @interface.cmd_target_names, username: @name, hazardous_check: hazardous_check, scope: @scope)
         rescue Exception => err
           @error = err
           @logger.error "Error routing command from #{@interface.name}\n#{err.formatted}"
         end
       end
+    end
+
+    # OPTION ALLOW_HAZARDOUS TRUE on the router permits forwarding hazardous commands
+    def allow_hazardous?
+      option = @interface.options['ALLOW_HAZARDOUS']
+      return false unless option and option[0]
+
+      return ConfigParser.handle_true_false(option[0])
     end
   end
 end

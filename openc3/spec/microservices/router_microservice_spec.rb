@@ -192,5 +192,64 @@ module OpenC3
       sleep 0.5
       expect(Thread.list.count).to eql init_threads
     end
+
+    describe "handle_packet hazardous gating" do
+      before(:each) do
+        @uservice = RouterMicroservice.new("DEFAULT__ROUTER__TEST_INT")
+        @router = @uservice.instance_variable_get(:@interface)
+        @router.cmd_target_enabled['INST'] = true
+        @routed = nil
+        allow(RouterTopic).to receive(:route_command) { |*args, **kwargs| @routed = [args, kwargs] }
+      end
+
+      after(:each) do
+        @uservice.shutdown
+        sleep 0.1
+      end
+
+      it "routes commands with the router identity and hazardous_check enabled" do
+        packet = System.commands.build_cmd("INST", "ABORT", {}, false, false)
+        @uservice.handle_packet(packet)
+        expect(@routed).not_to be_nil
+        expect(@routed[0][0].packet_name).to eql "ABORT"
+        expect(@routed[1][:username]).to eql "DEFAULT__ROUTER__TEST_INT"
+        expect(@routed[1][:hazardous_check]).to be true
+      end
+
+      it "rejects hazardous commands by default" do
+        packet = System.commands.build_cmd("INST", "CLEAR", {}, false, false)
+        capture_io do |stdout|
+          @uservice.handle_packet(packet)
+          expect(stdout.string).to include("Hazardous command INST CLEAR rejected")
+        end
+        expect(@routed).to be_nil
+      end
+
+      it "rejects commands with hazardous parameters by default" do
+        packet = System.commands.build_cmd("INST", "COLLECT", { "TYPE" => "SPECIAL" }, false, false)
+        capture_io do |stdout|
+          @uservice.handle_packet(packet)
+          expect(stdout.string).to include("Hazardous command INST COLLECT rejected")
+        end
+        expect(@routed).to be_nil
+      end
+
+      it "forwards hazardous commands without the hazardous check when OPTION ALLOW_HAZARDOUS is TRUE" do
+        @router.set_option('ALLOW_HAZARDOUS', ['TRUE'])
+        packet = System.commands.build_cmd("INST", "CLEAR", {}, false, false)
+        @uservice.handle_packet(packet)
+        expect(@routed).not_to be_nil
+        expect(@routed[0][0].packet_name).to eql "CLEAR"
+        expect(@routed[1][:username]).to eql "DEFAULT__ROUTER__TEST_INT"
+        expect(@routed[1][:hazardous_check]).to be false
+      end
+
+      it "keeps the hazardous check when OPTION ALLOW_HAZARDOUS is FALSE" do
+        @router.set_option('ALLOW_HAZARDOUS', ['FALSE'])
+        packet = System.commands.build_cmd("INST", "CLEAR", {}, false, false)
+        capture_io { @uservice.handle_packet(packet) }
+        expect(@routed).to be_nil
+      end
+    end
   end
 end
