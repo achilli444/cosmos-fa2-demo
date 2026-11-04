@@ -738,6 +738,63 @@ RSpec.describe StorageController, type: :controller do
       expect(response).to have_http_status(:internal_server_error)
       expect(JSON.parse(response.body)["message"]).to eq("Must pass bucket or volume parameter!")
     end
+
+    describe "logs bucket minimum retention" do
+      let(:bucket_client) { instance_double(OpenC3::Bucket) }
+      let(:log_key) { "DEFAULT/raw_logs/cmd/INST/20260101/20260101000000000000000__20260101001000000000000.bin.gz" }
+
+      before do
+        ENV["OPENC3_LOCAL_MODE"] = nil
+        ENV["OPENC3_LOG_MIN_RETAIN_TIME"] = "86400"
+        allow(OpenC3::Bucket).to receive(:getClient).and_return(bucket_client)
+        allow(bucket_client).to receive(:delete_object)
+      end
+
+      after do
+        ENV.delete("OPENC3_LOG_MIN_RETAIN_TIME")
+      end
+
+      it "refuses to delete a log file younger than OPENC3_LOG_MIN_RETAIN_TIME" do
+        allow(bucket_client).to receive(:head_object).and_return(double(last_modified: Time.now - 60))
+        allow(OpenC3::Logger).to receive(:warn)
+
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: log_key, scope: "DEFAULT"}
+        expect(response).to have_http_status(:forbidden)
+        expect(JSON.parse(response.body)["message"]).to include("minimum log retention period (86400s)")
+        expect(bucket_client).not_to have_received(:delete_object)
+        expect(OpenC3::Logger).to have_received(:warn).with(/Delete refused, within minimum log retention/, hash_including(user: anything))
+      end
+
+      it "refuses to delete a log file whose age can not be determined" do
+        allow(bucket_client).to receive(:head_object).and_return(double(last_modified: nil))
+
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: log_key, scope: "DEFAULT"}
+        expect(response).to have_http_status(:forbidden)
+        expect(bucket_client).not_to have_received(:delete_object)
+      end
+
+      it "deletes a log file older than the minimum and records it at info" do
+        allow(bucket_client).to receive(:head_object).and_return(double(last_modified: Time.now - 90000))
+
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: log_key, scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+        expect(bucket_client).to have_received(:delete_object).with(bucket: "logs-bucket", key: log_key)
+        expect(OpenC3::Logger).to have_received(:info).with("Deleted: logs-bucket/#{log_key}", hash_including(scope: "DEFAULT"))
+      end
+
+      it "does not consult retention for other buckets" do
+        delete :delete, params: {bucket: "OPENC3_CONFIG_BUCKET", object_id: "file.txt", scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+        expect(bucket_client).to have_received(:delete_object)
+      end
+
+      it "skips the retention check when no minimum is configured" do
+        ENV["OPENC3_LOG_MIN_RETAIN_TIME"] = "0"
+        delete :delete, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: log_key, scope: "DEFAULT"}
+        expect(response).to have_http_status(:ok)
+        expect(bucket_client).to have_received(:delete_object)
+      end
+    end
   end
 
   describe "DELETE delete_directory" do
@@ -785,6 +842,28 @@ RSpec.describe StorageController, type: :controller do
         expect(result["deleted_count"]).to eq(1500)
         # Should have been called twice (1000 + 500)
         expect(bucket_client).to have_received(:delete_objects).twice
+      end
+
+      it "keeps logs bucket objects inside the minimum retention and audits the rest" do
+        ENV["OPENC3_LOCAL_MODE"] = nil
+        ENV["OPENC3_LOG_MIN_RETAIN_TIME"] = "86400"
+        objects = [
+          double(key: "DEFAULT/raw_logs/cmd/INST/20260101/old.bin.gz", last_modified: Time.now - 90000),
+          double(key: "DEFAULT/raw_logs/cmd/INST/20260102/new.bin.gz", last_modified: Time.now - 60),
+        ]
+        allow(bucket_client).to receive(:list_objects).and_return(objects)
+        allow(bucket_client).to receive(:delete_objects)
+        allow(OpenC3::Logger).to receive(:warn)
+
+        delete :delete_directory, params: {bucket: "OPENC3_LOGS_BUCKET", object_id: "DEFAULT/raw_logs/cmd/INST", scope: "DEFAULT"}
+        ENV.delete("OPENC3_LOG_MIN_RETAIN_TIME")
+        expect(response).to have_http_status(:ok)
+        result = JSON.parse(response.body)
+        expect(result["deleted_count"]).to eq(1)
+        expect(result["retained_count"]).to eq(1)
+        expect(bucket_client).to have_received(:delete_objects).with(bucket: "logs-bucket", keys: ["DEFAULT/raw_logs/cmd/INST/20260101/old.bin.gz"])
+        expect(OpenC3::Logger).to have_received(:info).with("Deleted: logs-bucket/DEFAULT/raw_logs/cmd/INST/20260101/old.bin.gz", hash_including(scope: "DEFAULT"))
+        expect(OpenC3::Logger).to have_received(:warn).with(/kept 1 objects within minimum log retention/, anything)
       end
 
       it "handles local mode for bucket directories" do

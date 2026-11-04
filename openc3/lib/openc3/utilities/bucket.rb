@@ -73,6 +73,10 @@ module OpenC3
       raise NotImplementedError, "#{self.class} has not implemented method '#{__method__}'"
     end
 
+    def head_object(bucket:, key:)
+      raise NotImplementedError, "#{self.class} has not implemented method '#{__method__}'"
+    end
+
     def delete_object(bucket:, key:)
       raise NotImplementedError, "#{self.class} has not implemented method '#{__method__}'"
     end
