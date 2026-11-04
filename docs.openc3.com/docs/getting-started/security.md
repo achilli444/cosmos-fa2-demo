@@ -148,6 +148,38 @@ The `OPENC3_SERVICE_PASSWORD` is a backend service account password that allows 
 
 Note: In COSMOS Enterprise with Keycloak, user offline access tokens can be used instead when available, but the service password serves as a fallback for automated operations.
 
+### Core Roles and Command Attribution
+
+COSMOS Core has one shared frontend password and one service password, so it cannot tell individual people apart. It still records *which login* and *which credential* performed every API call, and it enforces a role on each of them. Every session token carries the identity it was created with:
+
+| Credential                                 | Recorded username      | Role environment variable | Default |
+| ------------------------------------------ | ---------------------- | ------------------------- | ------- |
+| Frontend password (login page, `/auth/verify`) | `operator-<8 hex chars>` (unique per login) | `OPENC3_SESSION_ROLE`     | `admin` |
+| `OPENC3_SERVICE_PASSWORD` (`/auth/verify_service`) | `service-<8 hex chars>` (unique per login), or `service` when the password itself is sent as the token | `OPENC3_SERVICE_ROLE` | `admin` |
+| Trusted in-cluster code (operator, decom, limits responses) | `OPENC3_MICROSERVICE_NAME` | none (always `admin`)     | `admin` |
+
+One-time tokens (`/auth/otp`) keep the identity of the session that requested them. The username is stamped on every command (visible as "Executed By" in Command History and in the command log) and on the cmd-tlm-api and script-runner-api request logs.
+
+The roles carry the same permissions as the [Enterprise built-in roles](/docs/guides/roles-permissions) of the same name, with `admin` holding every permission because Core has nobody else to hold the administrative and approval rights:
+
+| Role       | Permissions                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| `admin`    | everything                                                                                        |
+| `operator` | `system`, `system_set`, `tlm`, `tlm_set`, `cmd_info`, `cmd_raw`, `cmd`, `script_view`, `script_edit`, `script_run` |
+| `runner`   | `system`, `system_set`, `tlm`, `tlm_set`, `cmd_info`, `cmd_raw`, `cmd`, `script_view`, `script_run` |
+| `viewer`   | `system`, `tlm`, `cmd_info`, `script_view`                                                        |
+
+A request for a permission the role does not grant is rejected with HTTP 403 and the message `User <username> does not have permission '<permission>' for <target> <packet>`. Requests that name no permission, or an unknown one, are rejected the same way, and an unknown role name in either variable rejects every request rather than granting access.
+
+For example, a telemetry-only console that must never command the vehicle:
+
+```bash
+OPENC3_SESSION_ROLE=viewer
+OPENC3_SERVICE_ROLE=runner
+```
+
+With this configuration operators logged in through the browser can view telemetry, screens and scripts but cannot send commands, change limits, run scripts or administer plugins; queued commands and Script Runner scripts, which authenticate with the service password, can still command and run scripts but cannot edit scripts or administer the system. Individual user accounts and per-user roles require COSMOS Enterprise.
+
 ### Rails Application Secret
 
 | Variable          | Description                                                     |

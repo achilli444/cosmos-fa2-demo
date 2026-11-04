@@ -43,7 +43,7 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
         clear_user_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        render :plain => OpenC3::AuthModel.generate_session(user: OpenC3::Authorization.session_user)
       else
         record_user_bad_attempt
         head :unauthorized
@@ -96,7 +96,7 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
         clear_service_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        render :plain => OpenC3::AuthModel.generate_session(user: OpenC3::Authorization.session_user(service: true))
       else
         record_service_bad_attempt
         head :unauthorized
@@ -124,7 +124,7 @@ class AuthController < ApplicationController
       OpenC3::AuthModel.set(params[:password], params[:old_password])
       clear_user_bad_attempts
       OpenC3::Logger.info("Password changed", user: username())
-      render :plain => OpenC3::AuthModel.generate_session()
+      render :plain => OpenC3::AuthModel.generate_session(user: OpenC3::Authorization.session_user)
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt
