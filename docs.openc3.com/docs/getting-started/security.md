@@ -247,6 +247,18 @@ OPENC3_REDIS_PASSWORD=mypassword OPENC3_BUCKET_PASSWORD=mypassword ./openc3.sh r
 
 This prevents cleartext passwords from being stored on disk, though you must provide them each time you start COSMOS.
 
+## Allowed Origins and Hosts
+
+The Script Runner API only answers requests whose `Host` header matches one of the configured COSMOS URLs, the container's own hostname (used by Traefik) or loopback, only grants cross-origin (CORS) access to the configured origins, and only accepts WebSocket connections whose `Origin` header is one of them. The list comes from `OPENC3_ALLOWED_ORIGINS` in `.env` (comma or whitespace separated `scheme://host[:port]` values). When it is not set, `OPENC3_EXTERNAL_URL` is used.
+
+```bash
+OPENC3_EXTERNAL_URL=https://cosmos.example.com
+# Only needed when COSMOS is reached at more than one URL
+OPENC3_ALLOWED_ORIGINS=https://cosmos.example.com,https://cosmos.internal.example.com:2943
+```
+
+Wildcards are not accepted. If users see `Blocked host` responses or `Request origin not allowed` in the Script Runner API logs after changing the URL COSMOS is served at, add that URL to `OPENC3_ALLOWED_ORIGINS` and restart the `openc3-cosmos-script-runner-api` container.
+
 ## Security Recommendations
 
 For production deployments:
