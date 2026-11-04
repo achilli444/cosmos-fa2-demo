@@ -18,6 +18,12 @@
 require 'openc3/utilities/open_telemetry'
 
 class ApiController < ApplicationController
+  # Request headers whose values must never reach the log store, in addition
+  # to anything already matched by Rails.application.config.filter_parameters
+  # (authorization, token, secret, ...). Cookie is included because the
+  # browser session token can arrive that way through the Traefik proxy.
+  SENSITIVE_HEADERS = [:cookie].freeze
+
   def ping
     render plain: 'OK'
   end
@@ -36,7 +42,7 @@ class ApiController < ApplicationController
         begin
           # Intentionally log to the nil scope so we don't clog the CmdTlmServer log messages
           OpenC3::Logger.info("API data: #{request_data}", scope: nil, user: username())
-          OpenC3::Logger.debug("API headers: #{request_headers}", scope: nil, user: username())
+          OpenC3::Logger.debug("API headers: #{loggable_headers(request_headers)}", scope: nil, user: username())
           status, content_type, body = handle_post(request_data, request_headers)
         rescue OpenC3::AuthError, OpenC3::ForbiddenError => e
           id = 1
@@ -115,5 +121,13 @@ class ApiController < ApplicationController
       status = 200 # OK
     end
     return status, "application/json-rpc", response_data
+  end
+
+  # Returns a copy of the request headers with credential-bearing values
+  # replaced by [FILTERED] so bearer tokens and session cookies never land
+  # in the logs. The original hash is passed to the JSON-RPC layer untouched.
+  def loggable_headers(request_headers)
+    filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters + SENSITIVE_HEADERS)
+    filter.filter(request_headers)
   end
 end
