@@ -95,6 +95,16 @@ RSpec.describe ScopesController, type: :controller do
       expect(JSON.parse(response.body)["critical_commanding"]).to eq("NORMAL")
     end
 
+    it "passes the acting user to the model so discarded approvals are attributed" do
+      expect_any_instance_of(OpenC3::ScopeModel).to receive(:update).with(username: "anonymous")
+      put :update, params: {id: "SCOPE1", scope: "DEFAULT", json: JSON.generate({"name" => "SCOPE1", "critical_commanding" => "OFF"})}
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::Logger).to have_received(:info).with(
+        /AUDIT scopes#update PUT \/openc3-api\/scopes\/SCOPE1 target=SCOPE1 params=\{json=.*critical_commanding.*OFF.*\} outcome=status=200/,
+        scope: "DEFAULT", user: "anonymous"
+      )
+    end
+
     it "returns unauthorized without authorization" do
       put :update, params: {id: "SCOPE1"}
 

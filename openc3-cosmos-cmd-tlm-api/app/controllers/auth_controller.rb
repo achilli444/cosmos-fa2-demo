@@ -19,6 +19,8 @@ require 'openc3'
 require 'openc3/models/auth_model'
 
 class AuthController < ApplicationController
+  # Login/verification requests carry credentials and are not state changes
+  skip_around_action :audit_mutating_action, except: [:set]
   MAX_BAD_ATTEMPTS = ENV.fetch('OPENC3_AUTH_RATE_LIMIT_TO', '10').to_i
   BAD_ATTEMPTS_WINDOW = ENV.fetch('OPENC3_AUTH_RATE_LIMIT_WITHIN', '120').to_i
 

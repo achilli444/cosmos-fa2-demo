@@ -119,6 +119,20 @@ module OpenC3
     end
 
     describe "update" do
+      it "records who discarded command authorities and pending critical commands (Enterprise)" do
+        stub_const("OpenC3::ScopeModel::ENTERPRISE", true)
+        stub_const("OpenC3::CmdAuthorityModel", double("CmdAuthorityModel", names: ["INST"], get_model: nil))
+        stub_const("OpenC3::CriticalCmdModel", double("CriticalCmdModel", names: ["uuid1", "uuid2"], get_model: nil))
+        allow(Logger).to receive(:info)
+        model = ScopeModel.new(name: "DEFAULT", command_authority: true, critical_commanding: "ALL")
+        model.create()
+        model.command_authority = false
+        model.critical_commanding = "OFF"
+        model.update(username: "admin")
+        expect(Logger).to have_received(:info).with("Scope DEFAULT update discarded 1 command authorities: INST", scope: "DEFAULT", user: "admin")
+        expect(Logger).to have_received(:info).with("Scope DEFAULT update discarded 2 pending critical commands: uuid1, uuid2", scope: "DEFAULT", user: "admin")
+      end
+
       it "updates command_authority and works in core" do
         model = ScopeModel.new(name: "DEFAULT", command_authority: true, critical_commanding: "ALL", updated_at: 12345)
         model.create()

@@ -19,6 +19,8 @@ require 'base64'
 require 'openc3/utilities/config_overlay'
 
 class TablesController < ApplicationController
+  # Read-only POSTs (they return derived data, nothing is stored)
+  skip_around_action :audit_mutating_action, only: [:binary, :definition, :report, :load]
   def index
     return unless authorization('system')
     scope = sanitize_params([:scope])

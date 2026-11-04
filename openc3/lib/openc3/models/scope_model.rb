@@ -24,6 +24,7 @@ require "openc3/models/setting_model"
 require "openc3/models/trigger_group_model"
 require "openc3/topics/system_events_topic"
 require "openc3/utilities/rubygems_url"
+require "openc3/utilities/authorization"
 
 begin
   require "openc3-enterprise/models/cmd_authority_model"
@@ -171,7 +172,9 @@ module OpenC3
         # If we're updating the scope and disabling command_authority
         # then we clear out all the existing values so it comes up fresh
         if update and @command_authority == false
-          CmdAuthorityModel.names(scope: @name).each do |auth_name|
+          auth_names = CmdAuthorityModel.names(scope: @name)
+          audit_purge('command authorities', auth_names) unless auth_names.empty?
+          auth_names.each do |auth_name|
             model = CmdAuthorityModel.get_model(name: auth_name, scope: @name)
             model.destroy if model
           end
@@ -180,7 +183,9 @@ module OpenC3
         # If we're updating the scope and disabling critical_commanding
         # then we clear out all the pending critical commands
         if update and @critical_commanding == "OFF"
-          CriticalCmdModel.names(scope: @name).each do |name|
+          critical_names = CriticalCmdModel.names(scope: @name)
+          audit_purge('pending critical commands', critical_names) unless critical_names.empty?
+          critical_names.each do |name|
             model = CriticalCmdModel.get_model(name: name, scope: @name)
             model.destroy if model
           end
@@ -188,6 +193,20 @@ module OpenC3
       end
 
       SystemEventsTopic.write(:scope, as_json)
+    end
+
+    # @param username [String, nil] User performing the update, recorded when the
+    #   update discards command authorities or pending critical commands
+    def update(force: false, queued: false, username: nil)
+      @audit_user = username
+      create(update: true, force: force, queued: queued)
+    end
+
+    # Records which security-relevant records a scope update throws away so the
+    # loss of pending approvals / authorities is attributable (AU-2, AU-12)
+    def audit_purge(what, names)
+      Logger.info("Scope #{@name} update discarded #{names.length} #{what}: #{names.join(', ')}",
+        scope: @name, user: @audit_user || Authorization::ANONYMOUS_USER)
     end
 
     def destroy

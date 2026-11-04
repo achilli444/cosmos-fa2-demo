@@ -153,6 +153,32 @@ RSpec.describe QueuesController, type: :controller do
   end
 
   describe "POST hold" do
+    it "records a user-attributed audit event with the outcome" do
+      hash = generate_queue_hash.merge({"state" => "HOLD"})
+      queue_model = double("QueueModel", :state= => nil, update: nil, as_json: hash)
+      allow(OpenC3::QueueModel).to receive(:get).and_return(hash)
+      allow(OpenC3::QueueModel).to receive(:from_json).and_return(queue_model)
+      allow(OpenC3::Logger).to receive(:info)
+
+      post :hold, params: {name: "QUEUE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::Logger).to have_received(:info).with(
+        "AUDIT queues#hold POST /openc3-api/queues/QUEUE1/hold target=QUEUE1 params={name=QUEUE1} outcome=status=200",
+        scope: "DEFAULT", user: "anonymous"
+      )
+    end
+
+    it "records a failed outcome when the queue does not exist" do
+      allow(OpenC3::QueueModel).to receive(:get).and_return(nil)
+      allow(OpenC3::Logger).to receive(:info)
+
+      post :hold, params: {name: "NONEXISTENT", scope: "DEFAULT"}
+      expect(OpenC3::Logger).to have_received(:info).with(
+        /AUDIT queues#hold .* target=NONEXISTENT .* outcome=status=#{response.status}/,
+        scope: "DEFAULT", user: "anonymous"
+      )
+    end
+
     it "holds a queue and returns status code 200" do
       hash = generate_queue_hash.merge({"state" => "HOLD"})
       queue_model = double("QueueModel")

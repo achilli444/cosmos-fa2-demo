@@ -30,6 +30,7 @@ require 'openc3/api/stash_api'
 require 'openc3/api/target_api'
 require 'openc3/api/tlm_api'
 require 'openc3/utilities/authorization'
+require 'openc3/utilities/audit_log'
 require 'openc3/topics/topic'
 begin
   require 'openc3-enterprise/api/cmd_authority_api'
@@ -43,5 +44,6 @@ module OpenC3
     include Extract
     include Authorization
     include ApiShared
+    include AuditLog
   end
 end

@@ -139,8 +139,10 @@ module OpenC3
     def _get_and_set_cmd(method, *args, manual:, scope:, token:)
       target_name, command_name = _extract_target_command_names(method, *args)
       authorize(permission: 'admin', target_name: target_name, packet_name: command_name, manual: manual, scope: scope, token: token)
-      command = yield TargetModel.packet(target_name, command_name, type: :CMD, scope: scope)
-      TargetModel.set_packet(target_name, command_name, command, type: :CMD, scope: scope)
+      audit(method, target: "#{target_name} #{command_name}", scope: scope, token: token) do
+        command = yield TargetModel.packet(target_name, command_name, type: :CMD, scope: scope)
+        TargetModel.set_packet(target_name, command_name, command, type: :CMD, scope: scope)
+      end
     end
 
     # @since 5.15.1

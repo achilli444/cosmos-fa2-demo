@@ -64,7 +64,9 @@ module OpenC3
     def connect_router(router_name, *router_params, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      RouterTopic.connect_router(router_name, *router_params, scope: scope)
+      audit('connect_router', target: router_name, params: router_params, scope: scope, token: token) do
+        RouterTopic.connect_router(router_name, *router_params, scope: scope)
+      end
     end
 
     # Disconnects a router and kills its command gathering thread
@@ -73,7 +75,9 @@ module OpenC3
     def disconnect_router(router_name, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      RouterTopic.disconnect_router(router_name, scope: scope)
+      audit('disconnect_router', target: router_name, scope: scope, token: token) do
+        RouterTopic.disconnect_router(router_name, scope: scope)
+      end
     end
 
     # Starts raw logging for a router
@@ -82,12 +86,14 @@ module OpenC3
     def start_raw_logging_router(router_name = 'ALL', manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      if router_name == 'ALL'
-        get_router_names().each do |router_name|
+      audit('start_raw_logging_router', target: router_name, scope: scope, token: token) do
+        if router_name == 'ALL'
+          get_router_names().each do |router_name|
+            RouterTopic.start_raw_logging(router_name, scope: scope)
+          end
+        else
           RouterTopic.start_raw_logging(router_name, scope: scope)
         end
-      else
-        RouterTopic.start_raw_logging(router_name, scope: scope)
       end
     end
 
@@ -97,12 +103,14 @@ module OpenC3
     def stop_raw_logging_router(router_name = 'ALL', manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      if router_name == 'ALL'
-        get_router_names().each do |router_name|
+      audit('stop_raw_logging_router', target: router_name, scope: scope, token: token) do
+        if router_name == 'ALL'
+          get_router_names().each do |router_name|
+            RouterTopic.stop_raw_logging(router_name, scope: scope)
+          end
+        else
           RouterTopic.stop_raw_logging(router_name, scope: scope)
         end
-      else
-        RouterTopic.stop_raw_logging(router_name, scope: scope)
       end
     end
 
@@ -126,13 +134,17 @@ module OpenC3
     def router_cmd(router_name, cmd_name, *cmd_params, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      RouterTopic.router_cmd(router_name, cmd_name, *cmd_params, scope: scope)
+      audit('router_cmd', target: router_name, params: [cmd_name, *cmd_params], scope: scope, token: token) do
+        RouterTopic.router_cmd(router_name, cmd_name, *cmd_params, scope: scope)
+      end
     end
 
     def router_protocol_cmd(router_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      RouterTopic.protocol_cmd(router_name, cmd_name, *cmd_params, read_write: read_write, index: index, scope: scope)
+      audit('router_protocol_cmd', target: router_name, params: { cmd_name: cmd_name, cmd_params: cmd_params, read_write: read_write, index: index }, scope: scope, token: token) do
+        RouterTopic.protocol_cmd(router_name, cmd_name, *cmd_params, read_write: read_write, index: index, scope: scope)
+      end
     end
 
     # Associates a target and all its commands and telemetry with a particular
@@ -143,19 +155,21 @@ module OpenC3
     def map_target_to_router(target_name, router_name, cmd_only: false, tlm_only: false, unmap_old: true, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      router = RouterModel.get_model(name: router_name, scope: scope)
-      raise "Router '#{router_name}' does not exist (map_target_to_router)" unless router
+      audit('map_target_to_router', target: router_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old }, scope: scope, token: token) do
+        router = RouterModel.get_model(name: router_name, scope: scope)
+        raise "Router '#{router_name}' does not exist (map_target_to_router)" unless router
 
-      if Array === target_name
-        target_names = target_name
-      else
-        target_names = [target_name]
+        if Array === target_name
+          target_names = target_name
+        else
+          target_names = [target_name]
+        end
+        target_names.each do |name|
+          router.map_target(name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old)
+          Logger.info("Target #{name} mapped to Router #{router_name}", scope: scope, user: audit_username(token))
+        end
+        nil
       end
-      target_names.each do |name|
-        router.map_target(name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old)
-        Logger.info("Target #{name} mapped to Router #{router_name}", scope: scope)
-      end
-      nil
     end
 
     # Removes association of a target and all its commands and telemetry with a particular
@@ -166,53 +180,59 @@ module OpenC3
     def unmap_target_from_router(target_name, router_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this router
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      router = RouterModel.get_model(name: router_name, scope: scope)
-      raise "Router '#{router_name}' does not exist (unmap_target_from_router)" unless router
+      audit('unmap_target_from_router', target: router_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only }, scope: scope, token: token) do
+        router = RouterModel.get_model(name: router_name, scope: scope)
+        raise "Router '#{router_name}' does not exist (unmap_target_from_router)" unless router
 
-      if Array === target_name
-        target_names = target_name
-      else
-        target_names = [target_name]
+        if Array === target_name
+          target_names = target_name
+        else
+          target_names = [target_name]
+        end
+        target_names.each do |name|
+          router.unmap_target(name, cmd_only: cmd_only, tlm_only: tlm_only)
+          Logger.info("Target #{name} unmapped from Router #{router_name}", scope: scope, user: audit_username(token))
+        end
+        nil
       end
-      target_names.each do |name|
-        router.unmap_target(name, cmd_only: cmd_only, tlm_only: tlm_only)
-        Logger.info("Target #{name} unmapped from Router #{router_name}", scope: scope)
-      end
-      nil
     end
 
     def router_target_enable(router_name, target_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      router = RouterModel.get_model(name: router_name, scope: scope)
-      if cmd_only and tlm_only
-        cmd_only = false
-        tlm_only = false
+      audit('router_target_enable', target: router_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only }, scope: scope, token: token) do
+        router = RouterModel.get_model(name: router_name, scope: scope)
+        if cmd_only and tlm_only
+          cmd_only = false
+          tlm_only = false
+        end
+        if not tlm_only
+          router.cmd_target_enabled[target_name.upcase] = true
+        end
+        if not cmd_only
+          router.tlm_target_enabled[target_name.upcase] = true
+        end
+        router.update
+        RouterTopic.router_target_enable(router_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
       end
-      if not tlm_only
-        router.cmd_target_enabled[target_name.upcase] = true
-      end
-      if not cmd_only
-        router.tlm_target_enabled[target_name.upcase] = true
-      end
-      router.update
-      RouterTopic.router_target_enable(router_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
     end
 
     def router_target_disable(router_name, target_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'system_set', router_name: router_name, manual: manual, scope: scope, token: token)
-      router = RouterModel.get_model(name: router_name, scope: scope)
-      if cmd_only and tlm_only
-        cmd_only = false
-        tlm_only = false
+      audit('router_target_disable', target: router_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only }, scope: scope, token: token) do
+        router = RouterModel.get_model(name: router_name, scope: scope)
+        if cmd_only and tlm_only
+          cmd_only = false
+          tlm_only = false
+        end
+        if not tlm_only
+          router.cmd_target_enabled[target_name.upcase] = false
+        end
+        if not cmd_only
+          router.tlm_target_enabled[target_name.upcase] = false
+        end
+        router.update
+        RouterTopic.router_target_disable(router_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
       end
-      if not tlm_only
-        router.cmd_target_enabled[target_name.upcase] = false
-      end
-      if not cmd_only
-        router.tlm_target_enabled[target_name.upcase] = false
-      end
-      router.update
-      RouterTopic.router_target_disable(router_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
     end
 
     def router_details(router_name, manual: false, scope: $openc3_scope, token: $openc3_token)

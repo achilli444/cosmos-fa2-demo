@@ -15,6 +15,7 @@ require 'openc3/models/gem_model'
 require 'openc3/models/python_package_model'
 
 class PackagesController < ApplicationController
+  skip_around_action :audit_mutating_action, only: [:download]
   # List the installed packages
   def index
     return unless authorization('system')

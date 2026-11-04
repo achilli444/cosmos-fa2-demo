@@ -160,6 +160,12 @@ module OpenC3
     end
 
     describe "set_tlm" do
+      it "records a user-attributed audit event" do
+        allow(Logger).to receive(:info)
+        @api.set_tlm("INST HEALTH_STATUS TEMP1 = 0.0")
+        expect(Logger).to have_received(:info).with("AUDIT set_tlm target=INST HEALTH_STATUS TEMP1 params={value=0.0, type=CONVERTED} outcome=success", scope: "DEFAULT", user: "anonymous")
+      end
+
       it "complains about unknown targets, packets, and parameters" do
         expect { @api.set_tlm("BLAH HEALTH_STATUS COLLECTS = 1") }.to raise_error(/does not exist/)
         expect { @api.set_tlm("INST UNKNOWN COLLECTS = 1") }.to raise_error(/does not exist/)
@@ -306,6 +312,14 @@ module OpenC3
     end
 
     describe "override_tlm" do
+      it "records a user-attributed audit event" do
+        allow(Logger).to receive(:info)
+        @api.override_tlm("INST HEALTH_STATUS TEMP1 = 5.0")
+        expect(Logger).to have_received(:info).with("AUDIT override_tlm target=INST HEALTH_STATUS TEMP1 params={value=5.0, type=ALL} outcome=success", scope: "DEFAULT", user: "anonymous")
+        @api.normalize_tlm("INST HEALTH_STATUS TEMP1")
+        expect(Logger).to have_received(:info).with("AUDIT normalize_tlm target=INST HEALTH_STATUS TEMP1 params={type=ALL} outcome=success", scope: "DEFAULT", user: "anonymous")
+      end
+
       it "complains about unknown targets, packets, and parameters" do
         expect { @api.override_tlm("BLAH HEALTH_STATUS COLLECTS = 1") }.to raise_error(/does not exist/)
         expect { @api.override_tlm("INST UNKNOWN COLLECTS = 1") }.to raise_error(/does not exist/)

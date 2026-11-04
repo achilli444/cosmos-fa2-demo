@@ -27,6 +27,7 @@ require 'net/http'
 require 'uri'
 
 class PluginsController < ModelController
+  skip_around_action :audit_mutating_action, only: [:modified_diff]
   def initialize
     @model_class = OpenC3::PluginModel
   end
@@ -245,6 +246,7 @@ class PluginsController < ModelController
         ["ruby", "/openc3/bin/openc3cli", "load", gem_name, scope, plugin_hash_file_path, "force"], # force install
         "plugin_install", params[:id], Time.now + 1.hour, temp_dir: temp_dir, scope: scope
       )
+      OpenC3::Logger.info("Plugin install started: #{params[:id]} (process #{result.name})", scope: scope, user: username())
       render json: result.name
     rescue Exception => error
       logger.error(error.formatted)
@@ -258,6 +260,7 @@ class PluginsController < ModelController
       id, scope = sanitize_params([:id, :scope])
       return unless id and scope
       result = OpenC3::ProcessManager.instance.spawn(["ruby", "/openc3/bin/openc3cli", "unload", id, scope], "plugin_uninstall", id, Time.now + 1.hour, scope: scope)
+      OpenC3::Logger.info("Plugin uninstall started: #{id} (process #{result.name})", scope: scope, user: username())
       render json: result.name
     rescue Exception => error
       logger.error(error.formatted)
@@ -276,6 +279,7 @@ class PluginsController < ModelController
         ["ruby", "/openc3/bin/openc3cli", "migratetouv", id, scope],
         "plugin_migrate_to_uv", id, Time.now + 1.hour, scope: scope
       )
+      OpenC3::Logger.info("Plugin migrate_to_uv started: #{id} (process #{result.name})", scope: scope, user: username())
       render json: result.name
     rescue Exception => error
       logger.error(error.formatted)

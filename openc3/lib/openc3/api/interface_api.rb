@@ -65,7 +65,9 @@ module OpenC3
     def connect_interface(interface_name, *interface_params, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      InterfaceTopic.connect_interface(interface_name, *interface_params, scope: scope)
+      audit('connect_interface', target: interface_name, params: interface_params, scope: scope, token: token) do
+        InterfaceTopic.connect_interface(interface_name, *interface_params, scope: scope)
+      end
     end
 
     # Disconnects from an interface and kills its telemetry gathering thread
@@ -74,7 +76,9 @@ module OpenC3
     def disconnect_interface(interface_name, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      InterfaceTopic.disconnect_interface(interface_name, scope: scope)
+      audit('disconnect_interface', target: interface_name, scope: scope, token: token) do
+        InterfaceTopic.disconnect_interface(interface_name, scope: scope)
+      end
     end
 
     # Starts raw logging for an interface
@@ -83,12 +87,14 @@ module OpenC3
     def start_raw_logging_interface(interface_name = 'ALL', manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      if interface_name == 'ALL'
-        get_interface_names().each do |interface_name|
+      audit('start_raw_logging_interface', target: interface_name, scope: scope, token: token) do
+        if interface_name == 'ALL'
+          get_interface_names().each do |interface_name|
+            InterfaceTopic.start_raw_logging(interface_name, scope: scope)
+          end
+        else
           InterfaceTopic.start_raw_logging(interface_name, scope: scope)
         end
-      else
-        InterfaceTopic.start_raw_logging(interface_name, scope: scope)
       end
     end
 
@@ -98,12 +104,14 @@ module OpenC3
     def stop_raw_logging_interface(interface_name = 'ALL', manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      if interface_name == 'ALL'
-        get_interface_names().each do |interface_name|
+      audit('stop_raw_logging_interface', target: interface_name, scope: scope, token: token) do
+        if interface_name == 'ALL'
+          get_interface_names().each do |interface_name|
+            InterfaceTopic.stop_raw_logging(interface_name, scope: scope)
+          end
+        else
           InterfaceTopic.stop_raw_logging(interface_name, scope: scope)
         end
-      else
-        InterfaceTopic.stop_raw_logging(interface_name, scope: scope)
       end
     end
 
@@ -137,17 +145,19 @@ module OpenC3
     def map_target_to_interface(target_name, interface_name, cmd_only: false, tlm_only: false, unmap_old: true, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      interface = InterfaceModel.get_model(name: interface_name, scope: scope)
-      if Array === target_name
-        target_names = target_name
-      else
-        target_names = [target_name]
+      audit('map_target_to_interface', target: interface_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old }, scope: scope, token: token) do
+        interface = InterfaceModel.get_model(name: interface_name, scope: scope)
+        if Array === target_name
+          target_names = target_name
+        else
+          target_names = [target_name]
+        end
+        target_names.each do |name|
+          interface.map_target(name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old)
+          Logger.info("Target #{name} mapped to Interface #{interface_name}", scope: scope, user: audit_username(token))
+        end
+        nil
       end
-      target_names.each do |name|
-        interface.map_target(name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old)
-        Logger.info("Target #{name} mapped to Interface #{interface_name}", scope: scope)
-      end
-      nil
     end
 
     # Removes association of a target and all its commands and telemetry with a particular
@@ -159,65 +169,75 @@ module OpenC3
     def unmap_target_from_interface(target_name, interface_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      interface = InterfaceModel.get_model(name: interface_name, scope: scope)
-      raise "Interface '#{interface_name}' does not exist (unmap_target_from_interface)" unless interface
+      audit('unmap_target_from_interface', target: interface_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only }, scope: scope, token: token) do
+        interface = InterfaceModel.get_model(name: interface_name, scope: scope)
+        raise "Interface '#{interface_name}' does not exist (unmap_target_from_interface)" unless interface
 
-      if Array === target_name
-        target_names = target_name
-      else
-        target_names = [target_name]
+        if Array === target_name
+          target_names = target_name
+        else
+          target_names = [target_name]
+        end
+        target_names.each do |name|
+          interface.unmap_target(name, cmd_only: cmd_only, tlm_only: tlm_only)
+          Logger.info("Target #{name} unmapped from Interface #{interface_name}", scope: scope, user: audit_username(token))
+        end
+        nil
       end
-      target_names.each do |name|
-        interface.unmap_target(name, cmd_only: cmd_only, tlm_only: tlm_only)
-        Logger.info("Target #{name} unmapped from Interface #{interface_name}", scope: scope)
-      end
-      nil
     end
 
     def interface_cmd(interface_name, cmd_name, *cmd_params, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      InterfaceTopic.interface_cmd(interface_name, cmd_name, *cmd_params, scope: scope)
+      audit('interface_cmd', target: interface_name, params: [cmd_name, *cmd_params], scope: scope, token: token) do
+        InterfaceTopic.interface_cmd(interface_name, cmd_name, *cmd_params, scope: scope)
+      end
     end
 
     def interface_protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, manual: false, scope: $openc3_scope, token: $openc3_token)
       # TODO: Check if they have command authority for the targets mapped to this interface
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      InterfaceTopic.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: read_write, index: index, scope: scope)
+      audit('interface_protocol_cmd', target: interface_name, params: { cmd_name: cmd_name, cmd_params: cmd_params, read_write: read_write, index: index }, scope: scope, token: token) do
+        InterfaceTopic.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: read_write, index: index, scope: scope)
+      end
     end
 
     def interface_target_enable(interface_name, target_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      interface = InterfaceModel.get_model(name: interface_name, scope: scope)
-      if cmd_only and tlm_only
-        cmd_only = false
-        tlm_only = false
+      audit('interface_target_enable', target: interface_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only }, scope: scope, token: token) do
+        interface = InterfaceModel.get_model(name: interface_name, scope: scope)
+        if cmd_only and tlm_only
+          cmd_only = false
+          tlm_only = false
+        end
+        if not tlm_only
+          interface.cmd_target_enabled[target_name.upcase] = true
+        end
+        if not cmd_only
+          interface.tlm_target_enabled[target_name.upcase] = true
+        end
+        interface.update
+        InterfaceTopic.interface_target_enable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
       end
-      if not tlm_only
-        interface.cmd_target_enabled[target_name.upcase] = true
-      end
-      if not cmd_only
-        interface.tlm_target_enabled[target_name.upcase] = true
-      end
-      interface.update
-      InterfaceTopic.interface_target_enable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
     end
 
     def interface_target_disable(interface_name, target_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      interface = InterfaceModel.get_model(name: interface_name, scope: scope)
-      if cmd_only and tlm_only
-        cmd_only = false
-        tlm_only = false
+      audit('interface_target_disable', target: interface_name, params: { target_name: target_name, cmd_only: cmd_only, tlm_only: tlm_only }, scope: scope, token: token) do
+        interface = InterfaceModel.get_model(name: interface_name, scope: scope)
+        if cmd_only and tlm_only
+          cmd_only = false
+          tlm_only = false
+        end
+        if not tlm_only
+          interface.cmd_target_enabled[target_name.upcase] = false
+        end
+        if not cmd_only
+          interface.tlm_target_enabled[target_name.upcase] = false
+        end
+        interface.update
+        InterfaceTopic.interface_target_disable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
       end
-      if not tlm_only
-        interface.cmd_target_enabled[target_name.upcase] = false
-      end
-      if not cmd_only
-        interface.tlm_target_enabled[target_name.upcase] = false
-      end
-      interface.update
-      InterfaceTopic.interface_target_disable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
     end
 
     def interface_details(interface_name, manual: false, scope: $openc3_scope, token: $openc3_token)

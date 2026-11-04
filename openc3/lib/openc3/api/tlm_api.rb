@@ -108,7 +108,9 @@ module OpenC3
     def set_tlm(*args, type: :CONVERTED, manual: false, cache_timeout: nil, scope: $openc3_scope, token: $openc3_token)
       target_name, packet_name, item_name, value = _set_tlm_process_args(args, __method__, cache_timeout: cache_timeout, scope: scope)
       authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token)
-      CvtModel.set_item(target_name, packet_name, item_name, value, type: type.intern, scope: scope)
+      audit('set_tlm', target: "#{target_name} #{packet_name} #{item_name}", params: { value: value, type: type }, scope: scope, token: token) do
+        CvtModel.set_item(target_name, packet_name, item_name, value, type: type.intern, scope: scope)
+      end
     end
 
     # Injects a packet into the system as if it was received from an interface
@@ -120,45 +122,47 @@ module OpenC3
     # @param received_time [Integer, nil] Optional received time as nanoseconds since Unix epoch
     def inject_tlm(target_name, packet_name, item_hash = nil, type: :CONVERTED, stored: false, received_time: nil, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token)
-      type = type.to_s.intern
-      target_name = target_name.upcase
-      packet_name = packet_name.upcase
-      unless CvtModel::VALUE_TYPES.include?(type)
-        raise "Unknown type '#{type}' for #{target_name} #{packet_name} (inject_tlm)"
-      end
+      audit('inject_tlm', target: "#{target_name.upcase} #{packet_name.upcase}", params: { items: item_hash, type: type, stored: stored }, scope: scope, token: token) do
+        type = type.to_s.intern
+        target_name = target_name.upcase
+        packet_name = packet_name.upcase
+        unless CvtModel::VALUE_TYPES.include?(type)
+          raise "Unknown type '#{type}' for #{target_name} #{packet_name} (inject_tlm)"
+        end
 
-      if item_hash
-        item_hash = item_hash.transform_keys(&:upcase)
-        # Check that the items exist ... exceptions are raised if not
-        items = TargetModel.packet_items(target_name, packet_name, item_hash.keys, scope: scope)
-        if type == :CONVERTED
-          # If the type is converted, check that the item states are valid
-          item_hash.each do |item_name, item_value|
-            item = items.find { |i| i['name'] == item_name.to_s.upcase }
-            if item['states'] && !item['states'][item_value]
-              raise "Unknown state '#{item_value}' for #{item['name']}, must be one of #{item['states'].keys.join(', ')}"
+        if item_hash
+          item_hash = item_hash.transform_keys(&:upcase)
+          # Check that the items exist ... exceptions are raised if not
+          items = TargetModel.packet_items(target_name, packet_name, item_hash.keys, scope: scope)
+          if type == :CONVERTED
+            # If the type is converted, check that the item states are valid
+            item_hash.each do |item_name, item_value|
+              item = items.find { |i| i['name'] == item_name.to_s.upcase }
+              if item['states'] && !item['states'][item_value]
+                raise "Unknown state '#{item_value}' for #{item['name']}, must be one of #{item['states'].keys.join(', ')}"
+              end
             end
           end
+        else
+          # Check that the packet exists ... exceptions are raised if not
+          TargetModel.packet(target_name, packet_name, scope: scope)
         end
-      else
-        # Check that the packet exists ... exceptions are raised if not
-        TargetModel.packet(target_name, packet_name, scope: scope)
-      end
 
-      # See if this target has a tlm interface
-      interface_name = nil
-      InterfaceModel.all(scope: scope).each do |_name, interface|
-        if interface['tlm_target_names'].include? target_name
-          interface_name = interface['name']
-          break
+        # See if this target has a tlm interface
+        interface_name = nil
+        InterfaceModel.all(scope: scope).each do |_name, interface|
+          if interface['tlm_target_names'].include? target_name
+            interface_name = interface['name']
+            break
+          end
         end
-      end
 
-      # Use an interface microservice if it exists, other use the decom microservice
-      if interface_name
-        InterfaceTopic.inject_tlm(interface_name, target_name, packet_name, item_hash, type: type, stored: stored, received_time: received_time, scope: scope)
-      else
-        DecomInterfaceTopic.inject_tlm(target_name, packet_name, item_hash, type: type, stored: stored, received_time: received_time, scope: scope)
+        # Use an interface microservice if it exists, other use the decom microservice
+        if interface_name
+          InterfaceTopic.inject_tlm(interface_name, target_name, packet_name, item_hash, type: type, stored: stored, received_time: received_time, scope: scope)
+        else
+          DecomInterfaceTopic.inject_tlm(target_name, packet_name, item_hash, type: type, stored: stored, received_time: received_time, scope: scope)
+        end
       end
     end
 
@@ -179,7 +183,9 @@ module OpenC3
     def override_tlm(*args, type: :ALL, manual: false, scope: $openc3_scope, token: $openc3_token)
       target_name, packet_name, item_name, value = _set_tlm_process_args(args, __method__, scope: scope)
       authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token)
-      CvtModel.override(target_name, packet_name, item_name, value, type: type.intern, scope: scope)
+      audit('override_tlm', target: "#{target_name} #{packet_name} #{item_name}", params: { value: value, type: type }, scope: scope, token: token) do
+        CvtModel.override(target_name, packet_name, item_name, value, type: type.intern, scope: scope)
+      end
     end
 
     # Get the list of CVT overrides
@@ -204,7 +210,9 @@ module OpenC3
     def normalize_tlm(*args, type: :ALL, manual: false, scope: $openc3_scope, token: $openc3_token)
       target_name, packet_name, item_name = _tlm_process_args(args, __method__, scope: scope)
       authorize(permission: 'tlm_set', target_name: target_name, packet_name: packet_name, manual: manual, scope: scope, token: token)
-      CvtModel.normalize(target_name, packet_name, item_name, type: type.intern, scope: scope)
+      audit('normalize_tlm', target: "#{target_name} #{packet_name} #{item_name}", params: { type: type }, scope: scope, token: token) do
+        CvtModel.normalize(target_name, packet_name, item_name, type: type.intern, scope: scope)
+      end
     end
 
     # Returns the raw buffer for a telemetry packet.
