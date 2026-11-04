@@ -124,7 +124,7 @@ module OpenC3
           record = JSON.parse(stdout.string.lines.last)
           expect(record['level']).to eql 'WARN'
           expect(record['type']).to eql 'security'
-          expect(record['security']).to include('event' => 'api_request', 'outcome' => 'failure',
+          expect(record).to include('event' => 'api_request', 'outcome' => 'failure',
             'reason' => 'AuthError: Token is invalid', 'method' => 'protected_call', 'source' => '10.20.30.40')
           expect(stdout.string).not_to include('SECRET_TOKEN')
         end

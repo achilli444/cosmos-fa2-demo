@@ -52,7 +52,7 @@ module OpenC3
           expect { host.authorize(permission: 'tlm', scope: 'DEFAULT', token: 'BAD_TOKEN') }.to raise_error(AuthError, "Token is invalid")
           record = JSON.parse(stdout.string.lines.last)
           expect(record['type']).to eql 'security'
-          expect(record['security']).to include('event' => 'authorize', 'outcome' => 'failure',
+          expect(record).to include('event' => 'authorize', 'outcome' => 'failure',
                                                 'reason' => 'Token is invalid', 'scope' => 'DEFAULT', 'permission' => 'tlm')
           expect(stdout.string).not_to include('BAD_TOKEN')
         end
@@ -67,7 +67,7 @@ module OpenC3
           end
           record = JSON.parse(stdout.string.lines.last)
           expect(record['user']).to eql 'mallory'
-          expect(record['security']).to include('source' => '10.0.0.7', 'user' => 'mallory', 'method' => 'cmd')
+          expect(record).to include('source' => '10.0.0.7', 'user' => 'mallory', 'method' => 'cmd')
         end
       end
 

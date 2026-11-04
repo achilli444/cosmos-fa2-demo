@@ -96,10 +96,13 @@ module OpenC3
       message = "Security event #{event} #{outcome}"
       message << ": #{reason}" if reason
       message << " (user: #{data[:user]}, source: #{data[:source] || 'unknown'})"
+      # Fields are written flat (scalar values only): the log record is also
+      # XADDed to the Redis log stream, which cannot hold nested hashes
+      fields = data.reject { |key, _| key == :user }.transform_values(&:to_s)
       if outcome == SUCCESS
-        Logger.info(message, scope: nil, user: data[:user], type: TYPE, other: { security: data })
+        Logger.info(message, scope: nil, user: data[:user], type: TYPE, other: fields)
       else
-        Logger.warn(message, scope: nil, user: data[:user], type: TYPE, other: { security: data })
+        Logger.warn(message, scope: nil, user: data[:user], type: TYPE, other: fields)
       end
       data
     end

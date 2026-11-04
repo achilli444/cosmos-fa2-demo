@@ -72,10 +72,19 @@ module OpenC3
           expect(record['type']).to eql 'security'
           expect(record['user']).to eql 'operator'
           expect(record['message']).to include('login failure: Incorrect password')
-          expect(record['security']).to eql({
-                                              'event' => 'login', 'outcome' => 'failure', 'reason' => 'Incorrect password',
-                                              'user' => 'operator', 'source' => '10.0.0.5', 'login_type' => 'user'
-                                            })
+          expect(record).to include('event' => 'login', 'outcome' => 'failure', 'reason' => 'Incorrect password',
+                                    'source' => '10.0.0.5', 'login_type' => 'user')
+        end
+      end
+
+      it "writes only flat string fields so the record fits in the Redis log stream (XADD)" do
+        allow(Logger).to receive(:warn).and_call_original
+        SecurityAudit.log(event: 'authorize', outcome: SecurityAudit::FAILURE, reason: 'Token is invalid',
+                          scope: 'DEFAULT', permission: :tlm, target_name: nil, count: 3)
+        expect(Logger).to have_received(:warn) do |_message, **kwargs|
+          expect(kwargs[:other]).to eql({ event: 'authorize', outcome: 'failure', reason: 'Token is invalid',
+                                          scope: 'DEFAULT', permission: 'tlm', count: '3' })
+          expect(kwargs[:other].values).to all(be_a(String))
         end
       end
 
@@ -84,7 +93,7 @@ module OpenC3
           SecurityAudit.log(event: 'login', outcome: SecurityAudit::SUCCESS, user: 'operator', source: '10.0.0.5')
           record = JSON.parse(stdout.string.lines.last)
           expect(record['level']).to eql 'INFO'
-          expect(record['security']['outcome']).to eql 'success'
+          expect(record['outcome']).to eql 'success'
         end
       end
 

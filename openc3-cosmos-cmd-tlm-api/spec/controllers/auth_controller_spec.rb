@@ -178,7 +178,8 @@ RSpec.describe AuthController, :type => :controller do
       message, kwargs = captured.find { |m, _| m.include?('Security event login failure') }
       expect(message).to include('Incorrect password')
       expect(kwargs).to include(type: 'security', scope: nil, user: 'anonymous')
-      expect(kwargs[:other][:security]).to include(event: 'login', outcome: 'failure', source: '0.0.0.0')
+      expect(kwargs[:other]).to include(event: 'login', outcome: 'failure', source: '0.0.0.0')
+      expect(kwargs[:other].values).to all(be_a(String))
     end
   end
 
