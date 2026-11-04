@@ -25,10 +25,14 @@ module OpenC3
       def secret
         'unreachable'
       end
+
+      def protected_call(token: nil)
+        raise AuthError.new("Token is invalid")
+      end
     end
 
     let(:json_drb) do
-      drb = JsonDRb.new(method_whitelist: ['greet'])
+      drb = JsonDRb.new(method_whitelist: ['greet', 'protected_call'])
       drb.object = JsonDRbSpecTarget.new
       drb
     end
@@ -106,6 +110,35 @@ module OpenC3
           expect(response['error']['message']).to eql('Cannot call unauthorized methods'),
                                                   "expected #{method_name} to be rejected"
         end
+      end
+
+      it "audits auth failures with the method, caller address and no token" do
+        request = { 'jsonrpc' => '2.0', 'method' => 'protected_call', 'id' => 7, 'keyword_params' => {} }
+        headers = { 'HTTP_AUTHORIZATION' => 'SECRET_TOKEN', 'HTTP_X_FORWARDED_FOR' => '10.20.30.40, 172.16.0.1' }
+        capture_io do |stdout|
+          response_data, error_code = json_drb.process_request(
+            request_data: JSON.generate(request), request_headers: headers, start_time: Time.now
+          )
+          expect(error_code).to eql(JsonRpcError::ErrorCode::AUTH_ERROR)
+          expect(JSON.parse(response_data)['error']['message']).to eql('Token is invalid')
+          record = JSON.parse(stdout.string.lines.last)
+          expect(record['level']).to eql 'WARN'
+          expect(record['type']).to eql 'security'
+          expect(record['security']).to include('event' => 'api_request', 'outcome' => 'failure',
+            'reason' => 'AuthError: Token is invalid', 'method' => 'protected_call', 'source' => '10.20.30.40')
+          expect(stdout.string).not_to include('SECRET_TOKEN')
+        end
+      end
+
+      it "exposes the method and caller address to code running inside the call" do
+        seen = nil
+        allow(json_drb.object).to receive(:greet) { seen = SecurityAudit.context; 'hi' }
+        request = { 'jsonrpc' => '2.0', 'method' => 'greet', 'id' => 1, 'keyword_params' => { 'name' => 'x' } }
+        json_drb.process_request(
+          request_data: JSON.generate(request), request_headers: { 'HTTP_X_REAL_IP' => '10.1.1.1' }, start_time: Time.now
+        )
+        expect(seen).to eql({ method: 'greet', source: '10.1.1.1' })
+        expect(SecurityAudit.context).to eql({})
       end
 
       it "rejects an unknown method" do

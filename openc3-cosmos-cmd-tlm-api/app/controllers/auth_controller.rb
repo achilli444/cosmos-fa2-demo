@@ -34,15 +34,18 @@ class AuthController < ApplicationController
 
   def verify
     if user_rate_limited?
+      audit_login(OpenC3::SecurityAudit::RATE_LIMITED, 'user', 'Too many bad password attempts')
       head :too_many_requests
       return
     end
 
     begin
       if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
+        audit_login(OpenC3::SecurityAudit::SUCCESS, 'user')
         render :plain => OpenC3::AuthModel.generate_session()
       else
         record_user_bad_attempt
+        audit_login(OpenC3::SecurityAudit::FAILURE, 'user', 'Incorrect password')
         head :unauthorized
       end
     rescue StandardError => e
@@ -53,15 +56,18 @@ class AuthController < ApplicationController
 
   def verify_service
     if service_rate_limited?
+      audit_login(OpenC3::SecurityAudit::RATE_LIMITED, 'service', 'Too many bad password attempts')
       head :too_many_requests
       return
     end
 
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
+        audit_login(OpenC3::SecurityAudit::SUCCESS, 'service')
         render :plain => OpenC3::AuthModel.generate_session()
       else
         record_service_bad_attempt
+        audit_login(OpenC3::SecurityAudit::FAILURE, 'service', 'Incorrect password')
         head :unauthorized
       end
     rescue StandardError => e
@@ -78,6 +84,7 @@ class AuthController < ApplicationController
 
   def set
     if user_rate_limited?
+      audit_password_change(OpenC3::SecurityAudit::RATE_LIMITED, 'Too many bad password attempts')
       head :too_many_requests
       return
     end
@@ -86,17 +93,31 @@ class AuthController < ApplicationController
       # Set throws an exception if it fails for any reason
       OpenC3::AuthModel.set(params[:password], params[:old_password])
       OpenC3::Logger.info("Password changed", user: username())
+      audit_password_change(OpenC3::SecurityAudit::SUCCESS)
       render :plain => OpenC3::AuthModel.generate_session()
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt
       end
+      audit_password_change(OpenC3::SecurityAudit::FAILURE, e.message)
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
     end
   end
 
   private
+
+  # Security audit record for a login attempt. The password is never logged.
+  def audit_login(outcome, login_type, reason = nil)
+    OpenC3::SecurityAudit.log(event: 'login', outcome: outcome, reason: reason,
+                              user: username(), source: request.remote_ip, login_type: login_type)
+  end
+
+  # Security audit record for a password change attempt. Passwords are never logged.
+  def audit_password_change(outcome, reason = nil)
+    OpenC3::SecurityAudit.log(event: 'password_change', outcome: outcome, reason: reason,
+                              user: username(), source: request.remote_ip)
+  end
 
   # Checks to see if the user password has been rate limited due to bad attempts
   def user_rate_limited?

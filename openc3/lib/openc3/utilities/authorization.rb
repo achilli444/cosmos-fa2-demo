@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/models/auth_model'
+require 'openc3/utilities/security_audit'
 
 begin
   require 'openc3-enterprise/utilities/authorization'
@@ -32,7 +33,10 @@ rescue LoadError
       ANONYMOUS_USER = "anonymous"
 
       def self.generate_otp(user)
-        raise AuthError.new("Invalid OTP user") unless user == ANONYMOUS_USER
+        unless user == ANONYMOUS_USER
+          SecurityAudit.authorization_failure("Invalid OTP user", user: user)
+          raise AuthError.new("Invalid OTP user")
+        end
         return OpenC3::AuthModel.generate_session(otp: true)
       end
 
@@ -40,11 +44,18 @@ rescue LoadError
 
       # Raises an exception if unauthorized, otherwise does nothing
       def authorize(permission: nil, target_name: nil, packet_name: nil, interface_name: nil, router_name: nil, manual: false, scope: nil, token: nil)
-        raise AuthError.new("Scope is required") unless scope
+        unless scope
+          SecurityAudit.authorization_failure("Scope is required", permission: permission, target_name: target_name, packet_name: packet_name)
+          raise AuthError.new("Scope is required")
+        end
 
         if $openc3_authorize
-          raise AuthError.new("Token is required") unless token
+          unless token
+            SecurityAudit.authorization_failure("Token is required", scope: scope, permission: permission, target_name: target_name, packet_name: packet_name)
+            raise AuthError.new("Token is required")
+          end
           unless OpenC3::AuthModel.verify(token)
+            SecurityAudit.authorization_failure("Token is invalid", scope: scope, permission: permission, target_name: target_name, packet_name: packet_name)
             raise AuthError.new("Token is invalid")
           end
         end
