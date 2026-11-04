@@ -15,6 +15,7 @@ require 'openc3/microservices/microservice'
 require 'openc3/topics/queue_topic'
 require 'openc3/models/queue_model'
 require 'openc3/utilities/authentication'
+require 'openc3/utilities/authorization'
 require 'openc3/api/api'
 
 module OpenC3
@@ -65,6 +66,15 @@ module OpenC3
             # OPENC3_DEFAULT_QUEUE is set because commands would be re-queued to the default queue
             # NOTE: cmd() via script rescues hazardous errors and calls prompt_for_hazardous()
             # but we've overridden it to always return true and go straight to cmd_no_hazardous_check()
+
+            # Re-check the original author's permission at release time. The queue
+            # microservice runs with the service password so without this a user
+            # who lost (or never had) cmd permission would still get their
+            # queued command executed.
+            unless Authorization.respond_to?(:user_permitted?) and Authorization.user_permitted?(command['username'], permission: 'cmd', scope: @scope)
+              @logger.error "QueueProcessor: Rejected command from queue #{@name}, user '#{command['username']}' is not permitted 'cmd'"
+              next
+            end
 
             # Support both new format (target_name, cmd_name, cmd_params) and legacy format (command string)
             if command['target_name'] && command['cmd_name']

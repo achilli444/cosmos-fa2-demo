@@ -31,9 +31,17 @@ class OpenC3AuthenticationRetryableError(OpenC3AuthenticationError):
 # OpenC3 COSMOS Core authentication code
 class OpenC3Authentication:
     def __init__(self):
+        # A delegated session token (issued by Script Runner for the user who
+        # started the script) is used as-is so the process acts as that user
+        if OPENC3_API_SESSION_TOKEN:
+            self.service = False
+            self._token = OPENC3_API_SESSION_TOKEN
+            return
         password = OPENC3_API_PASSWORD
         if not password:
-            raise OpenC3AuthenticationError("Authentication requires environment variable OPENC3_API_PASSWORD")
+            raise OpenC3AuthenticationError(
+                "Authentication requires environment variable OPENC3_API_PASSWORD or OPENC3_API_SESSION_TOKEN"
+            )
         self.service = password == OPENC3_SERVICE_PASSWORD
         response = Session().post(
             self._generate_auth_url(),

@@ -102,6 +102,97 @@ RSpec.describe AuthController, :type => :controller do
 
       post :verify_service, params: { password: 'openc3service' }
       expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.identity(response.body)['roles']).to eql ['service']
+    end
+
+    it "binds the session to the authenticated user" do
+      post :set, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+      OpenC3::AuthModel.set_user(username: 'ops', password: 'OPSPASSWORD', roles: ['operator'], name: 'Ops')
+
+      post :verify, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.identity(response.body)).to eql({ 'username' => 'admin', 'name' => 'admin', 'roles' => ['admin'] })
+
+      post :verify, params: { username: 'ops', password: 'OPSPASSWORD' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.identity(response.body)).to eql({ 'username' => 'ops', 'name' => 'Ops', 'roles' => ['operator'] })
+
+      # A named user's password is not the admin password and vice versa
+      post :verify, params: { password: 'OPSPASSWORD' }
+      expect(response).to have_http_status(:unauthorized)
+      post :verify, params: { username: 'ops', password: 'PASSWORD' }
+      expect(response).to have_http_status(:unauthorized)
+      post :verify, params: { username: 'nobody', password: 'PASSWORD' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
+  describe "users" do
+    before(:each) do
+      $openc3_authorize = true
+      post :set, params: { password: 'PASSWORD' }
+      @admin_token = response.body
+      OpenC3::AuthModel.set_user(username: 'ops', password: 'OPSPASSWORD', roles: ['operator'])
+      @ops_token = OpenC3::AuthModel.generate_session(username: 'ops', roles: ['operator'])
+    end
+
+    after(:each) do
+      $openc3_authorize = false
+    end
+
+    it "returns the identity bound to the caller's own token" do
+      get :user
+      expect(response).to have_http_status(:unauthorized)
+      request.headers['HTTP_AUTHORIZATION'] = 'ses_bogus'
+      get :user
+      expect(response).to have_http_status(:unauthorized)
+      request.headers['HTTP_AUTHORIZATION'] = @ops_token
+      get :user
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to eql({ 'username' => 'ops', 'name' => 'ops', 'roles' => ['operator'] })
+      request.headers['HTTP_AUTHORIZATION'] = @admin_token
+      get :user
+      expect(JSON.parse(response.body)).to eql({ 'username' => 'admin', 'name' => 'admin', 'roles' => ['admin'] })
+    end
+
+    it "requires a valid token" do
+      get :users, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:unauthorized)
+      request.headers['HTTP_AUTHORIZATION'] = 'ses_bogus'
+      get :users, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "requires the admin role" do
+      request.headers['HTTP_AUTHORIZATION'] = @ops_token
+      get :users, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:forbidden)
+      post :set_user, params: { scope: 'DEFAULT', username: 'ops', roles: ['admin'] }
+      expect(response).to have_http_status(:forbidden)
+      delete :delete_user, params: { scope: 'DEFAULT', username: 'ops' }
+      expect(response).to have_http_status(:forbidden)
+      expect(OpenC3::AuthModel.user_roles('ops')).to eql ['operator']
+    end
+
+    it "lets admin manage users" do
+      request.headers['HTTP_AUTHORIZATION'] = @admin_token
+      get :users, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json.map { |u| u['username'] }).to contain_exactly('admin', 'ops')
+      expect(json.none? { |u| u.key?('password_hash') }).to be true
+
+      post :set_user, params: { scope: 'DEFAULT', username: 'viewer1', password: 'VIEWERPASS', roles: ['viewer'] }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.user_roles('viewer1')).to eql ['viewer']
+
+      post :set_user, params: { scope: 'DEFAULT', username: 'viewer1', roles: ['bogus'] }
+      expect(response).to have_http_status(:bad_request)
+
+      delete :delete_user, params: { scope: 'DEFAULT', username: 'viewer1' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.user_roles('viewer1')).to be_nil
     end
   end
 

@@ -19,6 +19,8 @@ require 'tempfile'
 require 'openc3/utilities/target_file'
 require 'openc3/utilities/python_venv'
 require 'openc3/utilities/running_script'
+require 'openc3/utilities/authorization'
+require 'openc3/models/auth_model'
 require 'openc3/script/suite'
 require 'openc3/script/suite_runner'
 require 'openc3/tools/test_runner/test'
@@ -138,12 +140,15 @@ class Script < OpenC3::TargetFile
           raise "offline_access token invalid for script"
         end
       else
-        process.environment['OPENC3_API_USER'] = ENV['OPENC3_API_USER'] || nil
-        if ENV['OPENC3_SERVICE_PASSWORD']
-          process.environment['OPENC3_API_PASSWORD'] = ENV['OPENC3_SERVICE_PASSWORD']
+        # Core: analyze the suite as the requesting user with a delegated
+        # session token rather than the shared service password.
+        roles = OpenC3::AuthModel.user_roles(username)
+        if roles and (!OpenC3::Authorization.respond_to?(:roles_permit?) or OpenC3::Authorization.roles_permit?(roles, 'script_run'))
+          process.environment['OPENC3_API_USER'] = nil
+          process.environment['OPENC3_API_PASSWORD'] = nil
+          process.environment['OPENC3_API_SESSION_TOKEN'] = OpenC3::AuthModel.generate_session(username: username, roles: roles)
         else
-          # The viewer user doesn't have an offline access token (because they can't run scripts)
-          # but they still want to be able to view suite files
+          # The viewer user can't run scripts but they still want to be able to view suite files
           # Since processing a suite file requires running it they won't get the Suite chrome
           # so return nothing here and allow Script Runner to simply view the suite file
           return '', '', false

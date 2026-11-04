@@ -41,11 +41,16 @@ class AuthController < ApplicationController
     end
 
     begin
-      if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
+      # Bind the session to the authenticated user (blank username is the
+      # built-in admin account) so every later request carries an identity
+      identity = OpenC3::AuthModel.verify_user(params[:username], params[:password])
+      if identity
         clear_user_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        OpenC3::Logger.info("Login", user: identity['username'])
+        render :plain => OpenC3::AuthModel.generate_session(username: identity['username'], roles: identity['roles'], name: identity['name'])
       else
         record_user_bad_attempt
+        OpenC3::Logger.warn("Login failed for user '#{params[:username].to_s.empty? ? OpenC3::AuthModel::ADMIN_USERNAME : params[:username]}'")
         head :unauthorized
       end
     rescue StandardError => e
@@ -96,7 +101,7 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
         clear_service_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        render :plain => OpenC3::AuthModel.generate_session(username: OpenC3::AuthModel::SERVICE_USERNAME, roles: OpenC3::AuthModel::SERVICE_ROLES)
       else
         record_service_bad_attempt
         head :unauthorized
@@ -123,7 +128,7 @@ class AuthController < ApplicationController
       # Set throws an exception if it fails for any reason
       OpenC3::AuthModel.set(params[:password], params[:old_password])
       clear_user_bad_attempts
-      OpenC3::Logger.info("Password changed", user: username())
+      OpenC3::Logger.info("Password changed", user: OpenC3::AuthModel::ADMIN_USERNAME)
       render :plain => OpenC3::AuthModel.generate_session()
     rescue StandardError => e
       if e.message == "old_password incorrect"
@@ -131,6 +136,49 @@ class AuthController < ApplicationController
       end
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
+    end
+  end
+
+  # Returns the identity bound to the caller's session token so the UI can show
+  # who is signed in. Any valid session may ask about itself.
+  def user
+    identity = user_info(request.headers['HTTP_AUTHORIZATION'])
+    if identity.nil? or identity.empty?
+      head :unauthorized
+      return
+    end
+    render json: identity.slice('username', 'name', 'roles')
+  end
+
+  # Lists configured users (no password hashes). Admin only.
+  def users
+    return unless authorization('admin')
+    render json: OpenC3::AuthModel.users
+  end
+
+  # Creates or updates a named user with roles. Admin only.
+  def set_user
+    return unless authorization('admin')
+    begin
+      OpenC3::AuthModel.set_user(username: params[:username], password: params[:password], roles: params[:roles], name: params[:name])
+      OpenC3::Logger.info("User '#{params[:username]}' set with roles #{Array(params[:roles])}", user: username())
+      head :ok
+    rescue StandardError => e
+      log_error(e)
+      render json: { status: 'error', message: e.message, type: e.class }, status: :bad_request
+    end
+  end
+
+  # Deletes a named user and terminates their sessions. Admin only.
+  def delete_user
+    return unless authorization('admin')
+    begin
+      OpenC3::AuthModel.delete_user(params[:username])
+      OpenC3::Logger.info("User '#{params[:username]}' deleted", user: username())
+      head :ok
+    rescue StandardError => e
+      log_error(e)
+      render json: { status: 'error', message: e.message, type: e.class }, status: :bad_request
     end
   end
 

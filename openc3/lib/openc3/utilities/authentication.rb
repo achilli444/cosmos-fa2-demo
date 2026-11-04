@@ -28,9 +28,18 @@ module OpenC3
   # OpenC3 COSMOS Core authentication code
   class OpenC3Authentication
     def initialize()
+      # A delegated session token (issued by Script Runner for the user who
+      # started the script) is used as-is so the child process acts as that
+      # user rather than authenticating with a shared password.
+      session_token = ENV.fetch('OPENC3_API_SESSION_TOKEN', nil)
+      if session_token and !session_token.empty?
+        @service = false
+        @token = session_token
+        return
+      end
       password = ENV.fetch('OPENC3_API_PASSWORD', nil)
       if password.nil?
-        raise OpenC3AuthenticationError, "Authentication requires environment variable OPENC3_API_PASSWORD"
+        raise OpenC3AuthenticationError, "Authentication requires environment variable OPENC3_API_PASSWORD or OPENC3_API_SESSION_TOKEN"
       end
       @service = password == ENV['OPENC3_SERVICE_PASSWORD']
       retry_faraday_request do

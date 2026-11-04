@@ -47,6 +47,17 @@ class Auth {
   setTokens() {}
   clearTokens() {
     delete localStorage.openc3Token
+    delete localStorage.openc3User
+  }
+  // Identity bound to the session token, stored by the login page from
+  // /openc3-api/auth/user. Absent for sessions created before identities
+  // existed, which were only ever the built-in admin.
+  storedUser() {
+    try {
+      return JSON.parse(localStorage.openc3User || 'null')
+    } catch {
+      return null
+    }
   }
   // Navigating to login is idempotent: a page load with no token calls
   // updateToken once per request, and each of those would otherwise schedule
@@ -71,9 +82,20 @@ class Auth {
     location.reload()
   }
   user() {
+    const user = this.storedUser()
+    if (user && user.username) {
+      return {
+        name: user.name || user.username,
+        preferred_username: user.username,
+      }
+    }
     return { name: 'Anonymous' }
   }
   userroles() {
+    const user = this.storedUser()
+    if (user && Array.isArray(user.roles) && user.roles.length > 0) {
+      return user.roles
+    }
     return ['admin']
   }
   getInitOptions() {}

@@ -92,6 +92,40 @@ module OpenC3
       before do
         allow(processor).to receive(:cmd)
         processor.state = 'RELEASE'
+        # Queued commands are re-authorized against the original author at release
+        allow(Authorization).to receive(:user_permitted?).and_call_original
+        allow(AuthModel).to receive(:user_roles).with('test_user').and_return(['operator'])
+        allow(AuthModel).to receive(:user_roles).with('viewer_user').and_return(['viewer'])
+        allow(AuthModel).to receive(:user_roles).with('deleted_user').and_return(nil)
+        allow(AuthModel).to receive(:user_roles).with(nil).and_return(nil)
+      end
+
+      it 'rejects commands whose author is not permitted to send commands' do
+        viewer_command = { 'username' => 'viewer_user', 'target_name' => 'TARGET', 'cmd_name' => 'COMMAND' }
+        deleted_command = { 'username' => 'deleted_user', 'value' => 'cmd("TARGET", "COMMAND")' }
+        no_user_command = { 'value' => 'cmd("TARGET", "COMMAND")' }
+        call_count = 0
+        allow(Store).to receive(:bzpopmin) do
+          call_count += 1
+          case call_count
+          when 1
+            ["#{scope}:QUEUE", viewer_command.to_json, 0]
+          when 2
+            ["#{scope}:QUEUE", deleted_command.to_json, 0]
+          when 3
+            ["#{scope}:QUEUE", no_user_command.to_json, 0]
+          else
+            processor.state = 'HOLD'
+            nil
+          end
+        end
+        expect(logger).to receive(:error).with(/Rejected command.*'viewer_user' is not permitted 'cmd'/)
+        expect(logger).to receive(:error).with(/Rejected command.*'deleted_user' is not permitted 'cmd'/)
+        expect(logger).to receive(:error).with(/Rejected command.*'' is not permitted 'cmd'/)
+
+        processor.process_queued_commands
+
+        expect(processor).not_to have_received(:cmd)
       end
 
       it 'processes all queued commands and removes them from queue' do
