@@ -2509,7 +2509,7 @@ queue_disable('TEST')
 
 <span class="badge badge--secondary since-heading">Since 6.8.0</span>
 
-Removes a command from the queue and executes it.
+Removes a command from the queue and executes it. If the command is hazardous the operator is prompted (exactly as with `cmd`) and the command is only sent if the prompt is accepted; otherwise it remains in the queue.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python Syntax">

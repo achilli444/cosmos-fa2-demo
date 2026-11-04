@@ -26,6 +26,13 @@ module OpenC3
         raise "Failed to #{action}. No response from server."
       elsif response.status != 200 and response.status != 201
         result = JSON.parse(response.body, allow_nan: true, create_additions: true)
+        if result['type'] == 'HazardousError'
+          error = HazardousError.new
+          error.target_name = result['target_name']
+          error.cmd_name = result['cmd_name']
+          error.hazardous_description = result['hazardous_description']
+          raise error
+        end
         raise "#{action} failed with status #{response.status}. #{result['message']}."
       end
       return JSON.parse(response.body, allow_nan: true, create_additions: true)
@@ -61,10 +68,21 @@ module OpenC3
       return _make_request(action: 'disable queue', verb: 'post', uri: "/openc3-api/queues/#{name}/disable", scope: scope)
     end
 
+    # Removes a command from the queue and executes it. A hazardous command is only
+    # sent after the operator confirms the hazardous prompt (same as cmd()).
     def queue_exec(name, id=nil, scope: $openc3_scope)
       data = {}
       data['id'] = id if id
-      return _make_request(action: 'exec command', verb: 'post', uri: "/openc3-api/queues/#{name}/exec_command", data: data, scope: scope)
+      begin
+        return _make_request(action: 'exec command', verb: 'post', uri: "/openc3-api/queues/#{name}/exec_command", data: data, scope: scope)
+      rescue HazardousError => e
+        # The command is still in the queue. Only resend it with the explicit confirmation if the operator agrees.
+        unless prompt_for_hazardous(e.target_name, e.cmd_name, e.hazardous_description)
+          raise "exec command failed. Hazardous command #{e.target_name} #{e.cmd_name} was not confirmed and remains in queue #{name}."
+        end
+        data = data.merge('hazardous_confirmed' => true)
+        return _make_request(action: 'exec command', verb: 'post', uri: "/openc3-api/queues/#{name}/exec_command", data: data, scope: scope)
+      end
     end
 
     # No queue_insert because we do that through the cmd APIs with the queue kwarg

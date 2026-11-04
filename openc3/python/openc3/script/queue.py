@@ -13,6 +13,7 @@ import json
 
 from openc3.environment import OPENC3_SCOPE
 from openc3.script import API_SERVER
+from openc3.top_level import HazardousError
 
 
 def _make_request(action, verb, uri, scope, data=None):
@@ -31,7 +32,14 @@ def _make_request(action, verb, uri, scope, data=None):
             result = json.loads(response.text)
             message = result.get("message", "Unknown error")
         except (json.JSONDecodeError, AttributeError):
+            result = {}
             message = "Unknown error"
+        if result.get("type") == "HazardousError":
+            error = HazardousError()
+            error.target_name = result.get("target_name")
+            error.cmd_name = result.get("cmd_name")
+            error.hazardous_description = result.get("hazardous_description")
+            raise error
         raise RuntimeError(f"Failed to {action} due to {message}")
 
     return json.loads(response.text)
@@ -75,17 +83,37 @@ def queue_disable(name, scope: str = OPENC3_SCOPE):
 
 
 def queue_exec(name, id=None, scope: str = OPENC3_SCOPE):
-    """Pop a value from the queue at the specified id or first value if no id"""
+    """Pop a value from the queue at the specified id or first value if no id and execute it.
+    A hazardous command is only sent after the operator confirms the hazardous prompt (same as cmd())."""
     data = {}
     if id is not None:
         data["id"] = id
-    return _make_request(
-        "exec command",
-        "post",
-        f"/openc3-api/queues/{name}/exec_command",
-        scope,
-        data=data,
-    )
+    try:
+        return _make_request(
+            "exec command",
+            "post",
+            f"/openc3-api/queues/{name}/exec_command",
+            scope,
+            data=data,
+        )
+    except HazardousError as error:
+        # Need to reimport here to pick up changes from running_script
+        from openc3.script import prompt_for_hazardous
+
+        # The command is still in the queue. Only resend it with the explicit confirmation if the operator agrees.
+        if not prompt_for_hazardous(error.target_name, error.cmd_name, error.hazardous_description):
+            raise RuntimeError(
+                f"Failed to exec command. Hazardous command {error.target_name} {error.cmd_name} "
+                f"was not confirmed and remains in queue {name}."
+            ) from error
+        data = {**data, "hazardous_confirmed": True}
+        return _make_request(
+            "exec command",
+            "post",
+            f"/openc3-api/queues/{name}/exec_command",
+            scope,
+            data=data,
+        )
 
 
 def queue_remove(name, id=None, scope: str = OPENC3_SCOPE):

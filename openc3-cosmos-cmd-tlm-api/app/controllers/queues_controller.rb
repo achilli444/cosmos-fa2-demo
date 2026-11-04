@@ -264,7 +264,7 @@ class QueuesController < ApplicationController
       id = params[:id]&.to_f
       command_data = model.remove_command(id)
       if command_data
-        hazardous = false
+        hazardous_confirmed = [true, 'true'].include?(params[:hazardous_confirmed])
         token = get_token(username(), scope: params[:scope])
         begin
           # Support both new format (target_name, cmd_name, cmd_params) and legacy format (value)
@@ -277,27 +277,32 @@ class QueuesController < ApplicationController
             else
               cmd_params = {}
             end
-            if hazardous
-              cmd_no_hazardous_check(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            else
-              cmd(command_data['target_name'], command_data['cmd_name'], cmd_params, queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            end
+            cmd_args = [command_data['target_name'], command_data['cmd_name'], cmd_params]
           elsif command_data['value']
             # Legacy format: use single string parameter
-            if hazardous
-              cmd_no_hazardous_check(command_data['value'], queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            else
-              cmd(command_data['value'], queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
-            end
+            cmd_args = [command_data['value']]
           else
             log_error("Invalid command format in queue: #{command_data}")
             render json: { status: 'error', message: "Invalid command format: missing required fields" }, status: :bad_request
             return
           end
-        rescue HazardousError => e
-          # Rescue hazardous error and retry with cmd_no_hazardous_check
-          hazardous = true
-          retry
+          begin
+            cmd(*cmd_args, queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
+          rescue HazardousError => e
+            # Hazardous commands are only released with an explicit operator confirmation.
+            # Without one the command goes back into the queue and the caller is told why.
+            unless hazardous_confirmed
+              requeue_command(model, command_data, cmd_params)
+              render json: { status: 'error', message: e.message, type: e.class.to_s, hazardous: true,
+                             hazardous_description: e.hazardous_description, target_name: e.target_name,
+                             cmd_name: e.cmd_name, id: command_data['id'] }, status: :conflict
+              return
+            end
+            OpenC3::Logger.info("Hazardous command #{e.target_name} #{e.cmd_name} released from queue #{params[:name]} with operator confirmation" \
+                                "#{e.hazardous_description ? " (#{e.hazardous_description})" : ''}",
+                                scope: params[:scope], user: username())
+            cmd_no_hazardous_check(*cmd_args, queue: false, validate: validate, timeout: timeout, scope: params[:scope], token: token)
+          end
         rescue StandardError => e
           log_error(e)
           render json: { status: 'error', message: "Failed to execute command: #{e.message}", type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
@@ -344,6 +349,18 @@ class QueuesController < ApplicationController
     rescue StandardError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class.to_s, backtrace: e.backtrace }, status: :internal_server_error
+    end
+  end
+
+  # Put a command removed by exec_command back into the queue at its original id
+  def requeue_command(model, command_data, cmd_params)
+    validate = command_data.key?('validate') ? command_data['validate'] : nil
+    if command_data['target_name'] && command_data['cmd_name']
+      model.insert_command(id: command_data['id'], username: command_data['username'], target_name: command_data['target_name'],
+                           cmd_name: command_data['cmd_name'], cmd_params: cmd_params, validate: validate, timeout: command_data['timeout'])
+    else
+      model.insert_command(id: command_data['id'], username: command_data['username'], command: command_data['value'],
+                           validate: validate, timeout: command_data['timeout'])
     end
   end
 
