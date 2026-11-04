@@ -9,6 +9,7 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+import os
 import unittest
 from unittest.mock import ANY, Mock, patch
 
@@ -59,6 +60,10 @@ class TestMqttStreamInterface(unittest.TestCase):
         self.assertEqual(i.ack_timeout, 10.0)
         mock_client_instance.username_pw_set.assert_called_with("test_user", "test_pass")
         mock_client_instance.tls_set.assert_called_with(ca_certs=ANY, certfile=ANY, keyfile=ANY)
+        # The PEM text stays in memory and the files handed to tls_set are gone after connect
+        self.assertEqual(i.key, "key_content")
+        for path in mock_client_instance.tls_set.call_args.kwargs.values():
+            self.assertFalse(os.path.exists(path), path)
         mock_client_instance.loop_start.assert_called_once()
         mock_client_instance.connect.assert_called_with("localhost", 1883)
         mock_client_instance.is_connected.assert_called()

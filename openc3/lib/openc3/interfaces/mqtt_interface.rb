@@ -17,6 +17,7 @@
 
 require 'openc3/interfaces/interface'
 require 'openc3/config/config_parser'
+require 'openc3/utilities/mqtt_tls'
 require 'mqtt'
 
 # Patches to the Ruby MQTT library so that it will work reliably with COSMOS
@@ -133,15 +134,7 @@ module OpenC3
       @client.username = @username if @username
       @client.password = @password if @password
       @client.ssl = @ssl
-      if @cert and @key
-        @client.ssl = true
-        @client.cert_file = @cert.path
-        @client.key_file = @key.path
-      end
-      if @ca_file
-        @client.ssl = true
-        @client.ca_file = @ca_file.path
-      end
+      MqttTls.configure(@client, cert: @cert, key: @key, ca_file: @ca_file)
       @client.connect
       @read_packets_by_topic.each do |topic, _|
         Logger.info "#{@name}: Subscribing to #{topic}"
@@ -239,20 +232,14 @@ module OpenC3
       when 'PASSWORD'
         @password = option_values[0]
       when 'CERT'
-        # CERT must be given as a file
-        @cert = Tempfile.new('cert')
-        @cert.write(option_values[0])
-        @cert.close
+        # PEM text, loaded into the client in memory (see MqttTls)
+        @cert = option_values[0]
       when 'KEY'
-        # KEY must be given as a file
-        @key = Tempfile.new('key')
-        @key.write(option_values[0])
-        @key.close
+        # PEM text, loaded into the client in memory (see MqttTls)
+        @key = option_values[0]
       when 'CA_FILE'
-        # CA_FILE must be given as a file
-        @ca_file = Tempfile.new('ca_file')
-        @ca_file.write(option_values[0])
-        @ca_file.close
+        # PEM text, loaded into the client in memory (see MqttTls)
+        @ca_file = option_values[0]
       end
     end
 

@@ -14,6 +14,7 @@
 require 'openc3/interfaces/mqtt_interface' # For MQTT patches
 require 'openc3/streams/stream'
 require 'openc3/config/config_parser'
+require 'openc3/utilities/mqtt_tls'
 
 module OpenC3
   class MqttStream < Stream
@@ -57,15 +58,7 @@ module OpenC3
       @client.ssl = @ssl
       @client.username = @username if @username
       @client.password = @password if @password
-      if @cert and @key
-        @client.ssl = true
-        @client.cert_file = @cert.path
-        @client.key_file = @key.path
-      end
-      if @ca_file
-        @client.ssl = true
-        @client.ca_file = @ca_file.path
-      end
+      MqttTls.configure(@client, cert: @cert, key: @key, ca_file: @ca_file)
       @client.connect
       @client.subscribe(@read_topic) if @read_topic
     end

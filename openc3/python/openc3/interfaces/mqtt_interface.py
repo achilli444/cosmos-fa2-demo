@@ -14,7 +14,6 @@
 # You can also test against encrypted and authenticated servers at https://test.mosquitto.org/
 
 import queue
-import tempfile
 from time import sleep
 
 # See https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html
@@ -24,6 +23,7 @@ from openc3.config.config_parser import ConfigParser
 from openc3.interfaces.interface import Interface
 from openc3.system.system import System
 from openc3.utilities.logger import Logger
+from openc3.utilities.mqtt_tls import configure_tls
 
 
 # Base class for interfaces that send and receive messages over MQTT
@@ -76,23 +76,13 @@ class MqttInterface(Interface):
             self.client.tls_set()
         if self.username and self.password:
             self.client.username_pw_set(self.username, self.password)
-        # You still need the ca_file if you're using your own cert and key
-        if self.cert and self.key and self.ca_file:
-            if self.keyfile_password:
-                self.client.tls_set(
-                    ca_certs=self.ca_file.name,
-                    certfile=self.cert.name,
-                    keyfile=self.key.name,
-                    keyfile_password=self.keyfile_password,
-                )
-            else:
-                self.client.tls_set(
-                    ca_certs=self.ca_file.name,
-                    certfile=self.cert.name,
-                    keyfile=self.key.name,
-                )
-        elif self.ca_file:
-            self.client.tls_set(ca_certs=self.ca_file.name)
+        configure_tls(
+            self.client,
+            cert=self.cert,
+            key=self.key,
+            ca_file=self.ca_file,
+            keyfile_password=self.keyfile_password,
+        )
 
         self.client.loop_start()
         # Connect doesn't fully establish the connection, it just sends the CONNECT packet
@@ -198,17 +188,14 @@ class MqttInterface(Interface):
             case "PASSWORD":
                 self.password = option_values[0]
             case "CERT":
-                # CERT must be given as a file
-                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as self.cert:
-                    self.cert.write(option_values[0])
+                # PEM text, handed to the client by configure_tls at connect
+                self.cert = option_values[0]
             case "KEY":
-                # KEY must be given as a file
-                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as self.key:
-                    self.key.write(option_values[0])
+                # PEM text, handed to the client by configure_tls at connect
+                self.key = option_values[0]
             case "CA_FILE":
-                # CA_FILE must be given as a file
-                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as self.ca_file:
-                    self.ca_file.write(option_values[0])
+                # PEM text, handed to the client by configure_tls at connect
+                self.ca_file = option_values[0]
             case "KEYFILE_PASSWORD":
                 self.keyfile_password = option_values[0]
 

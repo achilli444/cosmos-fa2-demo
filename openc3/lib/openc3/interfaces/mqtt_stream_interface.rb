@@ -77,20 +77,14 @@ module OpenC3
       when 'PASSWORD'
         @password = option_values[0]
       when 'CERT'
-        # CERT must be given as a file
-        @cert = Tempfile.new('cert')
-        @cert.write(option_values[0])
-        @cert.close
+        # PEM text, loaded into the client in memory (see MqttTls)
+        @cert = option_values[0]
       when 'KEY'
-        # KEY must be given as a file
-        @key = Tempfile.new('key')
-        @key.write(option_values[0])
-        @key.close
+        # PEM text, loaded into the client in memory (see MqttTls)
+        @key = option_values[0]
       when 'CA_FILE'
-        # CA_FILE must be given as a file
-        @ca_file = Tempfile.new('ca_file')
-        @ca_file.write(option_values[0])
-        @ca_file.close
+        # PEM text, loaded into the client in memory (see MqttTls)
+        @ca_file = option_values[0]
       end
     end
 
