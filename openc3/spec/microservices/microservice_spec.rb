@@ -93,6 +93,27 @@ module OpenC3
         expect(call_count).to eq(3)
       end
 
+      it "syntax checks the ruby file without a shell so metacharacters in the name are not interpreted" do
+        client = double("BucketClient")
+        allow(client).to receive(:list_objects).and_return([])
+        allow(Bucket).to receive(:getClient).and_return(client)
+
+        Dir.mktmpdir do |work_dir|
+          # A valid ruby file whose name would be split / interpreted by a shell
+          ruby_filename = 'micro;echo INJECTED.rb'
+          File.write(File.join(work_dir, ruby_filename), "puts 'hello'\n")
+          @config['work_dir'] = work_dir
+          @config['cmd'] = ['ruby', ruby_filename]
+
+          expect(Open3).to receive(:capture2e).with('ruby', '-c', ruby_filename).and_call_original
+          expect_any_instance_of(Logger).to receive(:debug).with(/passed syntax check/, scope: 'DEFAULT')
+          expect_any_instance_of(Logger).not_to receive(:error)
+          capture_io do
+            Microservice.new("DEFAULT__TYPE__NAME", is_plugin: true)
+          end
+        end
+      end
+
       it "raises if the bucket stays unreachable past the startup timeout" do
         ENV['OPENC3_MICROSERVICE_STARTUP_BUCKET_TIMEOUT'] = '0'
         client = double("BucketClient")
