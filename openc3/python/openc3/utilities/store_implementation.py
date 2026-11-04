@@ -16,6 +16,7 @@ import valkey
 from valkey.exceptions import TimeoutError
 
 from openc3.environment import *
+from openc3.utilities import tls_config
 from openc3.utilities.connection_pool import ConnectionPool
 
 
@@ -165,11 +166,13 @@ class Store(metaclass=StoreMeta):
         # NOTE: We can't use decode_response because it tries to decode the binary
         # packet buffer which does not work. Thus strings come back as bytes like
         # b"target_name" and we decode them using b"target_name".decode()
+        # OPENC3_REDIS_TLS enables TLS with certificate verification (see tls_config)
         return valkey.Valkey(
             host=self.redis_host,
             port=self.redis_port,
             username=OPENC3_REDIS_USERNAME,
             password=OPENC3_REDIS_PASSWORD,
+            **tls_config.redis_kwargs(),
         )
 
     ###########################################################################

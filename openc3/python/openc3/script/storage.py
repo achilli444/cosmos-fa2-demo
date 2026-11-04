@@ -18,6 +18,7 @@ import requests
 
 import openc3.script
 from openc3.environment import OPENC3_SCOPE
+from openc3.utilities import tls_config
 from openc3.utilities.extract import *
 from openc3.utilities.local_mode import LocalMode
 
@@ -86,6 +87,7 @@ def put_target_file(path: str, io_or_string: io.IOBase | str, scope: str = OPENC
                 uri,
                 data=io_or_string,
                 headers={"Content-Length": str(length)},
+                verify=_tls_verify(),
             )
             return result.content
     except Exception as error:
@@ -171,7 +173,7 @@ def _get_storage_file(path, bucket="OPENC3_CONFIG_BUCKET", scope=OPENC3_SCOPE):
 
     # Try to get the file
     uri = _get_uri(result["url"])
-    response = requests.get(uri)
+    response = requests.get(uri, verify=_tls_verify())
     if response.status_code == 404:
         raise RuntimeError(f"File not found: {scope}/{path}")
     file.write(response.content)
@@ -179,12 +181,20 @@ def _get_storage_file(path, bucket="OPENC3_CONFIG_BUCKET", scope=OPENC3_SCOPE):
     return file
 
 
+def _tls_verify():
+    """requests ``verify`` for the presigned bucket URL: the bucket CA bundle from
+    OPENC3_BUCKET_TLS_CA_FILE for in-cluster local buckets, otherwise the default trust store."""
+    if openc3.script.OPENC3_IN_CLUSTER and OPENC3_CLOUD == "local":
+        return tls_config.bucket_verify()
+    return True
+
+
 def _get_uri(url):
     if openc3.script.OPENC3_IN_CLUSTER:
         match OPENC3_CLOUD:
             case "local":
-                bucket_url = os.environ.get("OPENC3_BUCKET_URL", "http://openc3-buckets:9000")
-                return f"{bucket_url}{url}"
+                # Honors OPENC3_BUCKET_URL and OPENC3_BUCKET_TLS (rejects a plaintext endpoint when TLS is required)
+                return f"{tls_config.bucket_endpoint()}{url}"
             case "aws":
                 return f"https://s3.{os.getenv('AWS_REGION')}.amazonaws.com{url}"
             case "gcp":

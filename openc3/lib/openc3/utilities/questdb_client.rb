@@ -16,6 +16,7 @@ require 'bigdecimal'
 require 'concurrent'
 require 'json'
 require 'pg'
+require 'openc3/utilities/tls_config'
 require 'set'
 require 'time'
 require 'openc3/models/target_model'
@@ -94,7 +95,8 @@ module OpenC3
         port: ENV['OPENC3_TSDB_QUERY_PORT'],
         user: ENV['OPENC3_TSDB_USERNAME'],
         password: ENV['OPENC3_TSDB_PASSWORD'],
-        dbname: 'qdb'
+        dbname: 'qdb',
+        **TlsConfig.tsdb_pg_params
       )
       conn.type_map_for_results = PG::BasicTypeMapForResults.new(conn)
       conns[db_shard] = conn
@@ -129,7 +131,8 @@ module OpenC3
         port: ENV['OPENC3_TSDB_QUERY_PORT'],
         user: ENV['OPENC3_TSDB_USERNAME'],
         password: ENV['OPENC3_TSDB_PASSWORD'],
-        dbname: 'qdb'
+        dbname: 'qdb',
+        **TlsConfig.tsdb_pg_params
       )
       conn.close
       true

@@ -17,6 +17,7 @@
 
 require 'tempfile'
 require 'net/http'
+require 'openc3/utilities/tls_config'
 
 ENV['OPENC3_CLOUD'] ||= 'local'
 
@@ -65,18 +66,16 @@ module OpenC3
       # Try to put the file
       begin
         uri = _get_uri(result['url'])
-        Net::HTTP.start(uri.host, uri.port) do
-          request = Net::HTTP::Put.new(uri, {'Content-Length' => io_or_string.length.to_s})
-          if String === io_or_string
-            request.body = io_or_string
-          else
-            request.body_stream = io_or_string
-          end
-          Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
-            http.request(request) do |response|
-              response.value() # Raises an HTTP error if the response is not 2xx (success)
-              return response
-            end
+        request = Net::HTTP::Put.new(uri, {'Content-Length' => io_or_string.length.to_s})
+        if String === io_or_string
+          request.body = io_or_string
+        else
+          request.body_stream = io_or_string
+        end
+        Net::HTTP.start(uri.host, uri.port, **_http_options(uri)) do |http|
+          http.request(request) do |response|
+            response.value() # Raises an HTTP error if the response is not 2xx (success)
+            return response
           end
         end
       rescue => e
@@ -152,27 +151,37 @@ module OpenC3
 
       # Try to get the file
       uri = _get_uri(result['url'])
-      Net::HTTP.start(uri.host, uri.port) do
-        request = Net::HTTP::Get.new uri
-        Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
-          http.request(request) do |response|
-            response.value() # Raises an HTTP error if the response is not 2xx (success)
-            response.read_body do |chunk|
-              file.write chunk
-            end
+      request = Net::HTTP::Get.new uri
+      Net::HTTP.start(uri.host, uri.port, **_http_options(uri)) do |http|
+        http.request(request) do |response|
+          response.value() # Raises an HTTP error if the response is not 2xx (success)
+          response.read_body do |chunk|
+            file.write chunk
           end
         end
-        file.rewind
       end
+      file.rewind
       return file
+    end
+
+    # Net::HTTP.start options for the presigned bucket URL. TLS is used whenever the
+    # URL is https (certificate verification is Net::HTTP's default); the bucket CA
+    # bundle from OPENC3_BUCKET_TLS_CA_FILE is applied for in-cluster local buckets.
+    def _http_options(uri)
+      options = { use_ssl: uri.scheme == 'https' }
+      if options[:use_ssl] and $openc3_in_cluster and ENV['OPENC3_CLOUD'] == 'local'
+        ca_file = TlsConfig.bucket_ca_file
+        options[:ca_file] = ca_file if ca_file
+      end
+      options
     end
 
     def _get_uri(url)
       if $openc3_in_cluster
         case ENV['OPENC3_CLOUD']
         when 'local'
-          bucket_url = ENV["OPENC3_BUCKET_URL"] || "http://openc3-buckets:9000"
-          URI.parse("#{bucket_url}#{url}")
+          # Honors OPENC3_BUCKET_URL and OPENC3_BUCKET_TLS (rejects a plaintext endpoint when TLS is required)
+          URI.parse("#{TlsConfig.bucket_endpoint(devel: false)}#{url}")
         when 'aws'
           URI.parse("https://s3.#{ENV['AWS_REGION']}.amazonaws.com" + url)
         when 'gcp'

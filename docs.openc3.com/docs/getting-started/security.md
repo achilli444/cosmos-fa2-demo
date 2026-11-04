@@ -247,6 +247,23 @@ OPENC3_REDIS_PASSWORD=mypassword OPENC3_BUCKET_PASSWORD=mypassword ./openc3.sh r
 
 This prevents cleartext passwords from being stored on disk, though you must provide them each time you start COSMOS.
 
+### Encrypting Internal Service Connections (TLS)
+
+By default the COSMOS services talk to Redis/Valkey, QuestDB and the bucket store (VersityGW) over plaintext TCP on the internal Docker network, relying on that network for isolation. When the services are deployed with TLS enabled (for example on a shared or multi-host network), the Ruby and Python clients can be switched to encrypted, certificate-verified connections with the following environment variables. They are read by every COSMOS container (cmd-tlm-api, script-runner-api, operator, init and spawned scripts), so set them in `.env` or the host environment.
+
+| Variable                     | Default | Description                                                                                                 |
+| ---------------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `OPENC3_REDIS_TLS`           | unset   | Set to `1` to connect to Redis/Valkey over TLS (`rediss://`) with server certificate and hostname verification |
+| `OPENC3_REDIS_TLS_CA_FILE`   | unset   | PEM CA bundle used to verify the Redis server (system trust store when unset)                               |
+| `OPENC3_REDIS_TLS_CERT_FILE` | unset   | PEM client certificate for mutual TLS (set together with `OPENC3_REDIS_TLS_KEY_FILE`)                        |
+| `OPENC3_REDIS_TLS_KEY_FILE`  | unset   | PEM client private key for mutual TLS                                                                       |
+| `OPENC3_TSDB_TLS`            | unset   | Set to `1` to use HTTPS for QuestDB ILP ingest and `sslmode=verify-full` for QuestDB PostgreSQL queries      |
+| `OPENC3_TSDB_TLS_CA_FILE`    | unset   | PEM CA bundle used to verify QuestDB (system trust store when unset)                                        |
+| `OPENC3_BUCKET_TLS`          | unset   | Set to `1` to require an `https://` bucket endpoint; a plaintext `OPENC3_BUCKET_URL` is rejected at startup |
+| `OPENC3_BUCKET_TLS_CA_FILE`  | unset   | PEM CA bundle used to verify the bucket endpoint (system trust store when unset)                            |
+
+Certificate verification cannot be disabled; supply the issuing CA through the `*_CA_FILE` variables instead. Mount the CA bundle (and any client certificates) into the containers at the configured paths. Enabling these variables does not configure TLS on the Redis, QuestDB or VersityGW servers themselves; that is part of the deployment (see the respective service documentation).
+
 ## Security Recommendations
 
 For production deployments:
