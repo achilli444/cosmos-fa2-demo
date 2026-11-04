@@ -31,6 +31,35 @@ module OpenC3
       end
     end
 
+    describe "directive attribution" do
+      it "carries the username on write_raw so the microservice can attribute it" do
+        stub_ack("SUCCESS")
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'raw' => "\x00\x01", 'username' => 'anonymous@abc123def456' }, '*', 100, db_shard: 0).and_return("1234-0")
+        InterfaceTopic.write_raw("INST_INT", "\x00\x01", username: 'anonymous@abc123def456', scope: "DEFAULT")
+      end
+
+      it "carries the username on connect, disconnect, logging, cmd and target directives" do
+        username = 'anonymous@abc123def456'
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'connect' => 'true', 'username' => username }, '*', 100, db_shard: 0)
+        InterfaceTopic.connect_interface("INST_INT", username: username, scope: "DEFAULT")
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'disconnect' => 'true', 'username' => username }, '*', 100, db_shard: 0)
+        InterfaceTopic.disconnect_interface("INST_INT", username: username, scope: "DEFAULT")
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'log_stream' => 'false', 'username' => username }, '*', 100, db_shard: 0)
+        InterfaceTopic.stop_raw_logging("INST_INT", username: username, scope: "DEFAULT")
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", hash_including('interface_cmd', 'username' => username), '*', 100, db_shard: 0)
+        InterfaceTopic.interface_cmd("INST_INT", "CMD", username: username, scope: "DEFAULT")
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", hash_including('protocol_cmd', 'username' => username), '*', 100, db_shard: 0)
+        InterfaceTopic.protocol_cmd("INST_INT", "CMD", username: username, scope: "DEFAULT")
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", hash_including('target_control', 'username' => username), '*', 100, db_shard: 0)
+        InterfaceTopic.interface_target_disable("INST_INT", "INST", username: username, scope: "DEFAULT")
+      end
+
+      it "omits the username key when no user is given" do
+        expect(Topic).to receive(:write_topic).with("{DEFAULT__CMD}INTERFACE__INST_INT", { 'disconnect' => 'true' }, '*', 100, db_shard: 0)
+        InterfaceTopic.disconnect_interface("INST_INT", scope: "DEFAULT")
+      end
+    end
+
     describe "interface_details" do
       it "parses the JSON result from the microservice" do
         stub_ack({ 'name' => 'INST_INT', 'state' => 'CONNECTED' }.to_json)

@@ -167,10 +167,13 @@ module OpenC3
       interface_name = interface_name.upcase
       interface = get_interface(interface_name, scope: scope, token: token)
       # Verify we have command authority on all the targets mapped to this interface
+      user = nil
       interface['cmd_target_names'].each do |target_name|
-        authorize(permission: 'cmd_raw', interface_name: interface_name, target_name: target_name, manual: manual, scope: scope, token: token)
+        user = authorize(permission: 'cmd_raw', interface_name: interface_name, target_name: target_name, manual: manual, scope: scope, token: token)
       end
-      InterfaceTopic.write_raw(interface_name, data, scope: scope)
+      # An interface with no mapped targets never went through authorize above
+      user ||= authorize(permission: 'cmd_raw', interface_name: interface_name, manual: manual, scope: scope, token: token)
+      InterfaceTopic.write_raw(interface_name, data, username: _audit_username(user), scope: scope)
     end
 
     # Returns the raw buffer from the most recent specified command packet.

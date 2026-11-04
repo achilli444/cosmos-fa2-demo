@@ -82,6 +82,22 @@ module OpenC3
     end
 
     describe "connect_interface, disconnect_interface" do
+      it "attributes the directives to the authorized user" do
+        username = /\Aanonymous@\h{12}\z/
+        expect(InterfaceTopic).to receive(:disconnect_interface).with("INST_INT", username: username, scope: "DEFAULT")
+        @api.disconnect_interface("INST_INT")
+        expect(InterfaceTopic).to receive(:connect_interface).with("INST_INT", username: username, scope: "DEFAULT")
+        @api.connect_interface("INST_INT")
+        expect(InterfaceTopic).to receive(:start_raw_logging).with("INST_INT", username: username, scope: "DEFAULT")
+        @api.start_raw_logging_interface("INST_INT")
+        expect(InterfaceTopic).to receive(:stop_raw_logging).with("INST_INT", username: username, scope: "DEFAULT")
+        @api.stop_raw_logging_interface("INST_INT")
+        expect(InterfaceTopic).to receive(:interface_cmd).with("INST_INT", "cmd1", "param1", username: username, scope: "DEFAULT")
+        @api.interface_cmd("INST_INT", "cmd1", "param1")
+        expect(InterfaceTopic).to receive(:protocol_cmd).with("INST_INT", "cmd1", read_write: :READ_WRITE, index: -1, username: username, scope: "DEFAULT")
+        @api.interface_protocol_cmd("INST_INT", "cmd1")
+      end
+
       it "connects the interface" do
         expect(@api.get_interface("INST_INT")['state']).to eql "CONNECTED"
         @api.disconnect_interface("INST_INT")
@@ -264,26 +280,28 @@ module OpenC3
 
     describe "interface_target_enable" do
       it "enables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        username = /\Aanonymous@\h{12}\z/
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: username, scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: username, scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: username, scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", tlm_only: true)
       end
     end
 
     describe "interface_target_disable" do
       it "disables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        username = /\Aanonymous@\h{12}\z/
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: username, scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: username, scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: username, scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", tlm_only: true)
       end
     end

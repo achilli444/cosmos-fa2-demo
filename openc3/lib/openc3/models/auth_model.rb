@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'argon2'
+require 'digest'
 require 'securerandom'
 require 'openc3/utilities/store'
 
@@ -57,6 +58,23 @@ module OpenC3
     # @return [Boolean] whether the value is shaped like a session token
     def self.session_token?(token)
       SESSION_TOKEN_REGEX.match?(token.to_s)
+    end
+
+    # Length of the hex session id recorded in audit logs (48 bits). Enough to
+    # keep concurrent sessions distinct; far too short to recover the token.
+    SESSION_ID_LENGTH = 12
+
+    # Stable, non-reversible identifier for a session token, for audit records.
+    # Core has one shared password so there is no individual username; this id
+    # is what lets records written during one login be tied together without
+    # ever writing the bearer token itself into a log. Tokens are 128 bits of
+    # randomness, so a SHA-256 prefix of one reveals nothing about it.
+    # @param token [String, nil] the session (or OTP) token
+    # @return [String, nil] hex id, or nil when there is no token
+    def self.session_id(token)
+      return nil if token.nil? or token.empty?
+
+      Digest::SHA256.hexdigest(token)[0, SESSION_ID_LENGTH]
     end
 
     def self.set?(key = PRIMARY_KEY)

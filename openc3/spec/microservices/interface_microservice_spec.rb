@@ -641,6 +641,41 @@ module OpenC3
       im.shutdown
     end
 
+    it "records the requesting user on interface directives" do
+      im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
+      interface = im.instance_variable_get(:@interface)
+      expect(interface).to receive(:interface_cmd).with("DO_THE_THING")
+
+      capture_io do |stdout|
+        Thread.new { im.run }
+        # Allow to start
+        10.times do
+          break if InterfaceStatusModel.all(scope: "DEFAULT")["INST_INT"]["state"] == "CONNECTED"
+
+          sleep 0.05
+        end
+        expect(InterfaceStatusModel.all(scope: "DEFAULT")["INST_INT"]["state"]).to eql "CONNECTED"
+
+        @api.interface_cmd("INST_INT", "DO_THE_THING", scope: "DEFAULT")
+        @api.stop_raw_logging_interface("INST_INT", scope: "DEFAULT")
+        sleep 0.2 # Allow the directives to be processed
+        lines = stdout.string.lines.map { |line| JSON.parse(line) rescue nil }.compact
+        cmd_log = lines.find { |line| line['message'].to_s.include?('interface_cmd: DO_THE_THING') }
+        expect(cmd_log).not_to be_nil
+        expect(cmd_log['user']).to match(/\Aanonymous@\h{12}\z/)
+        log_log = lines.find { |line| line['message'].to_s.include?('Disable stream logging') }
+        expect(log_log['user']).to match(/\Aanonymous@\h{12}\z/)
+
+        # A directive written without a username (internal caller) is tagged, not blank
+        InterfaceTopic.disconnect_interface("INST_INT", scope: "DEFAULT")
+        sleep 0.2
+        lines = stdout.string.lines.map { |line| JSON.parse(line) rescue nil }.compact
+        disconnect_log = lines.find { |line| line['message'].to_s.include?('Disconnect requested') }
+        expect(disconnect_log['user']).to eql 'unattributed'
+        im.shutdown
+      end
+    end
+
     it "supports interface_cmd" do
       im = InterfaceMicroservice.new("DEFAULT__INTERFACE__INST_INT")
       all = InterfaceStatusModel.all(scope: "DEFAULT")

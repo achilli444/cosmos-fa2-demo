@@ -34,12 +34,19 @@ class ApplicationController < ActionController::API
 
   def username()
     # For user_info see openc3/utilities/authorization and
-    # openc3_enterprise/utilities/authorization
+    # openc3_enterprise/utilities/authorization. Core tags the username with a
+    # session id (anonymous@<id>) since it has no individual accounts.
     user = user_info(request.headers['HTTP_AUTHORIZATION'])
     username = user['username']
-    # COSMOS Core username (Enterprise has the actual username)
+    # Only reached when user_info has no username at all
     username ||= 'anonymous'
     return username
+  end
+
+  # Request correlation data for audit records (Logger other:), so an event can
+  # be tied to its source even when the username is only a session tag.
+  def audit_context()
+    { 'remote_ip' => request.remote_ip, 'request_id' => request.request_id }
   end
 
   # Authorize and rescue the possible exceptions
