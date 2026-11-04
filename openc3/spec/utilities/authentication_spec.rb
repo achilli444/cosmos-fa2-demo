@@ -62,8 +62,88 @@ module OpenC3
     end
   end
 
+  describe "credential transport" do
+    let(:cleared) do
+      { 'OPENC3_API_SCHEMA' => nil, 'OPENC3_API_HOSTNAME' => nil, 'OPENC3_API_PORT' => nil,
+        'OPENC3_DEVEL' => nil, 'OPENC3_ALLOW_INSECURE_AUTH' => nil, 'OPENC3_API_PASSWORD' => 'test_password' }
+    end
+    let(:mock_response) do
+      response = Object.new
+      response.define_singleton_method(:body) { $openc3_mock_token }
+      response
+    end
+
+    before(:each) do
+      OpenC3.reset_cleartext_auth_warning
+      # spec_helper stubs out the whole request; put the URL generation (and thus
+      # the transport check) back on the path like the real _make_auth_request
+      allow_any_instance_of(OpenC3Authentication).to receive(:_make_auth_request) do |auth, _password|
+        auth._generate_auth_url
+        mock_response
+      end
+    end
+
+    it "defaults OPENC3_API_SCHEMA to https" do
+      OpenC3.spec_with_env(cleared) do
+        expect(OpenC3.api_schema('OPENC3_API_SCHEMA')).to eq('https')
+        auth = OpenC3Authentication.new
+        expect(auth._generate_auth_url).to eq('https://openc3-cosmos-cmd-tlm-api:2901/openc3-api/auth/verify')
+        expect(auth._generate_auth_url('/auth/otp')).to eq('https://openc3-cosmos-cmd-tlm-api:2901/openc3-api//auth/otp')
+      end
+    end
+
+    it "treats an empty OPENC3_API_SCHEMA as https" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_API_SCHEMA' => '')) do
+        expect(OpenC3Authentication.new._generate_auth_url).to start_with('https://')
+      end
+    end
+
+    it "refuses to post the password over http" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_API_SCHEMA' => 'http')) do
+        expect(Logger).not_to receive(:warn)
+        expect { OpenC3Authentication.new }.to raise_error(OpenC3AuthenticationError, /Refusing to send credentials over cleartext http.*OPENC3_API_SCHEMA/)
+      end
+    end
+
+    it "does not treat OPENC3_ALLOW_INSECURE_AUTH=0 as an opt-in" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_API_SCHEMA' => 'http', 'OPENC3_ALLOW_INSECURE_AUTH' => '0')) do
+        expect { OpenC3Authentication.new }.to raise_error(OpenC3AuthenticationError, /cleartext http/)
+      end
+    end
+
+    it "posts over http when OPENC3_ALLOW_INSECURE_AUTH is set and warns once per process" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_API_SCHEMA' => 'http', 'OPENC3_ALLOW_INSECURE_AUTH' => '1')) do
+        expect(Logger).to receive(:warn).with(/Sending credentials over cleartext http/).once
+        expect(OpenC3Authentication.new.token).to eq($openc3_mock_token)
+        expect(OpenC3Authentication.new.token).to eq($openc3_mock_token)
+      end
+    end
+
+    it "treats OPENC3_DEVEL as the local development opt-in" do
+      OpenC3.spec_with_env(cleared.merge('OPENC3_API_SCHEMA' => 'http', 'OPENC3_DEVEL' => '../openc3')) do
+        expect(Logger).to receive(:warn).with(/cleartext http/).once
+        expect(OpenC3Authentication.new._generate_auth_url).to eq('http://127.0.0.1:2901/openc3-api/auth/verify')
+      end
+    end
+
+    it "refuses an http Keycloak URL and accepts https" do
+      OpenC3.spec_with_env(cleared) do
+        expect { OpenC3KeycloakAuthentication.new('http://keycloak:8080') }.to raise_error(OpenC3AuthenticationError, /cleartext http.*OPENC3_KEYCLOAK_URL/)
+        expect(OpenC3KeycloakAuthentication.new('https://keycloak:8080')).to be_a(OpenC3KeycloakAuthentication)
+      end
+    end
+
+    it "leaves https and wss alone" do
+      OpenC3.spec_with_env(cleared) do
+        expect(Logger).not_to receive(:warn)
+        expect(OpenC3.verify_credential_transport('https://x:1')).to eq('https://x:1')
+        expect(OpenC3.verify_credential_transport('wss://x:1')).to eq('wss://x:1')
+      end
+    end
+  end
+
   describe OpenC3KeycloakAuthentication do
-    let(:test_url) { "http://test-keycloak.local" }
+    let(:test_url) { "https://test-keycloak.local" }
     let(:mock_http) { instance_double(Faraday::Connection) }
     let(:mock_builder) { instance_double(Faraday::RackBuilder) }
 

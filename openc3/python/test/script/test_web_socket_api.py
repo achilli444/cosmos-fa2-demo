@@ -37,8 +37,11 @@ from openc3.script.web_socket_api import (
     WebSocketApi,
 )
 from openc3.utilities.authentication import (
+    OpenC3AuthenticationError,
     OpenC3KeycloakAuthentication,
+    reset_cleartext_auth_warning,
 )
+from openc3.utilities.logger import Logger
 from openc3.utilities.time import to_nsec_from_epoch
 
 
@@ -112,7 +115,7 @@ class FakeStreamApiTest(unittest.TestCase):
     CONFIRM_SUBSCRIPTION = False
 
     def _make_api(self):
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         api.identifier = {"channel": "TestChannel"}
         api.stream = FakeWebSocketStream()
         if self.CONFIRM_SUBSCRIPTION:
@@ -147,7 +150,7 @@ class TestMessagesWebSocketApiConnectionClosed(unittest.TestCase):
 
         # Create a real WebSocketClientStream and replace its connection
         api.stream = WebSocketClientStream(
-            url="ws://test.com",
+            url="wss://test.com",
             write_timeout=10.0,
             read_timeout=10.0,
             connect_timeout=5.0,
@@ -176,7 +179,7 @@ class TestWebSocketApiEdgeCases(unittest.TestCase):
         mock_auth = Mock()
         mock_auth.token.return_value = "test-token"
         api = WebSocketApi(
-            url="ws://test.com/cable",
+            url="wss://test.com/cable",
             authentication=mock_auth,
         )
         api.identifier = {"channel": "TestChannel"}
@@ -212,7 +215,7 @@ class TestWebSocketApiSubscribe(unittest.TestCase):
     """Verify the subscribe wire format the server is actually expecting."""
 
     def _make_api(self):
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         api.identifier = {"channel": "TestChannel"}
         api.stream = Mock()
         # subscribe() now blocks until the server confirms the subscription
@@ -263,7 +266,7 @@ class TestRunningScriptWebSocketApiReady(unittest.TestCase):
     def _make_api(self):
         api = RunningScriptWebSocketApi(
             id="spec-script-1",
-            url="ws://test.com/script-api/cable",
+            url="wss://test.com/script-api/cable",
             authentication=mock_auth(),
         )
         api.stream = Mock()
@@ -322,7 +325,7 @@ class TestRunningScriptWebSocketApiReady(unittest.TestCase):
     def test_read_returns_batched_events_one_at_a_time(self):
         api = RunningScriptWebSocketApi(
             id="spec-script-1",
-            url="ws://test.com/script-api/cable",
+            url="wss://test.com/script-api/cable",
             authentication=mock_auth(),
         )
         api.stream = FakeWebSocketStream()
@@ -335,7 +338,7 @@ class TestRunningScriptWebSocketApiReady(unittest.TestCase):
     def test_read_accepts_an_individual_event_from_an_older_backend(self):
         api = RunningScriptWebSocketApi(
             id="spec-script-1",
-            url="ws://test.com/script-api/cable",
+            url="wss://test.com/script-api/cable",
             authentication=mock_auth(),
         )
         api.stream = FakeWebSocketStream()
@@ -348,7 +351,7 @@ class TestRunningScriptWebSocketApiReady(unittest.TestCase):
 class TestWebSocketApiInit(unittest.TestCase):
     def test_stores_the_timeouts_for_the_stream(self):
         api = WebSocketApi(
-            url="ws://test.com/cable",
+            url="wss://test.com/cable",
             authentication=mock_auth(),
             write_timeout=1.0,
             read_timeout=2.0,
@@ -360,14 +363,14 @@ class TestWebSocketApiInit(unittest.TestCase):
         self.assertFalse(api.subscribed)
 
     def test_defaults_the_scope_and_accepts_an_override(self):
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         self.assertEqual(api.scope, "DEFAULT")
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth(), scope="OTHER")
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth(), scope="OTHER")
         self.assertEqual(api.scope, "OTHER")
 
     def test_generates_authentication_when_none_is_passed(self):
         with patch.dict(os.environ, {"OPENC3_API_TOKEN": "token"}, clear=True):
-            api = WebSocketApi(url="ws://test.com/cable")
+            api = WebSocketApi(url="wss://test.com/cable")
             self.assertIsInstance(api.authentication, OpenC3KeycloakAuthentication)
 
     # Subclasses forward **options, which would otherwise silently swallow a
@@ -375,12 +378,12 @@ class TestWebSocketApiInit(unittest.TestCase):
     def test_rejects_an_unknown_option(self):
         auth = mock_auth()
         with self.assertRaisesRegex(TypeError, "unexpected keyword argument\\(s\\): read_timout"):
-            WebSocketApi(url="ws://test.com/cable", authentication=auth, read_timout=5.0)
+            WebSocketApi(url="wss://test.com/cable", authentication=auth, read_timout=5.0)
 
     def test_reports_every_unknown_option(self):
         auth = mock_auth()
         with self.assertRaisesRegex(TypeError, "unexpected keyword argument\\(s\\): bogus, other"):
-            MessagesWebSocketApi(url="ws://test.com/cable", authentication=auth, bogus=1, other=2)
+            MessagesWebSocketApi(url="wss://test.com/cable", authentication=auth, bogus=1, other=2)
 
 
 class TestWebSocketApiContextManager(unittest.TestCase):
@@ -388,7 +391,7 @@ class TestWebSocketApiContextManager(unittest.TestCase):
     def test_connects_yields_itself_then_disconnects(self, stream_class):
         stream = FakeWebSocketStream()
         stream_class.return_value = stream
-        with WebSocketApi(url="ws://test.com/cable", authentication=mock_auth()) as api:
+        with WebSocketApi(url="wss://test.com/cable", authentication=mock_auth()) as api:
             self.assertIsInstance(api, WebSocketApi)
             self.assertEqual(stream.connect_count, 1)
             self.assertTrue(api.connected())
@@ -401,7 +404,7 @@ class TestWebSocketApiContextManager(unittest.TestCase):
         stream_class.return_value = stream
 
         def raise_inside_the_block():
-            with WebSocketApi(url="ws://test.com/cable", authentication=mock_auth()):
+            with WebSocketApi(url="wss://test.com/cable", authentication=mock_auth()):
                 raise RuntimeError("boom")
 
         self.assertRaisesRegex(RuntimeError, "boom", raise_inside_the_block)
@@ -414,7 +417,7 @@ class TestWebSocketApiConnect(unittest.TestCase):
         stream = FakeWebSocketStream()
         stream_class.return_value = stream
         api = WebSocketApi(
-            url="ws://test.com/cable",
+            url="wss://test.com/cable",
             authentication=mock_auth(),
             scope="OTHER",
             write_timeout=1.0,
@@ -422,7 +425,7 @@ class TestWebSocketApiConnect(unittest.TestCase):
             connect_timeout=3.0,
         )
         api.connect()
-        stream_class.assert_called_once_with("ws://test.com/cable?scope=OTHER", 1.0, 2.0, 3.0)
+        stream_class.assert_called_once_with("wss://test.com/cable?scope=OTHER", 1.0, 2.0, 3.0)
         self.assertEqual(stream.connect_count, 1)
 
     # The server negotiates the ActionCable JSON subprotocol from this header;
@@ -431,7 +434,7 @@ class TestWebSocketApiConnect(unittest.TestCase):
     def test_sets_the_actioncable_subprotocol_and_user_agent_headers(self, stream_class):
         stream = FakeWebSocketStream()
         stream_class.return_value = stream
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         api.connect()
         self.assertEqual(
             stream.headers["Sec-WebSocket-Protocol"],
@@ -443,7 +446,7 @@ class TestWebSocketApiConnect(unittest.TestCase):
     def test_disconnects_an_existing_connection_before_reconnecting(self, stream_class):
         stream = FakeWebSocketStream()
         stream_class.return_value = stream
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         api.identifier = {"channel": "TestChannel"}
         api.connect()
         api.connect()
@@ -453,11 +456,11 @@ class TestWebSocketApiConnect(unittest.TestCase):
 
 class TestWebSocketApiConnected(unittest.TestCase):
     def test_is_false_before_a_stream_exists(self):
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         self.assertFalse(api.connected())
 
     def test_delegates_to_the_stream_once_connected(self):
-        api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = WebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         stream = FakeWebSocketStream()
         api.stream = stream
         self.assertFalse(api.connected())
@@ -711,16 +714,42 @@ class TestWebSocketApiGenerateAuth(unittest.TestCase):
             self.api._generate_auth()
 
     def test_uses_keycloak_authentication_when_the_api_token_is_set(self):
-        env = {"OPENC3_API_TOKEN": "token", "OPENC3_KEYCLOAK_URL": "http://keycloak:8080"}
+        env = {"OPENC3_API_TOKEN": "token", "OPENC3_KEYCLOAK_URL": "https://keycloak:8080"}
         with patch.dict(os.environ, env, clear=True):
             auth = self.api._generate_auth()
             self.assertIsInstance(auth, OpenC3KeycloakAuthentication)
-            self.assertEqual(auth.url, "http://keycloak:8080")
+            self.assertEqual(auth.url, "https://keycloak:8080")
 
     def test_uses_keycloak_authentication_when_the_api_user_is_set(self):
-        env = {"OPENC3_API_USER": "user", "OPENC3_KEYCLOAK_URL": "http://keycloak:8080"}
+        env = {"OPENC3_API_USER": "user", "OPENC3_KEYCLOAK_URL": "https://keycloak:8080"}
         with patch.dict(os.environ, env, clear=True):
             self.assertIsInstance(self.api._generate_auth(), OpenC3KeycloakAuthentication)
+
+
+class TestWebSocketApiCredentialTransport(unittest.TestCase):
+    """The token travels in the subscribe identifier, so the cable must be encrypted"""
+
+    def setUp(self):
+        reset_cleartext_auth_warning()
+
+    @patch("openc3.script.web_socket_api.WebSocketClientStream")
+    def test_connect_refuses_a_cleartext_ws_cable(self, stream_class):
+        with patch.dict(os.environ, {}, clear=True):
+            api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+            with self.assertRaisesRegex(OpenC3AuthenticationError, "cleartext ws"):
+                api.connect()
+        stream_class.assert_not_called()
+
+    @patch("openc3.script.web_socket_api.WebSocketClientStream")
+    def test_connect_allows_cleartext_ws_with_opt_in_and_warns(self, stream_class):
+        with (
+            patch.dict(os.environ, {"OPENC3_ALLOW_INSECURE_AUTH": "1"}, clear=True),
+            patch.object(Logger.instance(), "warn") as warn,
+        ):
+            api = WebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+            api.connect()
+        stream_class.return_value.connect.assert_called_once()
+        warn.assert_called_once()
 
 
 class TestCmdTlmWebSocketApiGenerateUrl(unittest.TestCase):
@@ -729,17 +758,17 @@ class TestCmdTlmWebSocketApiGenerateUrl(unittest.TestCase):
 
     def test_defaults_to_the_in_cluster_service_name_and_cable_port(self):
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(self.api.generate_url(), "ws://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable")
+            self.assertEqual(self.api.generate_url(), "wss://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable")
 
     # Outside the cluster the service DNS name does not resolve
     def test_uses_localhost_when_openc3_devel_is_set(self):
         with patch.dict(os.environ, {"OPENC3_DEVEL": "../openc3"}, clear=True):
-            self.assertEqual(self.api.generate_url(), "ws://127.0.0.1:3901/openc3-api/cable")
+            self.assertEqual(self.api.generate_url(), "wss://127.0.0.1:3901/openc3-api/cable")
 
     def test_prefers_an_explicit_hostname_over_the_devel_default(self):
         env = {"OPENC3_DEVEL": "../openc3", "OPENC3_API_HOSTNAME": "example.com"}
         with patch.dict(os.environ, env, clear=True):
-            self.assertEqual(self.api.generate_url(), "ws://example.com:3901/openc3-api/cable")
+            self.assertEqual(self.api.generate_url(), "wss://example.com:3901/openc3-api/cable")
 
     # http/https are translated to the ws/wss websocket schemes
     def test_translates_the_http_schema_to_ws(self):
@@ -756,23 +785,23 @@ class TestCmdTlmWebSocketApiGenerateUrl(unittest.TestCase):
 
     def test_falls_back_to_the_api_port_when_no_cable_port_is_set(self):
         with patch.dict(os.environ, {"OPENC3_API_PORT": "2900"}, clear=True):
-            self.assertEqual(self.api.generate_url(), "ws://openc3-cosmos-cmd-tlm-api:2900/openc3-api/cable")
+            self.assertEqual(self.api.generate_url(), "wss://openc3-cosmos-cmd-tlm-api:2900/openc3-api/cable")
 
     # Cable traffic can be routed to a different port than the REST API
     def test_prefers_the_cable_port_over_the_api_port(self):
         env = {"OPENC3_API_PORT": "2900", "OPENC3_API_CABLE_PORT": "3901"}
         with patch.dict(os.environ, env, clear=True):
-            self.assertEqual(self.api.generate_url(), "ws://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable")
+            self.assertEqual(self.api.generate_url(), "wss://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable")
 
     def test_generates_its_url_when_none_is_given(self):
         env = {"OPENC3_API_HOSTNAME": "example.com", "OPENC3_API_CABLE_PORT": "1234"}
         with patch.dict(os.environ, env, clear=True):
             api = CmdTlmWebSocketApi(authentication=mock_auth())
-            self.assertEqual(api.url, "ws://example.com:1234/openc3-api/cable")
+            self.assertEqual(api.url, "wss://example.com:1234/openc3-api/cable")
 
     def test_uses_an_explicitly_passed_url_unchanged(self):
-        api = CmdTlmWebSocketApi(url="ws://given:1/cable", authentication=mock_auth())
-        self.assertEqual(api.url, "ws://given:1/cable")
+        api = CmdTlmWebSocketApi(url="wss://given:1/cable", authentication=mock_auth())
+        self.assertEqual(api.url, "wss://given:1/cable")
 
 
 class TestScriptWebSocketApiGenerateUrl(unittest.TestCase):
@@ -783,17 +812,17 @@ class TestScriptWebSocketApiGenerateUrl(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(
                 self.api.generate_url(),
-                "ws://openc3-cosmos-script-runner-api:3902/script-api/cable",
+                "wss://openc3-cosmos-script-runner-api:3902/script-api/cable",
             )
 
     def test_uses_localhost_when_openc3_devel_is_set(self):
         with patch.dict(os.environ, {"OPENC3_DEVEL": "../openc3"}, clear=True):
-            self.assertEqual(self.api.generate_url(), "ws://127.0.0.1:3902/script-api/cable")
+            self.assertEqual(self.api.generate_url(), "wss://127.0.0.1:3902/script-api/cable")
 
     def test_prefers_an_explicit_hostname_over_the_devel_default(self):
         env = {"OPENC3_DEVEL": "../openc3", "OPENC3_SCRIPT_API_HOSTNAME": "example.com"}
         with patch.dict(os.environ, env, clear=True):
-            self.assertEqual(self.api.generate_url(), "ws://example.com:3902/script-api/cable")
+            self.assertEqual(self.api.generate_url(), "wss://example.com:3902/script-api/cable")
 
     def test_translates_the_https_schema_to_wss(self):
         with patch.dict(os.environ, {"OPENC3_SCRIPT_API_SCHEMA": "https"}, clear=True):
@@ -806,7 +835,7 @@ class TestScriptWebSocketApiGenerateUrl(unittest.TestCase):
         with patch.dict(os.environ, {"OPENC3_SCRIPT_API_PORT": "2900"}, clear=True):
             self.assertEqual(
                 self.api.generate_url(),
-                "ws://openc3-cosmos-script-runner-api:2900/script-api/cable",
+                "wss://openc3-cosmos-script-runner-api:2900/script-api/cable",
             )
 
     def test_prefers_the_cable_port_over_the_script_api_port(self):
@@ -814,14 +843,14 @@ class TestScriptWebSocketApiGenerateUrl(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             self.assertEqual(
                 self.api.generate_url(),
-                "ws://openc3-cosmos-script-runner-api:3902/script-api/cable",
+                "wss://openc3-cosmos-script-runner-api:3902/script-api/cable",
             )
 
     def test_generates_its_url_when_none_is_given(self):
         env = {"OPENC3_SCRIPT_API_HOSTNAME": "example.com", "OPENC3_SCRIPT_API_CABLE_PORT": "1234"}
         with patch.dict(os.environ, env, clear=True):
             api = ScriptWebSocketApi(authentication=mock_auth())
-            self.assertEqual(api.url, "ws://example.com:1234/script-api/cable")
+            self.assertEqual(api.url, "wss://example.com:1234/script-api/cable")
 
 
 class TestChannelIdentifiers(unittest.TestCase):
@@ -841,13 +870,13 @@ class TestChannelIdentifiers(unittest.TestCase):
     def test_history_count_channels_default_history_count_to_zero(self):
         for klass, channel in self.HISTORY_COUNT_APIS.items():
             with self.subTest(klass=klass.__name__):
-                api = klass(url="ws://test.com/cable", authentication=mock_auth())
+                api = klass(url="wss://test.com/cable", authentication=mock_auth())
                 self.assertEqual(api.identifier, {"channel": channel, "history_count": 0})
 
     def test_history_count_channels_pass_history_count_through(self):
         for klass in self.HISTORY_COUNT_APIS:
             with self.subTest(klass=klass.__name__):
-                api = klass(history_count=100, url="ws://test.com/cable", authentication=mock_auth())
+                api = klass(history_count=100, url="wss://test.com/cable", authentication=mock_auth())
                 self.assertEqual(api.identifier["history_count"], 100)
 
     def test_history_count_channels_are_cmd_tlm_websockets(self):
@@ -856,17 +885,17 @@ class TestChannelIdentifiers(unittest.TestCase):
                 self.assertTrue(issubclass(klass, CmdTlmWebSocketApi))
 
     def test_all_scripts_channel(self):
-        api = AllScriptsWebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = AllScriptsWebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         self.assertEqual(api.identifier, {"channel": "AllScriptsChannel"})
         self.assertTrue(issubclass(AllScriptsWebSocketApi, ScriptWebSocketApi))
 
     def test_running_script_channel_for_a_specific_script_id(self):
-        api = RunningScriptWebSocketApi(id=42, url="ws://test.com/cable", authentication=mock_auth())
+        api = RunningScriptWebSocketApi(id=42, url="wss://test.com/cable", authentication=mock_auth())
         self.assertEqual(api.identifier, {"channel": "RunningScriptChannel", "id": 42})
         self.assertTrue(issubclass(RunningScriptWebSocketApi, ScriptWebSocketApi))
 
     def test_messages_channel_omits_optional_filters_when_not_given(self):
-        api = MessagesWebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = MessagesWebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         self.assertEqual(api.identifier, {"channel": "MessagesChannel", "history_count": 0})
 
     def test_messages_channel_includes_each_filter_that_is_given(self):
@@ -876,7 +905,7 @@ class TestChannelIdentifiers(unittest.TestCase):
             end_time=2,
             level="INFO",
             types=["LOG"],
-            url="ws://test.com/cable",
+            url="wss://test.com/cable",
             authentication=mock_auth(),
         )
         self.assertEqual(
@@ -892,14 +921,14 @@ class TestChannelIdentifiers(unittest.TestCase):
         )
 
     def test_streaming_channel(self):
-        api = StreamingWebSocketApi(url="ws://test.com/cable", authentication=mock_auth())
+        api = StreamingWebSocketApi(url="wss://test.com/cable", authentication=mock_auth())
         self.assertEqual(api.identifier, {"channel": "StreamingChannel"})
 
 
 class TestStreamingWebSocketApiActions(unittest.TestCase):
     def _make_api(self, scope=None):
         kwargs = {"scope": scope} if scope else {}
-        api = StreamingWebSocketApi(url="ws://test.com/cable", authentication=mock_auth(), **kwargs)
+        api = StreamingWebSocketApi(url="wss://test.com/cable", authentication=mock_auth(), **kwargs)
         api.stream = FakeWebSocketStream()
         api.stream.queue_read('{"type":"confirm_subscription"}')
         return api

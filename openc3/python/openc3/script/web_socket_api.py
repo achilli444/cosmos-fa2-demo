@@ -23,6 +23,7 @@ from openc3.streams.web_socket_client_stream import WebSocketClientStream
 from openc3.utilities.authentication import (
     OpenC3Authentication,
     OpenC3KeycloakAuthentication,
+    verify_credential_transport,
 )
 from openc3.utilities.time import to_nsec_from_epoch
 
@@ -56,7 +57,7 @@ def _cable_url(env_prefix, default_hostname, default_port, path):
     """Build a cable URL from the standard OPENC3 environment variable quartet:
     <prefix>_SCHEMA, <prefix>_HOSTNAME, <prefix>_CABLE_PORT, <prefix>_PORT
     """
-    schema = os.environ.get(f"{env_prefix}_SCHEMA") or "http"
+    schema = os.environ.get(f"{env_prefix}_SCHEMA") or "https"
     # Normalize to the websocket schemes; the websockets library rejects http
     if schema == "http":
         schema = "ws"
@@ -234,6 +235,9 @@ class WebSocketApi:
     def connect(self):
         """Connect to the websocket with authorization in query params"""
         self.disconnect()
+        # The token travels in the subscribe identifier, so the cable must be encrypted
+        if self.authentication:
+            verify_credential_transport(self.url, setting="OPENC3_API_SCHEMA / OPENC3_SCRIPT_API_SCHEMA")
         # Add the token directly in the URL since adding it to the header doesn't seem to work
         # Note in the this case we remove the "Bearer " string which is part of the token
         final_url = self.url + f"?scope={self.scope}"

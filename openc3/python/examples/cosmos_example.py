@@ -12,6 +12,9 @@ os.environ["OPENC3_LOG_LEVEL"] = "INFO"
 os.environ["OPENC3_API_SCHEMA"] = "http"
 os.environ["OPENC3_API_HOSTNAME"] = "127.0.0.1"
 os.environ["OPENC3_API_PORT"] = "2900"
+# Plain http is only for a local COSMOS on 127.0.0.1. Against a real deployment
+# use https and remove this line; the client refuses cleartext credentials otherwise.
+os.environ["OPENC3_ALLOW_INSECURE_AUTH"] = "1"
 # This import must be after the os.environ settings
 from openc3.script import *
 

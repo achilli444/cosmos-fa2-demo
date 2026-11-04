@@ -10,13 +10,15 @@
 # if purchased from OpenC3, Inc.
 
 import json
+import os
 import threading
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from requests import Session
 
 from openc3.environment import *
+from openc3.utilities.logger import Logger
 
 
 # Basic exception for known errors
@@ -26,6 +28,56 @@ class OpenC3AuthenticationError(RuntimeError):
 
 class OpenC3AuthenticationRetryableError(OpenC3AuthenticationError):
     pass
+
+
+# URL schemes that carry the API password / bearer token in cleartext
+CLEARTEXT_AUTH_SCHEMES = ("http", "ws")
+_cleartext_auth_warned = False
+
+
+def insecure_auth_allowed():
+    """Cleartext credential transport (http / ws) is only allowed when a
+    deployment opts in: OPENC3_ALLOW_INSECURE_AUTH for a container network
+    that is trusted or encrypted elsewhere, or OPENC3_DEVEL for local development.
+    """
+    if get_env_bool("OPENC3_ALLOW_INSECURE_AUTH", False):
+        return True
+    return bool(os.environ.get("OPENC3_DEVEL"))
+
+
+def verify_credential_transport(url, setting="OPENC3_API_SCHEMA"):
+    """Verify a URL that will carry a password or token uses TLS (https / wss).
+
+    Raises OpenC3AuthenticationError for http / ws unless the deployment opted in,
+    in which case a warning is logged once per process.
+
+    Args:
+        url (str): The URL credentials are about to be sent to
+        setting (str): The environment variable that controls the URL (for the message)
+    Returns:
+        str: The url, unchanged
+    """
+    global _cleartext_auth_warned
+    scheme = (urlparse(str(url)).scheme or "").lower()
+    if scheme not in CLEARTEXT_AUTH_SCHEMES:
+        return url
+    if not insecure_auth_allowed():
+        raise OpenC3AuthenticationError(
+            f"Refusing to send credentials over cleartext {scheme} to {url}. "
+            f"Use https/wss ({setting}) or set OPENC3_ALLOW_INSECURE_AUTH=1 to accept cleartext credential transport."
+        )
+    if not _cleartext_auth_warned:
+        _cleartext_auth_warned = True
+        Logger.warn(
+            f"Sending credentials over cleartext {scheme} to {url} because OPENC3_ALLOW_INSECURE_AUTH or OPENC3_DEVEL is set"
+        )
+    return url
+
+
+def reset_cleartext_auth_warning():
+    """Re-arm the once-per-process warning (used by tests)"""
+    global _cleartext_auth_warned
+    _cleartext_auth_warned = False
 
 
 # OpenC3 COSMOS Core authentication code
@@ -61,13 +113,13 @@ class OpenC3Authentication:
         return response.text
 
     def _generate_auth_url(self, endpoint=None):
-        schema = OPENC3_API_SCHEMA or "http"
+        schema = OPENC3_API_SCHEMA or "https"
         hostname = OPENC3_API_HOSTNAME or ("127.0.0.1" if OPENC3_DEVEL else "openc3-cosmos-cmd-tlm-api")
         port = OPENC3_API_PORT or "2901"
         port = int(port)
         if endpoint is None:
             endpoint = "auth/verify_service" if self.service else "auth/verify"
-        return f"{schema}://{hostname}:{port}/openc3-api/{endpoint}"
+        return verify_credential_transport(f"{schema}://{hostname}:{port}/openc3-api/{endpoint}")
 
 
 # OpenC3 enterprise Keycloak authentication code
@@ -88,6 +140,8 @@ class OpenC3KeycloakAuthentication(OpenC3Authentication):
 
     # @param url [String] The url of the openc3 or keycloak in the cluster
     def __init__(self, url):
+        if url:
+            verify_credential_transport(url, setting="OPENC3_KEYCLOAK_URL")
         self.url = url
         self.auth_mutex = threading.Lock()
         self.refresh_token = None

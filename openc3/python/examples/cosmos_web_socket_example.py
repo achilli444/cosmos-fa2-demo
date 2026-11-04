@@ -11,6 +11,11 @@ os.environ["OPENC3_API_HOSTNAME"] = "127.0.0.1"
 os.environ["OPENC3_API_PORT"] = "2900"
 os.environ["OPENC3_SCRIPT_API_HOSTNAME"] = "127.0.0.1"
 os.environ["OPENC3_SCRIPT_API_PORT"] = "2900"
+# A local COSMOS on 127.0.0.1:2900 serves plain http/ws. Against a real deployment
+# leave the schemas at their https default and remove these lines.
+os.environ["OPENC3_API_SCHEMA"] = "http"
+os.environ["OPENC3_SCRIPT_API_SCHEMA"] = "http"
+os.environ["OPENC3_ALLOW_INSECURE_AUTH"] = "1"
 # Define these for Enterprise
 # os.environ["OPENC3_KEYCLOAK_URL"] = "http://localhost:2900/auth"
 # os.environ["OPENC3_API_USER"] = "operator"

@@ -20,7 +20,10 @@ from openc3.utilities.authentication import (
     OpenC3AuthenticationError,
     OpenC3AuthenticationRetryableError,
     OpenC3KeycloakAuthentication,
+    reset_cleartext_auth_warning,
+    verify_credential_transport,
 )
+from openc3.utilities.logger import Logger
 from test.test_helper import *
 
 
@@ -140,9 +143,101 @@ class TestOpenC3Authentication(unittest.TestCase):
         self.assertIn("Uninitialized authentication", str(context.exception))
 
 
+@patch("openc3.utilities.authentication.OPENC3_API_HOSTNAME", None)
+@patch("openc3.utilities.authentication.OPENC3_API_PORT", None)
+@patch("openc3.utilities.authentication.OPENC3_DEVEL", None)
+@patch("openc3.utilities.authentication.OPENC3_API_PASSWORD", "test_password")
+class TestCredentialTransport(unittest.TestCase):
+    """Passwords and tokens must not leave the process over cleartext http / ws"""
+
+    def setUp(self):
+        reset_cleartext_auth_warning()
+
+    @staticmethod
+    def _auth():
+        auth = OpenC3Authentication.__new__(OpenC3Authentication)
+        auth.service = False
+        return auth
+
+    @patch("openc3.utilities.authentication.OPENC3_API_SCHEMA", None)
+    def test_defaults_to_https(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                self._auth()._generate_auth_url(), "https://openc3-cosmos-cmd-tlm-api:2901/openc3-api/auth/verify"
+            )
+
+    def test_environment_defaults_are_https(self):
+        import importlib
+
+        import openc3.environment as environment
+
+        with patch.dict(os.environ, {}, clear=True):
+            importlib.reload(environment)
+            self.assertEqual(environment.OPENC3_API_SCHEMA, "https")
+            self.assertEqual(environment.OPENC3_SCRIPT_API_SCHEMA, "https")
+            self.assertEqual(environment.OPENC3_KEYCLOAK_URL, "https://openc3-keycloak/auth")
+        with patch.dict(os.environ, {"OPENC3_API_SCHEMA": ""}, clear=True):
+            importlib.reload(environment)
+            self.assertEqual(environment.OPENC3_API_SCHEMA, "https")
+        importlib.reload(environment)
+
+    @patch("openc3.utilities.authentication.OPENC3_API_SCHEMA", "http")
+    @patch("openc3.utilities.authentication.Session")
+    def test_refuses_to_post_the_password_over_http(self, mock_session_class):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(Logger.instance(), "warn") as warn,
+            self.assertRaisesRegex(OpenC3AuthenticationError, "cleartext http.*OPENC3_API_SCHEMA"),
+        ):
+            OpenC3Authentication()
+        mock_session_class.return_value.post.assert_not_called()
+        warn.assert_not_called()
+
+    @patch("openc3.utilities.authentication.OPENC3_API_SCHEMA", "http")
+    def test_does_not_treat_allow_insecure_auth_0_as_opt_in(self):
+        with (
+            patch.dict(os.environ, {"OPENC3_ALLOW_INSECURE_AUTH": "0"}, clear=True),
+            self.assertRaisesRegex(OpenC3AuthenticationError, "cleartext http"),
+        ):
+            self._auth()._generate_auth_url()
+
+    @patch("openc3.utilities.authentication.OPENC3_API_SCHEMA", "http")
+    def test_allows_http_with_opt_in_and_warns_once(self):
+        with (
+            patch.dict(os.environ, {"OPENC3_ALLOW_INSECURE_AUTH": "1"}, clear=True),
+            patch.object(Logger.instance(), "warn") as warn,
+        ):
+            url = "http://openc3-cosmos-cmd-tlm-api:2901/openc3-api/auth/verify"
+            self.assertEqual(self._auth()._generate_auth_url(), url)
+            self.assertEqual(self._auth()._generate_auth_url(), url)
+        warn.assert_called_once()
+        self.assertIn("cleartext http", warn.call_args.args[0])
+
+    @patch("openc3.utilities.authentication.OPENC3_API_SCHEMA", "http")
+    def test_treats_openc3_devel_as_opt_in(self):
+        with (
+            patch.dict(os.environ, {"OPENC3_DEVEL": "../openc3"}, clear=True),
+            patch.object(Logger.instance(), "warn") as warn,
+        ):
+            self.assertTrue(self._auth()._generate_auth_url().startswith("http://"))
+        warn.assert_called_once()
+
+    def test_refuses_http_keycloak_url_and_accepts_https(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(OpenC3AuthenticationError, "cleartext http.*OPENC3_KEYCLOAK_URL"):
+                OpenC3KeycloakAuthentication("http://keycloak:8080")
+            self.assertEqual(OpenC3KeycloakAuthentication("https://keycloak:8080").url, "https://keycloak:8080")
+
+    def test_leaves_https_and_wss_alone(self):
+        with patch.dict(os.environ, {}, clear=True), patch.object(Logger.instance(), "warn") as warn:
+            self.assertEqual(verify_credential_transport("https://x:1"), "https://x:1")
+            self.assertEqual(verify_credential_transport("wss://x:1"), "wss://x:1")
+        warn.assert_not_called()
+
+
 class TestOpenC3KeycloakAuthentication(unittest.TestCase):
     def setUp(self):
-        self.test_url = "http://test-keycloak.local"
+        self.test_url = "https://test-keycloak.local"
         # Save original environment
         self.old_env = {}
         env_vars = [

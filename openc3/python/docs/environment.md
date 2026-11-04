@@ -6,12 +6,12 @@
 
 > CORE, ENTERPRISE
 
-Set the schema for OpenC3 COSMOS. Normal options are `http` or `https`. The default is `http`
+Set the schema for OpenC3 COSMOS. Normal options are `http` or `https`. The default is `https`. Credentials (the API password or a token) are only sent over `http` when `OPENC3_ALLOW_INSECURE_AUTH` (or `OPENC3_DEVEL`) is set.
 
 Example:
 
 ```
-OPENC3_API_SCHEMA=http
+OPENC3_API_SCHEMA=https
 ```
 
 ## OPENC3_API_HOSTNAME
@@ -73,12 +73,26 @@ OPENC3_API_READ_TIMEOUT=86400
 
 > CORE, ENTERPRISE
 
-Set the schema for OpenC3 COSMOS script api calls. Normal options are `http` or `https`. The default is `http`
+Set the schema for OpenC3 COSMOS script api calls. Normal options are `http` or `https`. The default is `https`. Credentials are only sent over `http` when `OPENC3_ALLOW_INSECURE_AUTH` (or `OPENC3_DEVEL`) is set.
 
 Example:
 
 ```
-OPENC3_SCRIPT_API_SCHEMA=http
+OPENC3_SCRIPT_API_SCHEMA=https
+```
+
+## OPENC3_ALLOW_INSECURE_AUTH
+
+---
+
+> CORE, ENTERPRISE
+
+The API clients refuse to send the API password or a bearer token over cleartext `http` / `ws` and raise `OpenC3AuthenticationError`. Set `OPENC3_ALLOW_INSECURE_AUTH=1` to accept cleartext credential transport on a network that is trusted or encrypted elsewhere (the stock `compose.yaml` sets it for the private container network); a warning is logged once per process when it is used. `OPENC3_DEVEL` implies it for local development. Unset or `0` by default.
+
+Example:
+
+```
+OPENC3_ALLOW_INSECURE_AUTH=1
 ```
 
 ## OPENC3_SCRIPT_API_HOSTNAME
@@ -237,10 +251,10 @@ OPENC3_KEYCLOAK_REALM=openc3
 
 > ENTERPRISE
 
-Set the keycloak url for all cosmos enterprise scripts. Set the environment variable `OPENC3_KEYCLOAK_URL` to the URL in your Cosmos v5 Keycloak. If this is not set the realm will default to 'http://127.0.0.1:2900/auth'.
+Set the keycloak url for all cosmos enterprise scripts. Set the environment variable `OPENC3_KEYCLOAK_URL` to the URL in your Cosmos v5 Keycloak. If this is not set it defaults to 'https://openc3-keycloak/auth'. An `http` URL is refused unless `OPENC3_ALLOW_INSECURE_AUTH` (or `OPENC3_DEVEL`) is set.
 
 Example:
 
 ```
-OPENC3_KEYCLOAK_URL=http://127.0.0.1:2900/auth
+OPENC3_KEYCLOAK_URL=https://127.0.0.1:2900/auth
 ```

@@ -67,32 +67,6 @@ class FakeWebSocketStream
 end
 
 module OpenC3
-  # Set the given environment variables for the duration of the block,
-  # restoring the previous values (including "not set") afterwards.
-  # A nil value means "ensure this variable is unset".
-  def self.spec_with_env(vars)
-    saved = {}
-    begin
-      vars.each do |key, value|
-        saved[key] = ENV.fetch(key, :__unset__)
-        if value.nil?
-          ENV.delete(key)
-        else
-          ENV[key] = value
-        end
-      end
-      yield
-    ensure
-      saved.each do |key, value|
-        if value == :__unset__
-          ENV.delete(key)
-        else
-          ENV[key] = value
-        end
-      end
-    end
-  end
-
   # The COSMOS Core authentication environment: password only, no keycloak
   def self.spec_with_password_auth(&block)
     spec_with_env({ 'OPENC3_API_TOKEN' => nil, 'OPENC3_API_USER' => nil,
@@ -105,7 +79,7 @@ module OpenC3
     shared_context "api with identifier" do
       let(:api) do
         api = WebSocketApi.new(
-          url: "ws://test.com/cable",
+          url: "wss://test.com/cable",
           authentication: double("auth", token: "test_token")
         )
         api.instance_variable_set(:@identifier, { "channel" => "TestChannel" })
@@ -288,14 +262,14 @@ module OpenC3
 
       it "falls back to OPENC3_SCOPE when no scope is given" do
         OpenC3.spec_with_env('OPENC3_SCOPE' => 'OTHER') do
-          api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth, scope: nil)
+          api = WebSocketApi.new(url: "wss://test.com/cable", authentication: auth, scope: nil)
           expect(api.instance_variable_get(:@scope)).to eq('OTHER')
         end
       end
 
       it "falls back to DEFAULT when neither scope nor OPENC3_SCOPE is set" do
         OpenC3.spec_with_env('OPENC3_SCOPE' => nil) do
-          api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth, scope: nil)
+          api = WebSocketApi.new(url: "wss://test.com/cable", authentication: auth, scope: nil)
           expect(api.instance_variable_get(:@scope)).to eq('DEFAULT')
         end
       end
@@ -304,18 +278,18 @@ module OpenC3
       # typo'd option name that explicit keyword arguments used to reject
       it "rejects an unknown option" do
         expect {
-          WebSocketApi.new(url: "ws://test.com/cable", authentication: auth, read_timout: 5.0)
+          WebSocketApi.new(url: "wss://test.com/cable", authentication: auth, read_timout: 5.0)
         }.to raise_error(ArgumentError, "unknown keyword: read_timout")
       end
 
       it "reports every unknown option" do
         expect {
-          MessagesWebSocketApi.new(url: "ws://test.com/cable", authentication: auth, bogus: 1, other: 2)
+          MessagesWebSocketApi.new(url: "wss://test.com/cable", authentication: auth, bogus: 1, other: 2)
         }.to raise_error(ArgumentError, "unknown keywords: bogus, other")
       end
 
       it "stores the timeouts for the stream" do
-        api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth,
+        api = WebSocketApi.new(url: "wss://test.com/cable", authentication: auth,
                                write_timeout: 1.0, read_timeout: 2.0, connect_timeout: 3.0)
         expect(api.instance_variable_get(:@write_timeout)).to eq(1.0)
         expect(api.instance_variable_get(:@read_timeout)).to eq(2.0)
@@ -332,7 +306,7 @@ module OpenC3
 
         it "connects, yields itself, then disconnects" do
           yielded = nil
-          WebSocketApi.new(url: "ws://test.com/cable", authentication: auth) do |api|
+          WebSocketApi.new(url: "wss://test.com/cable", authentication: auth) do |api|
             yielded = api
             expect(stream.connect_count).to eq(1)
             expect(api.connected?).to be true
@@ -344,7 +318,7 @@ module OpenC3
         # Guarantees a raising consumer block cannot leak the socket
         it "disconnects even when the block raises" do
           expect {
-            WebSocketApi.new(url: "ws://test.com/cable", authentication: auth) do |_api|
+            WebSocketApi.new(url: "wss://test.com/cable", authentication: auth) do |_api|
               raise "boom"
             end
           }.to raise_error("boom")
@@ -365,24 +339,24 @@ module OpenC3
       end
 
       it "appends the scope query param and passes the timeouts to the stream" do
-        api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth, scope: 'OTHER',
+        api = WebSocketApi.new(url: "wss://test.com/cable", authentication: auth, scope: 'OTHER',
                                write_timeout: 1.0, read_timeout: 2.0, connect_timeout: 3.0)
         api.connect
-        expect(stream.init_args).to eq(["ws://test.com/cable?scope=OTHER", 1.0, 2.0, 3.0])
+        expect(stream.init_args).to eq(["wss://test.com/cable?scope=OTHER", 1.0, 2.0, 3.0])
         expect(stream.connect_count).to eq(1)
       end
 
       # The server negotiates the ActionCable JSON subprotocol from this header;
       # without it anycable-go refuses the upgrade.
       it "sets the actioncable subprotocol and user agent headers" do
-        api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth)
+        api = WebSocketApi.new(url: "wss://test.com/cable", authentication: auth)
         api.connect
         expect(stream.headers['Sec-WebSocket-Protocol']).to eq('actioncable-v1-json, actioncable-unsupported')
         expect(stream.headers['User-Agent']).to eq(WebSocketApi::USER_AGENT)
       end
 
       it "disconnects an existing connection before reconnecting" do
-        api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth)
+        api = WebSocketApi.new(url: "wss://test.com/cable", authentication: auth)
         api.instance_variable_set(:@identifier, { "channel" => "TestChannel" })
         api.connect
         api.connect
@@ -391,8 +365,34 @@ module OpenC3
       end
     end
 
+    describe "#connect credential transport" do
+      let(:auth) { double("auth", token: "test_token") }
+      let(:cleared) { { 'OPENC3_DEVEL' => nil, 'OPENC3_ALLOW_INSECURE_AUTH' => nil } }
+
+      before(:each) { OpenC3.reset_cleartext_auth_warning }
+
+      it "refuses to open a cleartext ws cable that will carry the token" do
+        OpenC3.spec_with_env(cleared) do
+          expect(WebSocketClientStream).not_to receive(:new)
+          api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth)
+          expect { api.connect }.to raise_error(OpenC3AuthenticationError, /cleartext ws/)
+        end
+      end
+
+      it "opens a cleartext ws cable when OPENC3_ALLOW_INSECURE_AUTH is set and warns" do
+        OpenC3.spec_with_env(cleared.merge('OPENC3_ALLOW_INSECURE_AUTH' => '1')) do
+          stream = FakeWebSocketStream.new
+          allow(WebSocketClientStream).to receive(:new).and_return(stream)
+          expect(Logger).to receive(:warn).with(/cleartext ws/).once
+          api = WebSocketApi.new(url: "ws://test.com/cable", authentication: auth)
+          api.connect
+          expect(stream.connect_count).to eq(1)
+        end
+      end
+    end
+
     describe "#connected?" do
-      let(:api) { WebSocketApi.new(url: "ws://test.com/cable", authentication: double("auth", token: "t")) }
+      let(:api) { WebSocketApi.new(url: "wss://test.com/cable", authentication: double("auth", token: "t")) }
 
       it "is false before a stream exists" do
         expect(api.connected?).to be false
@@ -569,24 +569,24 @@ module OpenC3
 
       it "uses keycloak authentication when OPENC3_API_TOKEN is set" do
         OpenC3.spec_with_env('OPENC3_API_TOKEN' => 'token', 'OPENC3_API_USER' => nil,
-                             'OPENC3_KEYCLOAK_URL' => 'http://keycloak:8080') do
+                             'OPENC3_KEYCLOAK_URL' => 'https://keycloak:8080') do
           auth = api.generate_auth
           expect(auth).to be_a(OpenC3KeycloakAuthentication)
-          expect(auth.instance_variable_get(:@url)).to eq('http://keycloak:8080')
+          expect(auth.instance_variable_get(:@url)).to eq('https://keycloak:8080')
         end
       end
 
       it "uses keycloak authentication when OPENC3_API_USER is set" do
         OpenC3.spec_with_env('OPENC3_API_TOKEN' => nil, 'OPENC3_API_USER' => 'user',
-                             'OPENC3_KEYCLOAK_URL' => 'http://keycloak:8080') do
+                             'OPENC3_KEYCLOAK_URL' => 'https://keycloak:8080') do
           expect(api.generate_auth).to be_a(OpenC3KeycloakAuthentication)
         end
       end
 
       it "is used automatically when no authentication is passed" do
         OpenC3.spec_with_env('OPENC3_API_TOKEN' => 'token', 'OPENC3_API_USER' => nil,
-                             'OPENC3_KEYCLOAK_URL' => 'http://keycloak:8080') do
-          api = WebSocketApi.new(url: "ws://test.com/cable")
+                             'OPENC3_KEYCLOAK_URL' => 'https://keycloak:8080') do
+          api = WebSocketApi.new(url: "wss://test.com/cable")
           expect(api.instance_variable_get(:@authentication)).to be_a(OpenC3KeycloakAuthentication)
         end
       end
@@ -596,7 +596,7 @@ module OpenC3
       let(:api) do
         RunningScriptWebSocketApi.new(
           id: "spec-script-1",
-          url: "ws://test.com/script-api/cable",
+          url: "wss://test.com/script-api/cable",
           authentication: double("auth", token: "test_token")
         )
       end
@@ -633,7 +633,7 @@ module OpenC3
       let(:api) do
         RunningScriptWebSocketApi.new(
           id: "spec-script-1",
-          url: "ws://test.com/script-api/cable",
+          url: "wss://test.com/script-api/cable",
           authentication: double("auth", token: "test_token")
         )
       end
@@ -705,22 +705,22 @@ module OpenC3
           'OPENC3_API_PORT' => nil, 'OPENC3_DEVEL' => nil }
       end
 
-      it "defaults to the in-cluster service name and cable port" do
+      it "defaults to the in-cluster service name, cable port and encrypted wss" do
         OpenC3.spec_with_env(cleared) do
-          expect(api.generate_url).to eq('ws://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable')
+          expect(api.generate_url).to eq('wss://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable')
         end
       end
 
       # Outside the cluster the service DNS name does not resolve
       it "uses localhost when OPENC3_DEVEL is set" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_DEVEL' => '../openc3')) do
-          expect(api.generate_url).to eq('ws://127.0.0.1:3901/openc3-api/cable')
+          expect(api.generate_url).to eq('wss://127.0.0.1:3901/openc3-api/cable')
         end
       end
 
       it "prefers an explicit hostname over the OPENC3_DEVEL default" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_DEVEL' => '../openc3', 'OPENC3_API_HOSTNAME' => 'example.com')) do
-          expect(api.generate_url).to eq('ws://example.com:3901/openc3-api/cable')
+          expect(api.generate_url).to eq('wss://example.com:3901/openc3-api/cable')
         end
       end
 
@@ -745,14 +745,14 @@ module OpenC3
 
       it "falls back to OPENC3_API_PORT when no cable port is set" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_API_PORT' => '2900')) do
-          expect(api.generate_url).to eq('ws://openc3-cosmos-cmd-tlm-api:2900/openc3-api/cable')
+          expect(api.generate_url).to eq('wss://openc3-cosmos-cmd-tlm-api:2900/openc3-api/cable')
         end
       end
 
       # Cable traffic can be routed to a different port than the REST API
       it "prefers OPENC3_API_CABLE_PORT over OPENC3_API_PORT" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_API_PORT' => '2900', 'OPENC3_API_CABLE_PORT' => '3901')) do
-          expect(api.generate_url).to eq('ws://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable')
+          expect(api.generate_url).to eq('wss://openc3-cosmos-cmd-tlm-api:3901/openc3-api/cable')
         end
       end
     end
@@ -761,13 +761,13 @@ module OpenC3
       OpenC3.spec_with_env('OPENC3_API_HOSTNAME' => 'example.com', 'OPENC3_API_CABLE_PORT' => '1234',
                            'OPENC3_API_SCHEMA' => nil, 'OPENC3_DEVEL' => nil) do
         api = CmdTlmWebSocketApi.new(authentication: double("auth", token: "t"))
-        expect(api.instance_variable_get(:@url)).to eq('ws://example.com:1234/openc3-api/cable')
+        expect(api.instance_variable_get(:@url)).to eq('wss://example.com:1234/openc3-api/cable')
       end
     end
 
     it "uses an explicitly passed url unchanged" do
-      api = CmdTlmWebSocketApi.new(url: 'http://given:1/cable', authentication: double("auth", token: "t"))
-      expect(api.instance_variable_get(:@url)).to eq('http://given:1/cable')
+      api = CmdTlmWebSocketApi.new(url: 'https://given:1/cable', authentication: double("auth", token: "t"))
+      expect(api.instance_variable_get(:@url)).to eq('https://given:1/cable')
     end
   end
 
@@ -781,19 +781,19 @@ module OpenC3
 
       it "defaults to the in-cluster script runner service and cable port" do
         OpenC3.spec_with_env(cleared) do
-          expect(api.generate_url).to eq('ws://openc3-cosmos-script-runner-api:3902/script-api/cable')
+          expect(api.generate_url).to eq('wss://openc3-cosmos-script-runner-api:3902/script-api/cable')
         end
       end
 
       it "uses localhost when OPENC3_DEVEL is set" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_DEVEL' => '../openc3')) do
-          expect(api.generate_url).to eq('ws://127.0.0.1:3902/script-api/cable')
+          expect(api.generate_url).to eq('wss://127.0.0.1:3902/script-api/cable')
         end
       end
 
       it "prefers an explicit hostname over the OPENC3_DEVEL default" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_DEVEL' => '../openc3', 'OPENC3_SCRIPT_API_HOSTNAME' => 'example.com')) do
-          expect(api.generate_url).to eq('ws://example.com:3902/script-api/cable')
+          expect(api.generate_url).to eq('wss://example.com:3902/script-api/cable')
         end
       end
 
@@ -805,13 +805,13 @@ module OpenC3
 
       it "falls back to OPENC3_SCRIPT_API_PORT when no cable port is set" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_SCRIPT_API_PORT' => '2900')) do
-          expect(api.generate_url).to eq('ws://openc3-cosmos-script-runner-api:2900/script-api/cable')
+          expect(api.generate_url).to eq('wss://openc3-cosmos-script-runner-api:2900/script-api/cable')
         end
       end
 
       it "prefers OPENC3_SCRIPT_API_CABLE_PORT over OPENC3_SCRIPT_API_PORT" do
         OpenC3.spec_with_env(cleared.merge('OPENC3_SCRIPT_API_PORT' => '2900', 'OPENC3_SCRIPT_API_CABLE_PORT' => '3902')) do
-          expect(api.generate_url).to eq('ws://openc3-cosmos-script-runner-api:3902/script-api/cable')
+          expect(api.generate_url).to eq('wss://openc3-cosmos-script-runner-api:3902/script-api/cable')
         end
       end
     end
@@ -820,7 +820,7 @@ module OpenC3
       OpenC3.spec_with_env('OPENC3_SCRIPT_API_HOSTNAME' => 'example.com', 'OPENC3_SCRIPT_API_CABLE_PORT' => '1234',
                            'OPENC3_SCRIPT_API_SCHEMA' => nil, 'OPENC3_DEVEL' => nil) do
         api = ScriptWebSocketApi.new(authentication: double("auth", token: "t"))
-        expect(api.instance_variable_get(:@url)).to eq('ws://example.com:1234/script-api/cable')
+        expect(api.instance_variable_get(:@url)).to eq('wss://example.com:1234/script-api/cable')
       end
     end
   end
@@ -841,12 +841,12 @@ module OpenC3
     }.each do |klass, channel|
       describe klass do
         it "subscribes to #{channel} with a default history_count of 0" do
-          api = klass.new(url: 'http://test.com/cable', authentication: auth)
+          api = klass.new(url: 'https://test.com/cable', authentication: auth)
           expect(api.instance_variable_get(:@identifier)).to eq({ channel: channel, history_count: 0 })
         end
 
         it "passes history_count through" do
-          api = klass.new(history_count: 100, url: 'http://test.com/cable', authentication: auth)
+          api = klass.new(history_count: 100, url: 'https://test.com/cable', authentication: auth)
           expect(api.instance_variable_get(:@identifier)[:history_count]).to eq(100)
         end
 
@@ -858,7 +858,7 @@ module OpenC3
 
     describe AllScriptsWebSocketApi do
       it "subscribes to AllScriptsChannel" do
-        api = AllScriptsWebSocketApi.new(url: 'http://test.com/cable', authentication: auth)
+        api = AllScriptsWebSocketApi.new(url: 'https://test.com/cable', authentication: auth)
         expect(api.instance_variable_get(:@identifier)).to eq({ channel: 'AllScriptsChannel' })
         expect(AllScriptsWebSocketApi.ancestors).to include(ScriptWebSocketApi)
       end
@@ -866,7 +866,7 @@ module OpenC3
 
     describe RunningScriptWebSocketApi do
       it "subscribes to RunningScriptChannel for a specific script id" do
-        api = RunningScriptWebSocketApi.new(id: 42, url: 'http://test.com/cable', authentication: auth)
+        api = RunningScriptWebSocketApi.new(id: 42, url: 'https://test.com/cable', authentication: auth)
         expect(api.instance_variable_get(:@identifier)).to eq({ channel: 'RunningScriptChannel', id: 42 })
         expect(RunningScriptWebSocketApi.ancestors).to include(ScriptWebSocketApi)
       end
@@ -874,13 +874,13 @@ module OpenC3
 
     describe MessagesWebSocketApi do
       it "omits the optional filters when they are not given" do
-        api = MessagesWebSocketApi.new(url: 'http://test.com/cable', authentication: auth)
+        api = MessagesWebSocketApi.new(url: 'https://test.com/cable', authentication: auth)
         expect(api.instance_variable_get(:@identifier)).to eq({ channel: 'MessagesChannel', history_count: 0 })
       end
 
       it "includes each filter that is given" do
         api = MessagesWebSocketApi.new(history_count: 10, start_time: 1, end_time: 2, level: 'INFO',
-                                       types: ['LOG'], url: 'http://test.com/cable', authentication: auth)
+                                       types: ['LOG'], url: 'https://test.com/cable', authentication: auth)
         expect(api.instance_variable_get(:@identifier)).to eq({
           channel: 'MessagesChannel',
           history_count: 10,
@@ -897,7 +897,7 @@ module OpenC3
     let(:auth) { double("auth", token: "test_token") }
     let(:stream) { FakeWebSocketStream.new }
     let(:api) do
-      api = StreamingWebSocketApi.new(url: 'http://test.com/cable', authentication: auth, scope: 'DEFAULT')
+      api = StreamingWebSocketApi.new(url: 'https://test.com/cable', authentication: auth, scope: 'DEFAULT')
       api.instance_variable_set(:@stream, stream)
       api
     end

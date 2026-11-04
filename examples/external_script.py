@@ -17,6 +17,9 @@ os.environ["OPENC3_API_PORT"] = "2900"
 os.environ["OPENC3_SCRIPT_API_SCHEMA"] = "http"
 os.environ["OPENC3_SCRIPT_API_HOSTNAME"] = "127.0.0.1"
 os.environ["OPENC3_SCRIPT_API_PORT"] = "2900"
+# Plain http is only for a local COSMOS on 127.0.0.1. Against a real deployment
+# use https schemas and remove this line; the client refuses cleartext credentials otherwise.
+os.environ["OPENC3_ALLOW_INSECURE_AUTH"] = "1"
 # os.environ["OPENC3_API_USER"] = "admin" # Only set for Enterprise
 os.environ["OPENC3_API_PASSWORD"] = "password"
 os.environ["OPENC3_NO_STORE"] = "1"

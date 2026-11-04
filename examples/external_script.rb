@@ -17,6 +17,9 @@ ENV['OPENC3_API_PORT'] ||= '2900'
 ENV['OPENC3_SCRIPT_API_SCHEMA'] ||= 'http'
 ENV['OPENC3_SCRIPT_API_HOSTNAME'] ||= '127.0.0.1'
 ENV['OPENC3_SCRIPT_API_PORT'] ||= '2900'
+# Plain http is only for a local COSMOS on 127.0.0.1. Against a real deployment
+# use https schemas and remove this line; the client refuses cleartext credentials otherwise.
+ENV['OPENC3_ALLOW_INSECURE_AUTH'] ||= '1'
 # ENV['OPENC3_API_USER'] ||= 'admin' # Only set for Enterprise
 ENV['OPENC3_API_PASSWORD'] ||= 'password'
 ENV['OPENC3_NO_STORE'] ||= '1'

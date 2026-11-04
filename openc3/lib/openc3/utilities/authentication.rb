@@ -17,6 +17,8 @@
 
 require 'openc3/version'
 require 'openc3/io/json_drb'
+require 'openc3/utilities/logger'
+require 'openc3/utilities/env_helper'
 require 'faraday'
 require 'uri'
 
@@ -24,6 +26,63 @@ module OpenC3
   # Basic exception for known errors
   class OpenC3AuthenticationError < StandardError; end
   class OpenC3AuthenticationRetryableError < OpenC3AuthenticationError; end
+
+  # URL schemes that carry the API password / bearer token in cleartext
+  CLEARTEXT_AUTH_SCHEMES = %w(http ws).freeze
+  @cleartext_auth_warned = false
+
+  # The API schema (OPENC3_API_SCHEMA, OPENC3_SCRIPT_API_SCHEMA, ...) from the
+  # environment, defaulting to https so credentials are protected in transit
+  # unless a deployment explicitly chooses otherwise.
+  def self.api_schema(env_var = 'OPENC3_API_SCHEMA')
+    schema = ENV.fetch(env_var, nil)
+    return 'https' if schema.nil? or schema.empty?
+
+    schema
+  end
+
+  # Cleartext credential transport (http / ws) is only allowed when a
+  # deployment opts in: OPENC3_ALLOW_INSECURE_AUTH for a container network
+  # that is trusted or encrypted elsewhere, or OPENC3_DEVEL for local development.
+  def self.insecure_auth_allowed?
+    return true if EnvHelper.enabled?('OPENC3_ALLOW_INSECURE_AUTH')
+
+    devel = ENV.fetch('OPENC3_DEVEL', nil)
+    return true if devel and !devel.empty?
+
+    false
+  end
+
+  # Verify a URL that will carry a password or token uses TLS (https / wss).
+  # Raises OpenC3AuthenticationError for http / ws unless the deployment opted in,
+  # in which case a warning is logged once per process.
+  #
+  # @param url [String] The URL credentials are about to be sent to
+  # @param setting [String] The environment variable that controls the URL (for the message)
+  # @return [String] The url, unchanged
+  def self.verify_credential_transport(url, setting: 'OPENC3_API_SCHEMA')
+    scheme = begin
+      URI.parse(url.to_s).scheme.to_s.downcase
+    rescue URI::InvalidURIError
+      ''
+    end
+    return url unless CLEARTEXT_AUTH_SCHEMES.include?(scheme)
+
+    unless insecure_auth_allowed?
+      raise OpenC3AuthenticationError, "Refusing to send credentials over cleartext #{scheme} to #{url}. " \
+                                       "Use https/wss (#{setting}) or set OPENC3_ALLOW_INSECURE_AUTH=1 to accept cleartext credential transport."
+    end
+    unless @cleartext_auth_warned
+      @cleartext_auth_warned = true
+      Logger.warn("Sending credentials over cleartext #{scheme} to #{url} because OPENC3_ALLOW_INSECURE_AUTH or OPENC3_DEVEL is set")
+    end
+    url
+  end
+
+  # @private Allow specs to re-arm the once-per-process warning
+  def self.reset_cleartext_auth_warning
+    @cleartext_auth_warned = false
+  end
 
   # OpenC3 COSMOS Core authentication code
   class OpenC3Authentication
@@ -59,7 +118,7 @@ module OpenC3
     end
 
     def _make_auth_request(password)
-      Faraday.new.post(_generate_auth_url, '{"password": "' + password + '"}', {'Content-Type' => 'application/json'})
+      Faraday.new.post(_generate_auth_url, JSON.generate({ 'password' => password }), {'Content-Type' => 'application/json'})
     end
 
     def _make_otp_request(scope: 'DEFAULT')
@@ -73,7 +132,7 @@ module OpenC3
     end
 
     def _generate_auth_url(endpoint = nil)
-      schema = ENV['OPENC3_API_SCHEMA'] || 'http'
+      schema = OpenC3.api_schema('OPENC3_API_SCHEMA')
       hostname = ENV['OPENC3_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-cmd-tlm-api')
       port = ENV['OPENC3_API_PORT'] || '2901'
       port = port.to_i
@@ -84,7 +143,7 @@ module OpenC3
           "auth/verify"
         end
       end
-      return "#{schema}://#{hostname}:#{port}/openc3-api/#{endpoint}"
+      return OpenC3.verify_credential_transport("#{schema}://#{hostname}:#{port}/openc3-api/#{endpoint}")
     end
 
     def retry_faraday_request(max_retries: 3)
@@ -123,6 +182,7 @@ module OpenC3
 
     # @param url [String] The url of the openc3 or keycloak in the cluster
     def initialize(url)
+      OpenC3.verify_credential_transport(url, setting: 'OPENC3_KEYCLOAK_URL') if url
       @url = url
       @auth_mutex = Mutex.new
       @refresh_token = nil
