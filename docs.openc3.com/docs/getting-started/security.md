@@ -113,6 +113,26 @@ The `OPENC3_REDIS_*` credentials are used by COSMOS services (cmd-tlm-api, scrip
 
 The `OPENC3_SR_REDIS_*` credentials are passed to **spawned user scripts** when Script Runner executes them. The script-runner-api itself uses the main `OPENC3_REDIS_*` credentials, but when it spawns a user script process, it substitutes the limited `SR` credentials. This prevents user scripts from accessing or modifying data they shouldn't have access to.
 
+### Redis TLS
+
+By default COSMOS services connect to Redis over plaintext `redis://`. Redis carries commands, telemetry, the Redis `AUTH` password and values stored in the Redis secrets backend, so hardened deployments (for example NIST 800-53 SC-8 / SC-8(1) environments) should encrypt this link. Setting `OPENC3_REDIS_TLS` switches both the Ruby and Python stores to `rediss://` for the main and ephemeral Redis connections.
+
+| Variable                     | Default   | Description                                                                                                             |
+| ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `OPENC3_REDIS_TLS`           | _(unset)_ | Set to `1` (or `true`) to connect over TLS. The server certificate is always verified; verification cannot be disabled. |
+| `OPENC3_REDIS_TLS_CA_FILE`   | _(unset)_ | PEM bundle used to verify the Redis server certificate. When unset the container's system CA store is used.             |
+| `OPENC3_REDIS_TLS_CERT_FILE` | _(unset)_ | Optional client certificate (PEM) for mutual TLS. Must be set together with `OPENC3_REDIS_TLS_KEY_FILE`.                |
+| `OPENC3_REDIS_TLS_KEY_FILE`  | _(unset)_ | Private key for `OPENC3_REDIS_TLS_CERT_FILE`.                                                                           |
+
+The certificate files must be mounted into every container that talks to Redis (cmd-tlm-api, script-runner-api, operator and the init container), and Redis / Valkey itself must be started with `tls-port`, `tls-cert-file`, `tls-key-file` and `tls-ca-cert-file` (see the [Valkey TLS documentation](https://valkey.io/topics/encryption/)). The certificate's subject or SAN must match `OPENC3_REDIS_HOSTNAME` because hostname verification is enforced. Example `.env.local`:
+
+```bash
+OPENC3_REDIS_TLS=1
+OPENC3_REDIS_TLS_CA_FILE=/certs/redis-ca.crt
+```
+
+`OPENC3_REDIS_TLS` only covers the COSMOS stores. The `ANYCABLE_REDIS_URL` passed to the cmd-tlm-api and script-runner-api containers in `compose.yaml` is a separate connection; change its scheme to `rediss://` and configure AnyCable's TLS options in `compose.override.yaml` when you enable Redis TLS.
+
 ### VersityGW (S3 Storage) Credentials
 
 VersityGW provides S3-compatible object storage for logs, configurations, and other files.
