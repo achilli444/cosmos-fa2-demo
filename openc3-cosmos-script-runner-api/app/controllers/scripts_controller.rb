@@ -229,8 +229,22 @@ class ScriptsController < ApplicationController
     return unless authorization('script_run', target_name: target_name)
     # Users with only the script_run (runner) permission may only run
     # approved scripts. Users who can edit may run any lifecycle state.
-    if lifecycle_enabled?() and (state = lifecycle_state(scope, name)) and state != 'approved' and !authorization('script_edit')
-      return
+    if lifecycle_enabled?()
+      begin
+        state = Script.lifecycle(scope, name)['state']
+      rescue => e
+        # Fail CLOSED: when approval cannot be verified the script is not
+        # known to be approved, so runner-only users are denied (503) until
+        # the version store heals. Editors may run any state regardless.
+        log_error(e)
+        unless authorized?('script_edit')
+          OpenC3::Logger.warn("Script run denied, lifecycle unavailable: #{name}", scope: scope, user: username())
+          render json: { status: 'error', message: "Script lifecycle state could not be verified: #{e.message}" }, status: :service_unavailable
+          return
+        end
+        state = nil
+      end
+      return if state != 'approved' and !authorization('script_edit')
     end
     # TODO 7.0: Should suiteRunner be snake case?
     suite_runner = params[:suiteRunner] ? params[:suiteRunner].as_json() : nil
@@ -410,11 +424,12 @@ class ScriptsController < ApplicationController
     setting['data'] == true or setting['data'] == 'true'
   end
 
-  # Current lifecycle state for the create/run/destroy gates. The lookup hits
-  # git (VersionStore); a transient backend error must not 500 the hottest
-  # paths (especially run), so we log and fail OPEN by returning nil. Every
-  # gate treats nil as "no restriction" (nil != 'approved', nil is falsey), so
-  # an outage never blocks work — approval enforcement resumes once git heals.
+  # Current lifecycle state for the create/destroy guards, which only stop
+  # editors (script_edit) from overwriting or deleting an approved script. The
+  # lookup hits git (VersionStore); a transient backend error must not 500
+  # those paths, so we log and fail OPEN by returning nil (nil != 'approved',
+  # so the guard is skipped until git heals). The run gate does NOT use this
+  # helper: it must fail closed for runner-only users, see #run.
   def lifecycle_state(scope, name)
     Script.lifecycle(scope, name)['state']
   rescue => e
