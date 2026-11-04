@@ -530,11 +530,12 @@ module OpenC3
         PythonPackageModel.install(pkg_file, scope: "DEFAULT")
       end
 
-      it "derives --trusted-host from the pypi_url when PIP_ENABLE_TRUSTED_HOST is set" do
+      it "never disables TLS verification even when PIP_ENABLE_TRUSTED_HOST is set" do
         pkg_file = File.join(@temp_dir, "my_lib-1.0.0.tar.gz")
         File.write(pkg_file, "fake")
 
         allow(ENV).to receive(:[]).with('PIP_ENABLE_TRUSTED_HOST').and_return('1')
+        expect(OpenC3::Logger).to receive(:warn).with(/PIP_ENABLE_TRUSTED_HOST is no longer supported/)
 
         process_double = double("process", name: "process_123")
         pm = double("process_manager")
@@ -542,12 +543,44 @@ module OpenC3
         allow(PythonPackageModel).to receive(:get_setting).with('pypi_url', scope: "DEFAULT").and_return("https://custom.pypi.example.com")
 
         expect(pm).to receive(:spawn) do |cmd, _type, _detail, _expires, **_kw|
-          expect(cmd).to include("--trusted-host")
-          expect(cmd).to include("custom.pypi.example.com")
+          expect(cmd).to_not include("--trusted-host")
+          expect(cmd).to eql ["/openc3/bin/pipinstall", "-i", "https://custom.pypi.example.com/simple", pkg_file]
           process_double
         end
 
         PythonPackageModel.install(pkg_file, scope: "DEFAULT")
+      end
+
+      it "logs the package digest and rejects a package that is not on the allow-list" do
+        pkg_file = File.join(@temp_dir, "my_lib-1.0.0.tar.gz")
+        File.write(pkg_file, "fake")
+        digest = Digest::SHA256.hexdigest("fake")
+        allowlist = File.join(@temp_dir, "allowlist.txt")
+        File.write(allowlist, "0" * 64 + "  other.whl\n")
+        allow(ENV).to receive(:fetch).with('OPENC3_PACKAGE_ALLOWLIST', nil).and_return(allowlist)
+        allow(OpenC3::Logger).to receive(:error)
+        expect(OpenC3::ProcessManager).to_not receive(:instance)
+
+        expect { PythonPackageModel.install(pkg_file, scope: "DEFAULT") }.to \
+          raise_error(PackageIntegrityError, /sha256=#{digest} is not in OPENC3_PACKAGE_ALLOWLIST/)
+      end
+
+      it "installs an allow-listed package and logs its digest" do
+        pkg_file = File.join(@temp_dir, "my_lib-1.0.0.tar.gz")
+        File.write(pkg_file, "fake")
+        digest = Digest::SHA256.hexdigest("fake")
+        allowlist = File.join(@temp_dir, "allowlist.txt")
+        File.write(allowlist, "#{digest}  my_lib-1.0.0.tar.gz\n")
+        allow(ENV).to receive(:fetch).with('OPENC3_PACKAGE_ALLOWLIST', nil).and_return(allowlist)
+
+        process_double = double("process", name: "process_123")
+        pm = double("process_manager")
+        allow(OpenC3::ProcessManager).to receive(:instance).and_return(pm)
+        allow(PythonPackageModel).to receive(:get_setting).and_raise("no redis")
+        expect(pm).to receive(:spawn).and_return(process_double)
+
+        PythonPackageModel.install(pkg_file, scope: "DEFAULT")
+        expect(OpenC3::Logger).to have_received(:info).with(/Verified package my_lib-1.0.0.tar.gz sha256=#{digest} \(allow-listed\)/, scope: "DEFAULT")
       end
     end
 

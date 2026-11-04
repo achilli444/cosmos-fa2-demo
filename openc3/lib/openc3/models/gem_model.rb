@@ -23,6 +23,7 @@ require 'rubygems/uninstaller'
 require 'tempfile'
 require 'openc3/utilities/process_manager'
 require 'openc3/utilities/rubygems_url'
+require 'openc3/utilities/package_integrity'
 require 'openc3/api/api'
 require 'pathname'
 
@@ -54,6 +55,8 @@ module OpenC3
     def self.put(gem_file_path, gem_install: true, scope:)
       if File.file?(gem_file_path)
         gem_filename = File.basename(gem_file_path)
+        # Digest / allow-list gate before the gem enters the cache we install from
+        PackageIntegrity.verify!(gem_file_path, scope: scope)
         # Put into cosmoscache folder that we control
         FileUtils.mkdir_p("#{ENV.fetch('GEM_HOME', nil)}/cosmoscache") unless Dir.exist?("#{ENV.fetch('GEM_HOME', nil)}/cosmoscache")
         FileUtils.cp(gem_file_path, "#{ENV.fetch('GEM_HOME', nil)}/cosmoscache/#{File.basename(gem_file_path)}")
@@ -76,23 +79,28 @@ module OpenC3
       else
         gem_file_path = get(name_or_path)
       end
+      PackageIntegrity.verify!(gem_file_path, scope: scope)
+      security_policy = PackageIntegrity.gem_security_policy
       begin
         rubygems_url = get_setting('rubygems_url', scope: scope)
       rescue
         # If Redis isn't running try the ENV, then simply rubygems.org
         rubygems_url = ENV.fetch('RUBYGEMS_URL', RubygemsUrl::DEFAULT)
       end
-      # The url comes from a user-writable setting or ENV so validate it before
-      # using it as a Gem source
+      # The url comes from a user-writable setting or ENV so validate it (https
+      # only) before using it as a Gem source
       rubygems_url = RubygemsUrl.validate(rubygems_url) if rubygems_url
       Gem.sources = [rubygems_url] if rubygems_url
       Gem.done_installing_hooks.clear
+      # security_policy applies the RubyGems trust policy to the gem itself and to
+      # every dependency pulled from the remote source
+      install_options = { build_args: ['--no-document, --without development,test'], prerelease: true, security_policy: security_policy }
       begin
         # Look for local gems only first, this avoids lengthy timeouts when checking rubygems in airgap env
-        Gem.install(gem_file_path, "> 0.pre", build_args: ['--no-document, --without development,test'], prerelease: true, domain: :local)
+        Gem.install(gem_file_path, "> 0.pre", **install_options, domain: :local)
       rescue Gem::Exception => e
         # If there is a failure look for both local and remote gems
-        Gem.install(gem_file_path, "> 0.pre", build_args: ['--no-document, --without development,test'], prerelease: true, domain: :both)
+        Gem.install(gem_file_path, "> 0.pre", **install_options, domain: :both)
       end
     rescue => e
       message = "Gem file #{gem_file_path} error installing to #{ENV.fetch('GEM_HOME', nil)}\n#{e.formatted}"

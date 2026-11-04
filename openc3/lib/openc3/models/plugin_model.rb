@@ -34,6 +34,7 @@ require 'openc3/models/widget_model'
 require 'openc3/models/microservice_model'
 require 'openc3/api/api'
 require 'openc3/utilities/pypi_url'
+require 'openc3/utilities/package_integrity'
 require 'tmpdir'
 require 'tempfile'
 require 'fileutils'
@@ -94,6 +95,8 @@ module OpenC3
             raise EmptyGemFileError, "Gem file is empty: #{gem_file_path}"
           end
 
+          # Digest / allow-list gate on the uploaded file before anything is extracted
+          OpenC3::PackageIntegrity.verify!(gem_file_path, scope: scope)
           # Load gem to internal gem server
           OpenC3::GemModel.put(gem_file_path, gem_install: false, scope: scope) unless validate_only
         else
@@ -101,7 +104,8 @@ module OpenC3
         end
 
         # Extract gem and process plugin.txt to determine what VARIABLEs need to be filled in
-        pkg = Gem::Package.new(gem_file_path)
+        # The security policy makes extract_files verify the gem's signatures first
+        pkg = Gem::Package.new(gem_file_path, OpenC3::PackageIntegrity.gem_security_policy)
 
         minimum_cosmos_version = pkg.spec.metadata['openc3_cosmos_minimum_version']
 
@@ -230,7 +234,7 @@ module OpenC3
         # Extract gem contents
         gem_path = File.join(temp_dir, "gem")
         FileUtils.mkdir_p(gem_path)
-        pkg = Gem::Package.new(gem_file_path)
+        pkg = Gem::Package.new(gem_file_path, OpenC3::PackageIntegrity.gem_security_policy)
         pkg.extract_files(gem_path)
         Dir[File.join(gem_path, '**/screens/*.txt')].each do |filename|
           if File.basename(filename) != File.basename(filename).downcase
@@ -611,11 +615,15 @@ module OpenC3
       PypiUrl.validate(pypi_url)
     end
 
-    # Build the argv array for pypi index and trusted-host arguments.
+    # Build the argv array for the pypi index. The index is https-only
+    # (PypiUrl.validate) and TLS verification is never disabled: the legacy
+    # PIP_ENABLE_TRUSTED_HOST flag is ignored with a warning rather than adding
+    # --trusted-host.
     def self.build_pypi_args(pypi_url)
-      args = ["-i", pypi_url]
-      args += ["--trusted-host", URI.parse(pypi_url).host] unless ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
-      args
+      unless ENV['PIP_ENABLE_TRUSTED_HOST'].nil?
+        Logger.warn "PIP_ENABLE_TRUSTED_HOST is no longer supported; TLS verification stays enabled for #{pypi_url}"
+      end
+      ["-i", pypi_url]
     end
 
     # Build a sanitized venv directory name from scope and plugin name.
@@ -653,7 +661,7 @@ module OpenC3
         # Extract gem contents (same pattern as install_phase2)
         gem_path = File.join(temp_dir, "gem")
         FileUtils.mkdir_p(gem_path)
-        pkg = Gem::Package.new(gem_file_path)
+        pkg = Gem::Package.new(gem_file_path, OpenC3::PackageIntegrity.gem_security_policy)
         pkg.extract_files(gem_path)
 
         # Check for Python dependency files

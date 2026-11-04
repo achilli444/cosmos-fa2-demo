@@ -13,6 +13,7 @@
 
 require 'openc3/models/gem_model'
 require 'openc3/models/python_package_model'
+require 'openc3/utilities/package_integrity'
 
 class PackagesController < ApplicationController
   # List the installed packages
@@ -33,12 +34,15 @@ class PackagesController < ApplicationController
       begin
         package_file_path = temp_dir + '/' + file.original_filename
         FileUtils.cp(file.tempfile.path, package_file_path)
+        # The models verify the digest (and allow-list) before installing; record
+        # it here with the requesting user so the install is attributable
+        digest = OpenC3::PackageIntegrity.sha256(file.tempfile.path)
         if File.extname(package_file_path) == '.gem'
           process_name = OpenC3::GemModel.put(package_file_path, gem_install: true, scope: params[:scope])
         else
           process_name = OpenC3::PythonPackageModel.put(package_file_path, package_install: true, scope: params[:scope], plugin: params[:plugin])
         end
-        OpenC3::Logger.info("Package created: #{params[:package]}", scope: params[:scope], user: username())
+        OpenC3::Logger.info("Package created: #{file.original_filename} sha256=#{digest}", scope: params[:scope], user: username())
         render json: process_name
       rescue => e
         OpenC3::Logger.error("Error installing package: #{file.original_filename}:#{e.formatted}", scope: params[:scope], user: username())

@@ -23,13 +23,8 @@ module OpenC3
           expect(RubygemsUrl.validate(url)).to eql url
         end
 
-        it "returns http urls unchanged" do
-          url = "http://gems.example.com"
-          expect(RubygemsUrl.validate(url)).to eql url
-        end
-
         it "allows a host with a port" do
-          url = "http://localhost:8080"
+          url = "https://localhost:8080"
           expect(RubygemsUrl.validate(url)).to eql url
         end
 
@@ -54,6 +49,11 @@ module OpenC3
         it "rejects a non-http(s) scheme" do
           expect(Logger).to receive(:error)
           expect(RubygemsUrl.validate("ftp://example.com")).to eql RubygemsUrl::DEFAULT
+        end
+
+        it "rejects plain http so packages can't be swapped in transit" do
+          expect(Logger).to receive(:error).with(/not an https URL/)
+          expect(RubygemsUrl.validate("http://gems.example.com")).to eql RubygemsUrl::DEFAULT
         end
 
         it "rejects a url with no host" do

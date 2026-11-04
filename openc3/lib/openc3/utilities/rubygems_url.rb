@@ -18,17 +18,19 @@ module OpenC3
   class RubygemsUrl
     DEFAULT = 'https://rubygems.org'
 
-    # Validate that a resolved rubygems_url is an http(s) URL before it is used
-    # as a Gem source. The value can come from a user-writable setting or ENV, so
-    # a malformed or non-http value is rejected and replaced with the default
-    # rather than passed through to RubyGems.
+    # Validate that a resolved rubygems_url is an https URL before it is used as a
+    # package source. The value can come from a user-writable setting or ENV, so
+    # a malformed, non-http or plain-http value is rejected and replaced with the
+    # default rather than passed through: packages fetched over http (or with
+    # TLS verification disabled) can be swapped in transit, so only https
+    # indexes are accepted.
     #
-    # @param rubygems_url [String] the resolved rubygems source url to validate
+    # @param rubygems_url [String] the resolved url to validate
     # @return [String] the original url if valid, otherwise DEFAULT
     def self.validate(rubygems_url)
       uri = URI.parse(rubygems_url)
-      unless uri.is_a?(URI::HTTP) && !uri.host.to_s.empty?
-        raise URI::InvalidURIError, "not an http(s) URL"
+      unless uri.is_a?(URI::HTTPS) && !uri.host.to_s.empty?
+        raise URI::InvalidURIError, "not an https URL"
       end
       rubygems_url
     rescue URI::InvalidURIError => e

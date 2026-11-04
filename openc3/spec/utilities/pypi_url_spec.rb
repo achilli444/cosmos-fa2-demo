@@ -23,13 +23,8 @@ module OpenC3
           expect(PypiUrl.validate(url)).to eql url
         end
 
-        it "returns http urls unchanged" do
-          url = "http://pypi.example.com/simple"
-          expect(PypiUrl.validate(url)).to eql url
-        end
-
         it "allows a host with a port" do
-          url = "http://localhost:8080/simple"
+          url = "https://localhost:8080/simple"
           expect(PypiUrl.validate(url)).to eql url
         end
 
@@ -50,6 +45,11 @@ module OpenC3
         it "rejects a non-http(s) scheme" do
           expect(Logger).to receive(:error)
           expect(PypiUrl.validate("ftp://example.com/simple")).to eql PypiUrl::DEFAULT
+        end
+
+        it "rejects plain http so packages can't be swapped in transit" do
+          expect(Logger).to receive(:error).with(/not an https URL/)
+          expect(PypiUrl.validate("http://pypi.example.com/simple")).to eql PypiUrl::DEFAULT
         end
 
         it "rejects a url with no host" do
