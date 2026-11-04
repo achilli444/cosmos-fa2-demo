@@ -46,10 +46,12 @@ RSpec.describe TargetsController, :type => :controller do
     end
 
     it "forwards a files list to the model" do
+      allow(OpenC3::Logger).to receive(:info)
       expect(OpenC3::TargetModel).to receive(:delete_modified)
         .with("INST", scope: "DEFAULT", files: ["INST/screens/a.txt"])
       post :delete_modified, params: { scope: "DEFAULT", id: "INST", files: ["INST/screens/a.txt"] }
       expect(response).to have_http_status(:ok)
+      expect(OpenC3::Logger).to have_received(:info).with("Target 'INST' modified files deleted: INST/screens/a.txt", scope: "DEFAULT", user: "anonymous")
     end
 
     it "passes files: nil when no files param is given" do

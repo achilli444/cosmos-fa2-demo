@@ -16,11 +16,49 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/utilities/authorization'
+require 'openc3/utilities/audit_log'
 
 class ApplicationController < ActionController::API
   include OpenC3::Authorization
 
+  # Common audit hook (AU-2, AU-3, AU-12, AC-6(9)): every state-changing
+  # request (anything other than GET/HEAD) is recorded at INFO level with the
+  # acting user, controller action, target, filtered parameters and outcome.
+  # Controllers whose POST actions are read-only opt out with skip_around_action.
+  around_action :audit_mutating_action, unless: -> { request.get? || request.head? }
+
   private
+
+  def audit_mutating_action
+    outcome = nil
+    yield
+    outcome = "status=#{response.status}"
+  rescue Exception => e # rubocop:disable Lint/RescueException
+    outcome = "failed: #{e.class}: #{e.message}"
+    raise
+  ensure
+    begin
+      user = username()
+    rescue StandardError
+      user = 'anonymous'
+    end
+    OpenC3::Logger.info(
+      OpenC3::AuditLog.message("#{controller_name}##{action_name} #{request.method} #{request.path}", audit_target, audit_params, outcome),
+      scope: params[:scope] || 'DEFAULT',
+      user: user
+    )
+  end
+
+  def audit_target
+    params[:id] || params[:name] || params[:key]
+  end
+
+  # Parameters as they appear in the audit record. Values matching
+  # config.filter_parameters are already [FILTERED] by Rails; AuditLog
+  # additionally truncates long values (script bodies, table binaries).
+  def audit_params
+    request.filtered_parameters.except('controller', 'action', 'format', 'scope')
+  end
 
   def user_full_name()
     # For user_info see openc3/utilities/authorization and

@@ -54,6 +54,15 @@ RSpec.describe ApiController, type: :controller do
       allow(OpenC3::Cts).to receive(:instance).and_return(@cts)
     end
 
+    it "is not audited by the controller hook (API methods audit themselves)" do
+      allow(OpenC3::Logger).to receive(:info)
+      request.env["RAW_POST_DATA"] = sample_request
+      allow(@json_drb).to receive(:process_request).and_return([sample_response, nil])
+      post :api, params: { scope: "DEFAULT" }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::Logger).not_to have_received(:info).with(/AUDIT api#api/, anything)
+    end
+
     it "handles successful requests" do
       request.env["RAW_POST_DATA"] = sample_request
       allow(@json_drb).to receive(:process_request).and_return([sample_response, nil])

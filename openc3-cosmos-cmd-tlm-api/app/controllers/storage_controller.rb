@@ -36,6 +36,7 @@ rescue LoadError
 end
 
 class StorageController < ApplicationController
+  skip_around_action :audit_mutating_action, only: [:download_multiple_files]
   class StorageError < StandardError; end
 
   # Check if a bucket requires RBAC (config and logs do, tools does not)

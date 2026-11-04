@@ -33,7 +33,7 @@ class ScopesController < ModelController
     model = @model_class.from_json(params[:json])
     if update_model
       existing = @model_class.get(name: model.name)
-      model.update
+      model.update(username: username())
       # Scopes are global so the scope is always 'DEFAULT'
       changes = existing ? model.diff(existing) : nil
       if changes.nil? || changes.any?

@@ -18,6 +18,7 @@
 require 'openc3/models/target_model'
 
 class TargetsController < ModelController
+  skip_around_action :audit_mutating_action, only: [:download]
   def initialize
     @model_class = OpenC3::TargetModel
   end
@@ -56,10 +57,11 @@ class TargetsController < ModelController
     files = nil unless files.is_a?(Array)
     begin
       @model_class.delete_modified(id, scope: scope, files: files)
+      OpenC3::Logger.info("Target '#{id}' modified files deleted: #{files ? files.join(', ') : 'ALL'}", scope: scope, user: username())
       head :ok
     rescue Exception => e
       log_error(e)
-      OpenC3::Logger.info("Target '#{id} delete_modified failed: #{e.message}", user: username())
+      OpenC3::Logger.info("Target '#{id}' delete_modified failed: #{e.message}", scope: scope, user: username())
       head :internal_server_error
     end
   end

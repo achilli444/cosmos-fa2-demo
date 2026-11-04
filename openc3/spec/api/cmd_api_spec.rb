@@ -324,6 +324,14 @@ module OpenC3
     end
 
     describe "enable_cmd / disable_cmd" do
+      it "records a user-attributed audit event" do
+        allow(Logger).to receive(:info)
+        @api.disable_cmd("INST ABORT")
+        expect(Logger).to have_received(:info).with("AUDIT disable_cmd target=INST ABORT outcome=success", scope: "DEFAULT", user: "anonymous")
+        @api.enable_cmd("INST ABORT")
+        expect(Logger).to have_received(:info).with("AUDIT enable_cmd target=INST ABORT outcome=success", scope: "DEFAULT", user: "anonymous")
+      end
+
       it "complains about unknown commands" do
         expect { @api.enable_cmd("INST", "BLAH") }.to raise_error(/does not exist/)
         expect { @api.disable_cmd("INST BLAH") }.to raise_error(/does not exist/)

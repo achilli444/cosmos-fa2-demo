@@ -143,9 +143,16 @@ RSpec.describe ScriptsController, type: :controller do
       expect(s3).to receive(:put_object)
       expect(s3).to receive(:wait_until)
       allow(Aws::S3::Client).to receive(:new).and_return(s3)
+      allow(OpenC3::Logger).to receive(:info)
 
       post :create, params: {scope: "DEFAULT", name: "script.rb", text: "text"}
       expect(response).to have_http_status(:ok)
+      # Audited even though no suite was processed
+      expect(OpenC3::Logger).to have_received(:info).with("Script created: script.rb", scope: "DEFAULT", user: "anonymous")
+      expect(OpenC3::Logger).to have_received(:info).with(
+        "AUDIT scripts#create POST /script-api/scripts/script.rb target=script.rb params={text=text, name=script.rb} outcome=status=200",
+        scope: "DEFAULT", user: "anonymous"
+      )
     end
 
     it "saves when text changes" do

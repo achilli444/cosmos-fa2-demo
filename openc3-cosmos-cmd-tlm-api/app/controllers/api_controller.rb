@@ -18,6 +18,8 @@
 require 'openc3/utilities/open_telemetry'
 
 class ApiController < ApplicationController
+  # JSON-RPC requests are audited inside the individual API methods (OpenC3::AuditLog)
+  skip_around_action :audit_mutating_action
   def ping
     render plain: 'OK'
   end

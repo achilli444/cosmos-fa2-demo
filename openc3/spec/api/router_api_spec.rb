@@ -82,6 +82,14 @@ module OpenC3
     end
 
     describe "connect_router, disconnect_router" do
+      it "records user-attributed audit events" do
+        allow(Logger).to receive(:info)
+        @api.disconnect_router("ROUTE_INT")
+        expect(Logger).to have_received(:info).with("AUDIT disconnect_router target=ROUTE_INT outcome=success", scope: "DEFAULT", user: "anonymous")
+        @api.connect_router("ROUTE_INT")
+        expect(Logger).to have_received(:info).with("AUDIT connect_router target=ROUTE_INT outcome=success", scope: "DEFAULT", user: "anonymous")
+      end
+
       it "connects the router" do
         expect(@api.get_router("ROUTE_INT")['state']).to eql "CONNECTED"
         @api.disconnect_router("ROUTE_INT")

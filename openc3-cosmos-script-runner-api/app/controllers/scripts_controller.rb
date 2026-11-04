@@ -22,6 +22,8 @@ require 'openc3/models/setting_model'
 require 'openc3/models/target_model'
 
 class ScriptsController < ApplicationController
+  # Read-only POSTs (syntax check, mnemonic lookup, instrumented view)
+  skip_around_action :audit_mutating_action, only: [:syntax, :mnemonics, :instrumented]
   # This REGEX is also found in running_script.rb
   # Matches the following test cases:
   # class  MySuite  <  TestSuite
@@ -211,7 +213,7 @@ class ScriptsController < ApplicationController
       results['error'] = results_error
       results['success'] = success
     end
-    OpenC3::Logger.info("Script created: #{name}", scope: scope, user: username()) if success
+    OpenC3::Logger.info("Script created: #{name}", scope: scope, user: username())
     render json: results
   rescue => e
     log_error(e)

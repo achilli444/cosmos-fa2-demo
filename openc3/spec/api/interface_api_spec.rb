@@ -82,6 +82,21 @@ module OpenC3
     end
 
     describe "connect_interface, disconnect_interface" do
+      it "records user-attributed audit events" do
+        allow(Logger).to receive(:info)
+        @api.disconnect_interface("INST_INT")
+        expect(Logger).to have_received(:info).with("AUDIT disconnect_interface target=INST_INT outcome=success", scope: "DEFAULT", user: "anonymous")
+        @api.connect_interface("INST_INT")
+        expect(Logger).to have_received(:info).with("AUDIT connect_interface target=INST_INT outcome=success", scope: "DEFAULT", user: "anonymous")
+      end
+
+      it "records a failed outcome and re-raises" do
+        allow(Logger).to receive(:info)
+        allow(InterfaceTopic).to receive(:connect_interface).and_raise("Interface 'BLAH' does not exist")
+        expect { @api.connect_interface("BLAH") }.to raise_error(/does not exist/)
+        expect(Logger).to have_received(:info).with("AUDIT connect_interface target=BLAH outcome=failed: RuntimeError: Interface 'BLAH' does not exist", scope: "DEFAULT", user: "anonymous")
+      end
+
       it "connects the interface" do
         expect(@api.get_interface("INST_INT")['state']).to eql "CONNECTED"
         @api.disconnect_interface("INST_INT")
