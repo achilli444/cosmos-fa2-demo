@@ -159,19 +159,6 @@ module OpenC3
     end
 
     describe "map_target_to_interface" do
-      it "writes a user-attributed audit record" do
-        TargetModel.new(name: "INST", scope: "DEFAULT").create
-        TargetModel.new(name: "INST2", scope: "DEFAULT").create
-        umodel = double(MicroserviceModel)
-        allow(umodel).to receive(:target_names).and_return([])
-        allow(umodel).to receive(:update)
-        allow(MicroserviceModel).to receive(:get_model).and_return(umodel)
-        InterfaceModel.new(name: "INST2_INT", scope: "DEFAULT", target_names: ["INST2"], cmd_target_names: ["INST2"], tlm_target_names: ["INST2"], config_params: ["interface.rb"]).create
-
-        expect(Logger).to receive(:info).with("Target INST2 mapped to Interface INST_INT", scope: "DEFAULT", user: "anonymous")
-        @api.map_target_to_interface("INST2", "INST_INT")
-      end
-
       it "successfully maps a target to an interface" do
         TargetModel.new(name: "INST", scope: "DEFAULT").create
         TargetModel.new(name: "INST2", scope: "DEFAULT").create
@@ -185,6 +172,8 @@ module OpenC3
         model2 = InterfaceModel.new(name: "INST2_INT", scope: "DEFAULT", target_names: ["INST2"], cmd_target_names: ["INST2"], tlm_target_names: ["INST2"], config_params: ["interface.rb"])
         model2.create
 
+        allow(Logger).to receive(:info)
+        expect(Logger).to receive(:info).with("Target INST2 mapped to Interface INST_INT", scope: "DEFAULT", user: "anonymous")
         @api.map_target_to_interface("INST2", "INST_INT")
 
         model1 = InterfaceModel.get_model(name: "INST_INT", scope: "DEFAULT")
