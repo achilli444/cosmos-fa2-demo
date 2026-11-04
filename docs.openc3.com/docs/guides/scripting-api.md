@@ -2175,6 +2175,8 @@ Command queues can be used to store commands prior to "releasing" them for execu
 
 By setting the environment variable `OPENC3_DEFAULT_QUEUE` in the .env file you can create a "default" queue that all commands will go to unless explicitly excluded by passing `false/False` to the `queue` keyword argument. This queue is created during COSMOS initialization and is created in `RELEASE` mode so normal commanding will still work. Note that this will introduce delay in the command chain because all commands will flow through the queue instead of being directly executed by the interface.
 
+Commands defined with the [EMERGENCY](../configuration/command.md#emergency) keyword (for example a cease-emission or safe-mode telecommand) never enter a queue: they bypass `OPENC3_DEFAULT_QUEUE` and `cmd` raises an error if they are sent with an explicit `queue` argument, so a queue in `HOLD` can never delay them.
+
 Here is an example of sending a command to a queue:
 
 <Tabs groupId="script-language">

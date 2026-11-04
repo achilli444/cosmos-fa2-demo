@@ -10,6 +10,7 @@
 # if purchased from OpenC3, Inc.
 
 import contextlib
+import os
 import struct
 import threading
 import time
@@ -246,6 +247,49 @@ class TestCmdApi(unittest.TestCase):
             self.assertEqual(command["queue_username"], "original_author")
             # username is the executing user/process, not the author
             self.assertNotEqual(command["username"], "original_author")
+
+    def _mark_emergency(self, cmd_name):
+        packet = TargetModel.packet("INST", cmd_name, type="CMD", scope="DEFAULT")
+        packet["emergency"] = True
+        TargetModel.set_packet("INST", cmd_name, packet, type="CMD", scope="DEFAULT")
+
+    def test_cmd_routes_normal_commands_to_the_default_queue(self):
+        with (
+            patch.dict(os.environ, {"OPENC3_DEFAULT_QUEUE": "DEFAULT"}),
+            patch("openc3.api.cmd_api.QueueModel.queue_command") as queue_command,
+            patch("openc3.api.cmd_api.CommandTopic.send_command") as send_command,
+        ):
+            cmd("INST ABORT")
+            queue_command.assert_called_once()
+            self.assertEqual(queue_command.call_args.args[0], "DEFAULT")
+            send_command.assert_not_called()
+
+    def test_cmd_sends_emergency_commands_directly_with_default_queue(self):
+        self._mark_emergency("ABORT")
+        with (
+            patch.dict(os.environ, {"OPENC3_DEFAULT_QUEUE": "DEFAULT"}),
+            patch("openc3.api.cmd_api.QueueModel.queue_command") as queue_command,
+            patch("openc3.api.cmd_api.CommandTopic.send_command") as send_command,
+        ):
+            cmd("INST ABORT")
+            queue_command.assert_not_called()
+            send_command.assert_called_once()
+            self.assertEqual(send_command.call_args.args[0]["cmd_name"], "ABORT")
+
+    def test_cmd_refuses_to_queue_emergency_commands(self):
+        self._mark_emergency("ABORT")
+        with (
+            patch("openc3.api.cmd_api.QueueModel.queue_command") as queue_command,
+            self.assertRaisesRegex(RuntimeError, "EMERGENCY command and cannot be queued"),
+        ):
+            cmd("INST ABORT", queue="DEFAULT")
+        queue_command.assert_not_called()
+
+    def test_cmd_honors_queue_false_for_emergency_commands(self):
+        self._mark_emergency("ABORT")
+        with patch("openc3.api.cmd_api.CommandTopic.send_command") as send_command:
+            cmd("INST ABORT", queue=False)
+            send_command.assert_called_once()
 
     def test_cmd_warns_about_required_parameters(self):
         for name in [

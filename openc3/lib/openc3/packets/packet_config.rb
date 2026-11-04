@@ -249,7 +249,7 @@ module OpenC3
               'PARAMETER', 'ID_ITEM', 'ID_PARAMETER', 'ARRAY_ITEM', 'ARRAY_PARAMETER', 'APPEND_ITEM',\
               'APPEND_PARAMETER', 'APPEND_ID_ITEM', 'APPEND_ID_PARAMETER', 'APPEND_ARRAY_ITEM',\
               'APPEND_ARRAY_PARAMETER', 'ALLOW_SHORT', 'HAZARDOUS', 'PROCESSOR', 'META',\
-              'DISABLE_MESSAGES', 'HIDDEN', 'DISABLED', 'VIRTUAL', 'CATCHALL', 'RESTRICTED', 'ACCESSOR', 'TEMPLATE', 'TEMPLATE_BASE64', 'TEMPLATE_FILE',\
+              'DISABLE_MESSAGES', 'HIDDEN', 'DISABLED', 'VIRTUAL', 'CATCHALL', 'RESTRICTED', 'EMERGENCY', 'ACCESSOR', 'TEMPLATE', 'TEMPLATE_BASE64', 'TEMPLATE_FILE',\
               'RESPONSE', 'ERROR_RESPONSE', 'SCREEN', 'RELATED_ITEM', 'IGNORE_OVERLAP', 'VALIDATOR', 'SUBPACKET', 'SUBPACKETIZER',\
               'STRUCTURE', 'APPEND_STRUCTURE'
             raise parser.error("No current packet for #{keyword}") unless @current_packet
@@ -622,6 +622,14 @@ module OpenC3
         usage = "#{keyword}"
         parser.verify_num_parameters(0, 0, usage)
         @current_packet.restricted = true
+
+      # Mark the current command as an emergency command which is never queued
+      when 'EMERGENCY'
+        usage = "#{keyword}"
+        parser.verify_num_parameters(0, 0, usage)
+        raise parser.error("EMERGENCY only applies to COMMAND packets") unless @current_cmd_or_tlm == COMMAND
+
+        @current_packet.emergency = true
 
       when 'CATCHALL'
         usage = "#{keyword}"

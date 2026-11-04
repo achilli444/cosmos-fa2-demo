@@ -59,6 +59,7 @@ static ID id_ivar_packet_time = 0;
 static ID id_ivar_ignore_overlap = 0;
 static ID id_ivar_virtual = 0;
 static ID id_ivar_restricted = 0;
+static ID id_ivar_emergency = 0;
 static ID id_ivar_subpacket = 0;
 static ID id_ivar_subpacketizer = 0;
 static ID id_ivar_obfuscated_items = 0;
@@ -290,6 +291,7 @@ static VALUE packet_initialize(int argc, VALUE *argv, VALUE self)
   rb_ivar_set(self, id_ivar_ignore_overlap, Qfalse);
   rb_ivar_set(self, id_ivar_virtual, Qfalse);
   rb_ivar_set(self, id_ivar_restricted, Qfalse);
+  rb_ivar_set(self, id_ivar_emergency, Qfalse);
   rb_ivar_set(self, id_ivar_subpacket, Qfalse);
   rb_ivar_set(self, id_ivar_subpacketizer, Qnil);
   rb_ivar_set(self, id_ivar_obfuscated_items, Qnil);
@@ -338,6 +340,7 @@ void Init_packet(void)
   id_ivar_ignore_overlap = rb_intern("@ignore_overlap");
   id_ivar_virtual = rb_intern("@virtual");
   id_ivar_restricted = rb_intern("@restricted");
+  id_ivar_emergency = rb_intern("@emergency");
   id_ivar_subpacket = rb_intern("@subpacket");
   id_ivar_subpacketizer = rb_intern("@subpacketizer");
   id_ivar_obfuscated_items = rb_intern("@obfuscated_items");

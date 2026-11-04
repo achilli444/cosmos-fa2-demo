@@ -695,9 +695,17 @@ def _cmd_implementation(
     if queue_username:
         command["queue_username"] = queue_username
 
+    queue = kwargs.get("queue")
+    # EMERGENCY commands (e.g. cease-emission / safe-mode telecommands) must transmit
+    # immediately so they are never routed to a queue where they could be held.
+    if packet.get("emergency"):
+        if queue:
+            raise RuntimeError(
+                f"{target_name} {cmd_name} is an EMERGENCY command and cannot be queued (queue={queue!r})"
+            )
+        queue = False
     # Users have to explicitly opt into a default queue by setting the OPENC3_DEFAULT_QUEUE
     # At which point ALL commands will go to that queue unless they specifically opt out with queue=False
-    queue = kwargs.get("queue")
     if os.environ.get("OPENC3_DEFAULT_QUEUE", False) and queue is None:
         queue = os.environ["OPENC3_DEFAULT_QUEUE"]
     if queue:

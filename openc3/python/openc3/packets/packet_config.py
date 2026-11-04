@@ -243,6 +243,7 @@ class PacketConfig:
                         | "ALLOW_SHORT"
                         | "HAZARDOUS"
                         | "RESTRICTED"
+                        | "EMERGENCY"
                         | "PROCESSOR"
                         | "META"
                         | "DISABLE_MESSAGES"
@@ -732,6 +733,16 @@ class PacketConfig:
                 if not self.current_packet:
                     raise parser.error(f"{keyword} requires a current packet")
                 self.current_packet.restricted = True
+
+            # Mark the current command as an emergency command which is never queued
+            case "EMERGENCY":
+                usage = keyword
+                parser.verify_num_parameters(0, 0, usage)
+                if not self.current_packet:
+                    raise parser.error(f"{keyword} requires a current packet")
+                if self.current_cmd_or_tlm != PacketConfig.COMMAND_STRING:
+                    raise parser.error("EMERGENCY only applies to COMMAND packets")
+                self.current_packet.emergency = True
 
             case "CATCHALL":
                 usage = keyword
