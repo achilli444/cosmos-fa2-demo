@@ -27,6 +27,91 @@ module OpenC3
       # Disable the auth model mock for this spec
       allow(OpenC3::AuthModel).to receive(:verify).and_call_original
       allow(OpenC3::AuthModel).to receive(:verify_no_service).and_call_original
+      allow(OpenC3::AuthModel).to receive(:session_user).and_call_original
+    end
+
+    describe "operator accounts" do
+      it "binds sessions to the user they were issued to" do
+        token = AuthModel.generate_session
+        user = AuthModel.session_user(token)
+        expect(user['username']).to eq('admin')
+        expect(user['roles']).to eq(['admin', 'operator'])
+        expect(AuthModel.session_user('ses_bogus')).to be_nil
+      end
+
+      it "treats legacy identity-less sessions as having no roles" do
+        Store.hset(AuthModel::SESSIONS_KEY, 'ses_legacy', Time.now.iso8601)
+        expect(AuthModel.verify('ses_legacy')).to eq(true)
+        expect(AuthModel.session_user('ses_legacy')).to be_nil
+      end
+
+      it "narrows the built-in admin roles with OPENC3_ADMIN_ROLES" do
+        ENV['OPENC3_ADMIN_ROLES'] = 'admin'
+        expect(AuthModel.admin_user['roles']).to eq(['admin'])
+        expect(AuthModel.permitted?(AuthModel.admin_user, 'cmd', target_name: 'INST')).to eq(false)
+      ensure
+        ENV.delete('OPENC3_ADMIN_ROLES')
+      end
+
+      it "authenticates the admin account by password with or without a username" do
+        expect(AuthModel.authenticate(nil, AUTH_INITIAL_PASSWORD)['username']).to eq('admin')
+        expect(AuthModel.authenticate('admin', AUTH_INITIAL_PASSWORD)['username']).to eq('admin')
+        expect(AuthModel.authenticate('admin', 'wrong')).to be_nil
+        expect(AuthModel.authenticate('nobody', AUTH_INITIAL_PASSWORD)).to be_nil
+      end
+
+      it "adds, authenticates, lists and removes named operators" do
+        user = AuthModel.add_user('alice', 'alicepass1', roles: ['viewer'])
+        expect(user).to eq({ 'username' => 'alice', 'name' => 'alice', 'roles' => ['viewer'], 'targets' => nil })
+        expect(AuthModel.authenticate('alice', 'alicepass1')['roles']).to eq(['viewer'])
+        expect(AuthModel.authenticate('alice', 'wrongpass')).to be_nil
+        expect(AuthModel.users.map { |u| u['username'] }).to eq(['admin', 'alice'])
+        expect(AuthModel.users.none? { |u| u.key?('password_hash') }).to be true
+        token = AuthModel.generate_session(user: user)
+        expect(AuthModel.session_user(token)['username']).to eq('alice')
+        expect(AuthModel.remove_user('alice')).to be true
+        expect(AuthModel.authenticate('alice', 'alicepass1')).to be_nil
+        expect(AuthModel.verify(token)).to eq(false) # sessions revoked with the account
+        expect(AuthModel.remove_user('alice')).to be false
+      end
+
+      it "validates new accounts" do
+        expect { AuthModel.add_user('admin', 'password1', roles: ['viewer']) }.to raise_error(/reserved/)
+        expect { AuthModel.add_user('bad user', 'password1', roles: ['viewer']) }.to raise_error(/username must match/)
+        expect { AuthModel.add_user('bob', 'short', roles: ['viewer']) }.to raise_error(/at least 8 characters/)
+        expect { AuthModel.add_user('bob', 'password1', roles: []) }.to raise_error(/roles must not be empty/)
+        expect { AuthModel.add_user('bob', 'password1', roles: ['root']) }.to raise_error(/unknown roles: root/)
+        expect { AuthModel.add_user('bob', 'password1', roles: ['service']) }.to raise_error(/unknown roles: service/)
+      end
+
+      it "derives permissions from roles and target allow lists" do
+        viewer = AuthModel.add_user('viewer1', 'password1', roles: ['viewer'])
+        expect(AuthModel.permitted?(viewer, 'tlm')).to be true
+        expect(AuthModel.permitted?(viewer, 'cmd', target_name: 'INST')).to be false
+        expect(AuthModel.permitted?(viewer, 'script_run')).to be false
+        expect(AuthModel.permitted?(viewer, 'admin')).to be false
+
+        operator = AuthModel.add_user('op1', 'password1', roles: ['operator'], targets: ['inst'])
+        expect(operator['targets']).to eq(['INST'])
+        expect(AuthModel.permitted?(operator, 'cmd', target_name: 'INST')).to be true
+        expect(AuthModel.permitted?(operator, 'cmd_raw', target_name: 'inst')).to be true
+        expect(AuthModel.permitted?(operator, 'cmd', target_name: 'INST2')).to be false
+        expect(AuthModel.permitted?(operator, 'tlm', target_name: 'INST2')).to be true
+        expect(AuthModel.permitted?(operator, 'admin')).to be false
+
+        expect(AuthModel.permitted?(nil, 'tlm')).to be false
+        expect(AuthModel.permitted?({ 'username' => 'x', 'roles' => [] }, 'tlm')).to be false
+        expect(AuthModel.permitted?(AuthModel.service_user, 'cmd', target_name: 'INST')).to be true
+      end
+
+      it "maps the service password to a service identity" do
+        ENV['OPENC3_SERVICE_PASSWORD'] = 'servicepass'
+        user = AuthModel.session_user('servicepass')
+        expect(user['roles']).to eq(['service'])
+        expect(AuthModel.service_user('alice')['username']).to eq('alice')
+      ensure
+        ENV.delete('OPENC3_SERVICE_PASSWORD')
+      end
     end
 
     describe "authentication" do

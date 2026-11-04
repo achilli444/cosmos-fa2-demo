@@ -41,9 +41,11 @@ class AuthController < ApplicationController
     end
 
     begin
-      if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
+      user = OpenC3::AuthModel.authenticate(params[:username], params[:password])
+      if user
         clear_user_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        OpenC3::Logger.info("User '#{user['username']}' logged in", user: user['username'])
+        render :plain => OpenC3::AuthModel.generate_session(user: user)
       else
         record_user_bad_attempt
         head :unauthorized
@@ -96,7 +98,9 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
         clear_service_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        # Script Runner passes the operator who started the script so commands
+        # sent by the script are attributed to that operator (role: service)
+        render :plain => OpenC3::AuthModel.generate_session(user: OpenC3::AuthModel.service_user(params[:username]))
       else
         record_service_bad_attempt
         head :unauthorized
@@ -107,9 +111,17 @@ class AuthController < ApplicationController
     end
   end
 
+  # Returns the operator the caller's token was issued to (for UI attribution)
+  def user
+    return unless authorization('system')
+
+    render json: user_info(request.headers['HTTP_AUTHORIZATION'])
+  end
+
   def get_otp
     user = authorization('system')
     return unless user
+
     render :plain => OpenC3::Authorization.generate_otp(user)
   end
 
@@ -123,8 +135,8 @@ class AuthController < ApplicationController
       # Set throws an exception if it fails for any reason
       OpenC3::AuthModel.set(params[:password], params[:old_password])
       clear_user_bad_attempts
-      OpenC3::Logger.info("Password changed", user: username())
-      render :plain => OpenC3::AuthModel.generate_session()
+      OpenC3::Logger.info("Password changed for '#{OpenC3::AuthModel::ADMIN_USERNAME}'", user: OpenC3::AuthModel::ADMIN_USERNAME)
+      render :plain => OpenC3::AuthModel.generate_session(user: OpenC3::AuthModel.admin_user)
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt

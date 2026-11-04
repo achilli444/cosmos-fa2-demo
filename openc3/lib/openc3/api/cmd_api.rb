@@ -520,7 +520,11 @@ module OpenC3
         end
       end
       cmd_string = _build_cmd_output_string(method_name, target_name, cmd_name, cmd_params, packet)
-      username = user && user['username'] ? user['username'] : 'anonymous'
+      # Enterprise returns a user Hash, other authorizers may return the bare
+      # username String. Only a missing identity is recorded as anonymous.
+      username = user.is_a?(Hash) ? user['username'] : user
+      username = username.to_s
+      username = 'anonymous' if username.empty?
       command = {
         'target_name' => target_name,
         'cmd_name' => cmd_name,

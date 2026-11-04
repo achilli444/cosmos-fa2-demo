@@ -37,7 +37,7 @@ class OpenC3Authentication:
         self.service = password == OPENC3_SERVICE_PASSWORD
         response = Session().post(
             self._generate_auth_url(),
-            json={"password": password},
+            json=self._auth_body(password),
             headers={"Content-Type": "application/json"},
         )
         self._token = response.text
@@ -59,6 +59,13 @@ class OpenC3Authentication:
             headers={"Authorization": session_token},
         )
         return response.text
+
+    def _auth_body(self, password):
+        body = {"password": password}
+        # Named operator account (defaults to the built-in admin account when unset)
+        if OPENC3_API_USER:
+            body["username"] = OPENC3_API_USER
+        return body
 
     def _generate_auth_url(self, endpoint=None):
         schema = OPENC3_API_SCHEMA or "http"

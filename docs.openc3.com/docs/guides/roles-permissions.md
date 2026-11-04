@@ -416,3 +416,25 @@ If you have instead imported user groups from an LDAP user federation system, yo
 5. Search for "groups" and check the box next to that, then click "Add"
 
 ![Keycloak Groups Token Mapper](/img/guides/roles-permissions/keycloak_groups_token_mapper.png)
+
+## COSMOS Core Operator Accounts
+
+COSMOS Core does not use Keycloak, but it still maps every session to an individual operator with roles so that commands and script runs are attributed to a person and command-capable permissions are only granted to accounts that hold them.
+
+- The original COSMOS password belongs to the built-in `admin` account. Leaving the Username field blank at login (or omitting `OPENC3_API_USER` in scripts) logs in as `admin`. By default `admin` holds the `admin` and `operator` roles; set `OPENC3_ADMIN_ROLES=admin` on the `openc3-cosmos-cmd-tlm-api` container to remove its ability to command once named operators exist.
+- Named operator accounts hold one or more of the built-in roles above (`admin`, `operator`, `viewer`, `runner`, `approver`) and an optional target allow list that limits `cmd` / `cmd_raw` to those targets. They are managed by an `admin` through the API (the password is hashed with Argon2id and never stored in plaintext):
+
+```bash
+# Log in as admin
+TOKEN=$(curl -s -X POST http://localhost:2900/openc3-api/auth/verify -H 'Content-Type: application/json' -d '{"username":"admin","password":"<admin password>"}')
+# Create an operator that can only command INST
+curl -s -X POST "http://localhost:2900/openc3-api/users?scope=DEFAULT" -H "Authorization: $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"<at least 8 chars>","roles":["operator"],"targets":["INST"]}'
+# List accounts (no password hashes are returned)
+curl -s "http://localhost:2900/openc3-api/users?scope=DEFAULT" -H "Authorization: $TOKEN"
+# Remove an account (also revokes its sessions)
+curl -s -X DELETE "http://localhost:2900/openc3-api/users/alice?scope=DEFAULT" -H "Authorization: $TOKEN"
+```
+
+- Scripts and external tools select their account with `OPENC3_API_USER` plus `OPENC3_API_PASSWORD`. Scripts started from Script Runner send commands attributed to the operator who started them.
+- Sessions issued before this release carry no identity and are rejected; operators simply log in again.
