@@ -59,6 +59,7 @@ class TestMqttStreamInterface(unittest.TestCase):
         self.assertEqual(i.ack_timeout, 10.0)
         mock_client_instance.username_pw_set.assert_called_with("test_user", "test_pass")
         mock_client_instance.tls_set.assert_called_with(ca_certs=ANY, certfile=ANY, keyfile=ANY)
+        mock_client_instance.tls_set.assert_called_once()
         mock_client_instance.loop_start.assert_called_once()
         mock_client_instance.connect.assert_called_with("localhost", 1883)
         mock_client_instance.is_connected.assert_called()

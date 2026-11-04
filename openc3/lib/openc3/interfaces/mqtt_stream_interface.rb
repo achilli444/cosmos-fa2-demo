@@ -18,18 +18,20 @@
 require 'openc3/interfaces/stream_interface'
 require 'openc3/streams/mqtt_stream'
 require 'openc3/config/config_parser'
+require 'openc3/utilities/mqtt_client'
 
 module OpenC3
   class MqttStreamInterface < StreamInterface
     # @param hostname [String] MQTT server to connect to
-    # @param port [Integer] MQTT port
+    # @param port [Integer] MQTT port (defaults to 8883 with ssl, 1883 without)
+    # @param ssl [Boolean] Whether to use TLS (default true, broker certificate always verified)
     # @param write_topic [String] MQTT publish topic
     # @param read_topic [String] MQTT receive topic
-    def initialize(hostname, port = 1883, ssl = false, write_topic = nil, read_topic = nil, protocol_type = nil, *protocol_args)
+    def initialize(hostname, port = nil, ssl = true, write_topic = nil, read_topic = nil, protocol_type = nil, *protocol_args)
       super(protocol_type, protocol_args)
       @hostname = hostname
-      @port = Integer(port)
-      @ssl = ConfigParser.handle_true_false(ssl)
+      @ssl = MqttClient.resolve_ssl(ssl)
+      @port = MqttClient.resolve_port(port, @ssl)
       @write_topic = ConfigParser.handle_nil(write_topic)
       @read_topic = ConfigParser.handle_nil(read_topic)
       @ack_timeout = 5.0

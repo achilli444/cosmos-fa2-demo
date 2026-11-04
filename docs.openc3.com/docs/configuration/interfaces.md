@@ -309,8 +309,8 @@ The MQTT interface is typically used for connecting to Internet of Things (IoT) 
 | Parameter | Description                                                                          | Required | Default |
 | --------- | ------------------------------------------------------------------------------------ | -------- | ------- |
 | Host      | Host name or IP address of the MQTT broker                                           | Yes      |         |
-| Port      | Port on the MQTT broker to connect to. Keep in mind whether you're using SSL or not. | No       | 1883    |
-| SSL       | Whether to use SSL to connect                                                        | No       | false   |
+| Port      | Port on the MQTT broker to connect to. Defaults to 8883 when SSL is true and 1883 when SSL is false. | No | 8883 |
+| SSL       | Whether to use TLS to connect. The broker certificate is always verified (hostname check included) against CA_FILE or the system certificate store. Set to false to explicitly allow a plaintext connection (logged as a warning). | No | true |
 
 Options are added directly beneath the interface definition as shown in the example.
 
@@ -398,8 +398,8 @@ The MQTT streaming interface is typically used for connecting to Internet of Thi
 | Parameter          | Description                                                                             | Required | Default    |
 | ------------------ | --------------------------------------------------------------------------------------- | -------- | ---------- |
 | Host               | Host name or IP address of the MQTT broker                                              | Yes      |            |
-| Port               | Port on the MQTT broker to connect to. Keep in mind whether you're using SSL or not.    | No       | 1883       |
-| SSL                | Whether to use SSL to connect                                                           | No       | false      |
+| Port               | Port on the MQTT broker to connect to. Defaults to 8883 when SSL is true and 1883 when SSL is false. | No | 8883 |
+| SSL                | Whether to use TLS to connect. The broker certificate is always verified (hostname check included) against CA_FILE or the system certificate store. Set to false to explicitly allow a plaintext connection (logged as a warning). | No | true |
 | Write Topic        | Name of the write topic for all commands. Pass nil / None to make interface read only.  | No       | nil / None |
 | Read Topic         | Name of the read topic for all telemetry. Pass nil / None to make interface write only. | No       | nil / None |
 | Protocol Type      | See Protocols.                                                                          | No       |
@@ -412,7 +412,7 @@ Options are added directly beneath the interface definition as shown in the exam
 This example uses the [SECRET](plugins#secret) keyword to set the PASSWORD option in the Interface.
 
 ```cosmos
-INTERFACE MQTT_INT openc3/interfaces/mqtt_stream_interface.py test.mosquitto.org 8884 False write read
+INTERFACE MQTT_INT openc3/interfaces/mqtt_stream_interface.py test.mosquitto.org 8884 True write read
   OPTION USERNAME rw
   # Create an env variable called MQTT_PASSWORD with the secret named PASSWORD
   # and set an OPTION called PASSWORD with the secret value
@@ -425,7 +425,7 @@ INTERFACE MQTT_INT openc3/interfaces/mqtt_stream_interface.py test.mosquitto.org
 This example uses the [SECRET](plugins#secret) keyword to set the PASSWORD option in the Interface.
 
 ```cosmos
-INTERFACE MQTT_INT mqtt_stream_interface.rb test.mosquitto.org 8884 false write read
+INTERFACE MQTT_INT mqtt_stream_interface.rb test.mosquitto.org 8884 true write read
   OPTION USERNAME rw
   # Create an env variable called MQTT_PASSWORD with the secret named PASSWORD
   # and set an OPTION called PASSWORD with the secret value

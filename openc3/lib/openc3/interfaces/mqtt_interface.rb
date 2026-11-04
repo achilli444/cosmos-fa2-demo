@@ -11,12 +11,14 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
-# You can quickly setup an unauthenticated MQTT server in Docker with
+# You can quickly setup an unauthenticated plaintext MQTT server in Docker with
 # docker run -it -p 1883:1883 eclipse-mosquitto:2.0.15 mosquitto -c /mosquitto-no-auth.conf
+# (connect with ssl false, e.g. INTERFACE MQTT_INT mqtt_interface.rb localhost 1883 false)
 # You can also test against encrypted and authenticated servers at https://test.mosquitto.org/
 
 require 'openc3/interfaces/interface'
 require 'openc3/config/config_parser'
+require 'openc3/utilities/mqtt_client'
 require 'mqtt'
 
 # Patches to the Ruby MQTT library so that it will work reliably with COSMOS
@@ -48,6 +50,7 @@ module MQTT
         loop do
           packet = @read_queue.pop
           return nil unless packet # Patch for COSMOS
+
           yield(packet)
           puback_packet(packet) if packet.qos > 0
         end
@@ -55,6 +58,7 @@ module MQTT
         # Wait for one packet to be available
         packet = @read_queue.pop
         return nil unless packet # Patch for COSMOS
+
         puback_packet(packet) if packet.qos > 0
         return packet
       end
@@ -77,7 +81,6 @@ module MQTT
         @socket = nil
       end
     end
-
   end
 end
 $VERBOSE = saved_verbose
@@ -86,13 +89,14 @@ module OpenC3
   # Base class for interfaces that send and receive messages over MQTT
   class MqttInterface < Interface
     # @param hostname [String] MQTT server to connect to
-    # @param port [Integer] MQTT port
-    # @param ssl [Boolean] Whether to use SSL
-    def initialize(hostname, port = 1883, ssl = false)
+    # @param port [Integer] MQTT port (defaults to 8883 with ssl, 1883 without)
+    # @param ssl [Boolean] Whether to use TLS (default true). The broker certificate
+    #   is always verified against CA_FILE or the system certificate store.
+    def initialize(hostname, port = nil, ssl = true)
       super()
       @hostname = hostname
-      @port = Integer(port)
-      @ssl = ConfigParser.handle_true_false(ssl)
+      @ssl = MqttClient.resolve_ssl(ssl)
+      @port = MqttClient.resolve_port(port, @ssl)
       @ack_timeout = 5.0
       @username = nil
       @password = nil
@@ -126,22 +130,9 @@ module OpenC3
     def connect
       @write_topics = []
       @read_topics = []
-      @client = MQTT::Client.new
-      @client.ack_timeout = @ack_timeout
-      @client.host = @hostname
-      @client.port = @port
-      @client.username = @username if @username
-      @client.password = @password if @password
-      @client.ssl = @ssl
-      if @cert and @key
-        @client.ssl = true
-        @client.cert_file = @cert.path
-        @client.key_file = @key.path
-      end
-      if @ca_file
-        @client.ssl = true
-        @client.ca_file = @ca_file.path
-      end
+      @client = MqttClient.build(name: @name, hostname: @hostname, port: @port, ssl: @ssl,
+                                 ack_timeout: @ack_timeout, username: @username, password: @password,
+                                 cert: @cert, key: @key, ca_file: @ca_file)
       @client.connect
       @read_packets_by_topic.each do |topic, _|
         Logger.info "#{@name}: Subscribing to #{topic}"
@@ -172,6 +163,7 @@ module OpenC3
       packet = super()
       topic = @read_topics.shift
       return nil unless packet
+
       identified_packet = @read_packets_by_topic[topic]
       if identified_packet
         identified_packet = identified_packet.dup

@@ -20,8 +20,8 @@ from time import sleep
 # See https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html
 import paho.mqtt.client as mqtt
 
-from openc3.config.config_parser import ConfigParser
 from openc3.interfaces.interface import Interface
+from openc3.streams.mqtt_stream import resolve_mqtt_port, resolve_mqtt_ssl
 from openc3.system.system import System
 from openc3.utilities.logger import Logger
 
@@ -29,12 +29,13 @@ from openc3.utilities.logger import Logger
 # Base class for interfaces that send and receive messages over MQTT
 class MqttInterface(Interface):
     # @param hostname [String] MQTT server to connect to
-    # @param port [Integer] MQTT port
-    def __init__(self, hostname, port=1883, ssl=False):
+    # @param port [Integer] MQTT port (defaults to 8883 with ssl, 1883 without)
+    # @param ssl [Boolean] Whether to use TLS (default True, broker certificate always verified)
+    def __init__(self, hostname, port=None, ssl=True):
         super().__init__()
         self.hostname = hostname
-        self.port = int(port)
-        self.ssl = ConfigParser.handle_true_false(ssl)
+        self.ssl = resolve_mqtt_ssl(ssl)
+        self.port = resolve_mqtt_port(port, self.ssl)
         self.ack_timeout = 5.0
         self.username = None
         self.password = None
@@ -72,8 +73,16 @@ class MqttInterface(Interface):
         self.client.on_message = self.on_message
         self.client.user_data_set(self.pkt_queue)  # passed to on_message
 
-        if self.ssl:
+        if self.ssl and not self.ca_file:
+            # Verifies the broker certificate (CERT_REQUIRED + hostname check)
+            # against the system certificate store. With CA_FILE, tls_set is
+            # called once below with ca_certs instead (Paho rejects a second call).
             self.client.tls_set()
+        else:
+            message = f"{self.name}: TLS disabled, connecting to {self.hostname}:{self.port} in plaintext"
+            if self.username or self.password:
+                message += " (MQTT credentials will be sent unencrypted)"
+            Logger.warn(message)
         if self.username and self.password:
             self.client.username_pw_set(self.username, self.password)
         # You still need the ca_file if you're using your own cert and key

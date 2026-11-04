@@ -17,18 +17,19 @@ import tempfile
 
 from openc3.config.config_parser import ConfigParser
 from openc3.interfaces.stream_interface import StreamInterface
-from openc3.streams.mqtt_stream import MqttStream
+from openc3.streams.mqtt_stream import MqttStream, resolve_mqtt_port, resolve_mqtt_ssl
 
 
 # Base class for interfaces that send and receive messages over MQTT
 class MqttStreamInterface(StreamInterface):
     # @param hostname [String] MQTT server to connect to
-    # @param port [Integer] MQTT port
+    # @param port [Integer] MQTT port (defaults to 8883 with ssl, 1883 without)
+    # @param ssl [Boolean] Whether to use TLS (default True, broker certificate always verified)
     def __init__(
         self,
         hostname,
-        port=1883,
-        ssl=False,
+        port=None,
+        ssl=True,
         write_topic=None,
         read_topic=None,
         protocol_type=None,
@@ -38,8 +39,8 @@ class MqttStreamInterface(StreamInterface):
             protocol_args = []
         super().__init__(protocol_type, protocol_args)
         self.hostname = hostname
-        self.port = int(port)
-        self.ssl = ConfigParser.handle_true_false(ssl)
+        self.ssl = resolve_mqtt_ssl(ssl)
+        self.port = resolve_mqtt_port(port, self.ssl)
         self.write_topic = ConfigParser.handle_none(write_topic)
         self.read_topic = ConfigParser.handle_none(read_topic)
         self.ack_timeout = 5.0

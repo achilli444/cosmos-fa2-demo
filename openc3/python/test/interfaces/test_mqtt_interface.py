@@ -23,12 +23,23 @@ class TestMqttInterface(unittest.TestCase):
         setup_system()
 
     def test_sets_all_the_instance_variables(self):
-        i = MqttInterface("localhost", "1883")
+        i = MqttInterface("localhost", "1883", False)
         self.assertEqual(i.name, "MqttInterface")
         self.assertEqual(i.hostname, "localhost")
         self.assertFalse(i.ssl)
         self.assertEqual(i.port, 1883)
         self.assertEqual(i.ack_timeout, 5.0)
+
+    def test_defaults_to_tls_on_8883(self):
+        i = MqttInterface("localhost")
+        self.assertTrue(i.ssl)
+        self.assertEqual(i.port, 8883)
+        i = MqttInterface("localhost", None, False)
+        self.assertFalse(i.ssl)
+        self.assertEqual(i.port, 1883)
+        i = MqttInterface("localhost", "1883")
+        self.assertTrue(i.ssl)
+        self.assertEqual(i.port, 1883)
 
     def test_builds_a_human_readable_connection_string(self):
         i = MqttInterface("localhost", "1883", False)
@@ -52,6 +63,7 @@ class TestMqttInterface(unittest.TestCase):
         self.assertEqual(i.ack_timeout, 10.0)
         mock_client_instance.username_pw_set.assert_called_with("test_user", "test_pass")
         mock_client_instance.tls_set.assert_called_with(ca_certs=ANY, certfile=ANY, keyfile=ANY)
+        mock_client_instance.tls_set.assert_called_once()
         mock_client_instance.loop_start.assert_called_once()
         mock_client_instance.connect.assert_called_with("localhost", 1883)
         mock_client_instance.is_connected.assert_called()

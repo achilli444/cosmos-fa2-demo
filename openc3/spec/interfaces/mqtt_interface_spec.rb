@@ -29,14 +29,25 @@ module OpenC3
         expect(i.instance_variable_get(:@hostname)).to eql 'localhost'
         expect(i.instance_variable_get(:@port)).to eql 1883
       end
+
+      it "defaults to TLS on port 8883" do
+        i = MqttInterface.new('localhost')
+        expect(i.instance_variable_get(:@ssl)).to be true
+        expect(i.instance_variable_get(:@port)).to eql 8883
+        i = MqttInterface.new('localhost', nil, false)
+        expect(i.instance_variable_get(:@ssl)).to be false
+        expect(i.instance_variable_get(:@port)).to eql 1883
+      end
     end
 
     describe "connection_string" do
       it "builds a human readable connection string" do
-        i = MqttInterface.new('localhost', '1883')
+        i = MqttInterface.new('localhost', '1883', false)
         expect(i.connection_string).to eql "localhost:1883 (ssl: false)"
         i = MqttInterface.new('localhost', '1883', true)
         expect(i.connection_string).to eql "localhost:1883 (ssl: true)"
+        i = MqttInterface.new('localhost')
+        expect(i.connection_string).to eql "localhost:8883 (ssl: true)"
       end
     end
 
@@ -48,8 +59,9 @@ module OpenC3
         expect(double).to receive(:port=).with(1883)
         expect(double).to receive(:username=).with('test_user')
         expect(double).to receive(:password=).with('test_pass')
-        expect(double).to receive(:ssl=).with(false)
-        expect(double).to receive(:ssl=).with(true).twice
+        expect(double).to receive(:ssl=).with(true)
+        expect(double).to receive(:verify_host=).with(true)
+        expect(double).to receive(:ssl_context).and_return(OpenSSL::SSL::SSLContext.new)
         expect(double).to receive(:cert_file=)
         expect(double).to receive(:key_file=)
         expect(double).to receive(:ca_file=)
@@ -60,7 +72,8 @@ module OpenC3
         expect(double).to receive(:subscribe).with('ADCS')
         allow(MQTT::Client).to receive(:new).and_return(double)
 
-        i = MqttInterface.new('localhost', '1883')
+        # ssl false is overridden because CERT/KEY and CA_FILE are given
+        i = MqttInterface.new('localhost', '1883', false)
         i.set_option('USERNAME', ['test_user'])
         i.set_option('PASSWORD', ['test_pass'])
         i.set_option('CERT', ['cert_content'])
@@ -71,13 +84,33 @@ module OpenC3
         expect(i.connected?).to be true
       end
 
-      it "sets ssl even without cert_file, key_file, or ca_file" do
+      it "verifies the broker against the system cert store without ca_file" do
+        context = OpenSSL::SSL::SSLContext.new
         double = double(MQTT_CLIENT).as_null_object
         expect(double).to receive(:ssl=).with(true)
+        expect(double).to receive(:verify_host=).with(true)
+        expect(double).to receive(:ssl_context).and_return(context)
+        expect(double).not_to receive(:ca_file=)
         expect(double).to receive(:connected?).and_return(true)
         allow(MQTT::Client).to receive(:new).and_return(double)
 
-        i = MqttInterface.new('localhost', '1883', true)
+        i = MqttInterface.new('localhost') # default ssl true
+        i.connect()
+        expect(i.connected?).to be true
+        expect(context.verify_mode).to eql OpenSSL::SSL::VERIFY_PEER
+        expect(context.verify_hostname).to be true
+        expect(context.cert_store).to be_a(OpenSSL::X509::Store)
+      end
+
+      it "warns when TLS is explicitly disabled" do
+        double = double(MQTT_CLIENT).as_null_object
+        expect(double).to receive(:ssl=).with(false)
+        expect(double).not_to receive(:ssl_context)
+        expect(double).to receive(:connected?).and_return(true)
+        allow(MQTT::Client).to receive(:new).and_return(double)
+        expect(Logger).to receive(:warn).with(/TLS disabled.*localhost:1883.*plaintext/)
+
+        i = MqttInterface.new('localhost', '1883', false)
         i.connect()
         expect(i.connected?).to be true
       end

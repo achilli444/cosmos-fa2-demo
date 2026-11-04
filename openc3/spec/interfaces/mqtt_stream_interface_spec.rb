@@ -50,8 +50,9 @@ module OpenC3
         expect(double).to receive(:port=).with(1883)
         expect(double).to receive(:username=).with('test_user')
         expect(double).to receive(:password=).with('test_pass')
-        expect(double).to receive(:ssl=).with(false)
-        expect(double).to receive(:ssl=).with(true).twice
+        expect(double).to receive(:ssl=).with(true)
+        expect(double).to receive(:verify_host=).with(true)
+        expect(double).to receive(:ssl_context).and_return(OpenSSL::SSL::SSLContext.new)
         expect(double).to receive(:cert_file=)
         expect(double).to receive(:key_file=)
         expect(double).to receive(:ca_file=)
@@ -72,15 +73,24 @@ module OpenC3
         expect(i.connected?).to be true
       end
 
-      it "sets ssl even without cert_file, key_file, or ca_file" do
+      it "defaults to TLS on 8883 and verifies the broker against the system cert store" do
+        context = OpenSSL::SSL::SSLContext.new
         double = double(MY_MQTT_CLIENT).as_null_object
+        expect(double).to receive(:port=).with(8883)
         expect(double).to receive(:ssl=).with(true)
+        expect(double).to receive(:verify_host=).with(true)
+        expect(double).to receive(:ssl_context).and_return(context)
+        expect(double).not_to receive(:ca_file=)
         expect(double).to receive(:connected?).and_return(true)
         allow(MQTT::Client).to receive(:new).and_return(double)
 
-        i = MqttStreamInterface.new('localhost', '1883', true, 'write_topic', 'read_topic')
+        i = MqttStreamInterface.new('localhost', nil, nil, 'write_topic', 'read_topic')
+        expect(i.connection_string).to eql "localhost:8883 (ssl: true) write topic: write_topic read topic: read_topic"
         i.connect()
         expect(i.connected?).to be true
+        expect(context.verify_mode).to eql OpenSSL::SSL::VERIFY_PEER
+        expect(context.verify_hostname).to be true
+        expect(context.cert_store).to be_a(OpenSSL::X509::Store)
       end
     end
 
