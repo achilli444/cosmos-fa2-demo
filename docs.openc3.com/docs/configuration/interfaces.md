@@ -222,6 +222,27 @@ INTERFACE INTERFACE_NAME tcpip_client_interface.rb host.docker.internal 8080 808
 </TabItem>
 </Tabs>
 
+#### TLS Options (Ruby only)
+
+The Ruby TCP/IP client interface can wrap its connection in TLS. The server certificate is always verified against the trusted CA store and checked against the hostname, so a misconfigured or impersonated target fails to connect instead of silently exchanging unauthenticated data. Options are added directly beneath the interface definition.
+
+| Option       | Description                                                                                                                                                | Default                                            |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| TLS          | Set to TRUE to wrap the read and write sockets in TLS. Implied by any other TLS\_ option.                                                                 | FALSE                                              |
+| TLS_CA_FILE  | PEM encoded Certificate Authority certificate filename (or inline PEM) to trust. Can contain multiple certificates.                                        | System CA store (honors SSL_CERT_FILE / SSL_CERT_DIR) |
+| TLS_CERT     | PEM encoded client certificate filename (or inline PEM) used with TLS_KEY for mutual TLS client authentication.                                            | None                                               |
+| TLS_KEY      | PEM encoded client private key filename (or inline PEM). Required with TLS_CERT.                                                                           | None                                               |
+| TLS_HOSTNAME | Name to verify the server certificate against (and send as SNI) when it differs from the Host parameter, e.g. when connecting by IP address.               | Host parameter                                     |
+| TLS_VERIFY   | Set to FALSE to skip server certificate and hostname verification. Not recommended: the connection is encrypted but the target is not authenticated and a warning is logged. | TRUE                                               |
+
+```cosmos
+INTERFACE INTERFACE_NAME tcpip_client_interface.rb target.example.com 8443 8443 10.0 nil LENGTH 0 16 0 1 BIG_ENDIAN 4 0xBA5EBA11
+  OPTION TLS TRUE
+  OPTION TLS_CA_FILE /openc3/certs/target_ca.pem
+  OPTION TLS_CERT /openc3/certs/cosmos_client.pem
+  OPTION TLS_KEY /openc3/certs/cosmos_client.key
+```
+
 ### TCP/IP Server Interface
 
 The TCP/IP server interface creates a TCP/IP server which listens for incoming connections and dynamically creates sockets which communicate with the target. This interface is used for targets which open a socket and try to connect to a server.

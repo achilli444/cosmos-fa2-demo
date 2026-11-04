@@ -26,19 +26,19 @@ module OpenC3
     #   Pass nil to block until the read is complete.
     # @param connect_timeout [Float|nil] Seconds to wait before aborting connect.
     #   Pass nil to block until the connection is complete.
-    def initialize(url, write_timeout, read_timeout, connect_timeout = 5.0)
+    # @param tls [Hash] TLS options (:ca_file, :cert, :key, :verify) applied
+    #   to wss / https URLs. See {TcpipClientStream.build_ssl_context}. The
+    #   server certificate is verified against the CA store and checked
+    #   against the URL host unless verify: false is given.
+    def initialize(url, write_timeout, read_timeout, connect_timeout = 5.0, tls: {})
       @url = url
       @uri = URI.parse @url
-      port = ((@uri.scheme == 'wss' or @uri.scheme == 'https') ? 443 : 80)
+      secure = ['https', 'wss'].include?(@uri.scheme)
+      port = (secure ? 443 : 80)
       port = @uri.port if @uri.port
-      super(@uri.host, port, port, write_timeout, read_timeout, connect_timeout)
-      if ['https', 'wss'].include? @uri.scheme
-        socket = ::OpenSSL::SSL::SSLSocket.new(@write_socket)
-        socket.sync_close = true
-        socket.hostname = @uri.host
-        @write_socket = socket
-        @read_socket = socket
-      end
+      # TLS is negotiated in connect (after the TCP connect) by TcpipClientStream,
+      # which verifies the certificate and calls post_connection_check(host)
+      super(@uri.host, port, port, write_timeout, read_timeout, connect_timeout, tls: (secure ? { hostname: @uri.host }.merge(tls) : nil))
       @headers = {}
     end
 
