@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'socket'
+require 'ipaddr'
 require 'timeout' # For Timeout::Error
 require 'openc3/interfaces/stream_interface'
 require 'openc3/streams/tcpip_socket_stream'
@@ -50,8 +51,11 @@ module OpenC3
     attr_accessor :read_connection_callback
     # @return [StreamLogPair] StreamLogPair instance or nil
     attr_accessor :stream_log_pair
-    # @return [String] The ip address to bind to.  Default to ANY (0.0.0.0)
+    # @return [String] The ip address to bind to. Default to localhost (127.0.0.1)
     attr_accessor :listen_address
+    # @return [Array<IPAddr>] Client addresses or CIDR ranges allowed to connect.
+    #   An empty list allows any client that can reach the listen address.
+    attr_reader :allowed_clients
 
     # @param write_port [Integer] The server write port. Clients should connect
     #   and expect to receive data from this port.
@@ -104,7 +108,8 @@ module OpenC3
       @stream_log_pair = nil
       @raw_logging_enabled = false
       @connection_mutex = Mutex.new
-      @listen_address = "0.0.0.0"
+      @listen_address = "127.0.0.1"
+      @allowed_clients = []
 
       @read_allowed = false unless ConfigParser.handle_nil(read_port)
       @write_allowed = false unless ConfigParser.handle_nil(write_port)
@@ -283,13 +288,36 @@ module OpenC3
     end
 
     # Supported Options
-    # LISTEN_ADDRESS - Ip address of the interface to accept connections on - Default: 0.0.0.0
+    # LISTEN_ADDRESS - Ip address of the interface to accept connections on - Default: 127.0.0.1
+    # ALLOWED_CLIENTS - Client IP addresses or CIDR ranges (e.g. 10.0.0.5 192.168.1.0/24) that
+    #   are allowed to connect. Connections from any other address are rejected.
+    #   Default: any client that can reach the listen address
     # (see Interface#set_option)
     def set_option(option_name, option_values)
       super(option_name, option_values)
-      if option_name.upcase == 'LISTEN_ADDRESS'
+      case option_name.upcase
+      when 'LISTEN_ADDRESS'
         @listen_address = option_values[0]
+      when 'ALLOWED_CLIENTS'
+        @allowed_clients = option_values.map do |value|
+          begin
+            IPAddr.new(value)
+          rescue IPAddr::Error => e
+            raise ArgumentError, "Invalid ALLOWED_CLIENTS entry '#{value}': #{e.message}"
+          end
+        end
       end
+    end
+
+    # @param host_ip [String] IP address of a connecting client
+    # @return [Boolean] Whether the client is permitted by ALLOWED_CLIENTS
+    def client_allowed?(host_ip)
+      return true if @allowed_clients.empty?
+
+      ip = IPAddr.new(host_ip)
+      @allowed_clients.any? { |allowed| allowed.include?(ip) }
+    rescue IPAddr::Error
+      false
     end
 
     # protected
@@ -372,17 +400,13 @@ module OpenC3
       end
 
       port, host_ip = Socket.unpack_sockaddr_in(address)
+      unless client_allowed?(host_ip)
+        OpenC3.close_socket(socket)
+        Logger.warn "#{@name}: Tcpip server rejected connection from #{host_ip}:#{port} (not in ALLOWED_CLIENTS)"
+        return
+      end
       hostname = ''
       hostname = Socket.lookup_hostname_from_ip(host_ip)
-      # if System.instance.acl
-      #   addr = ["AF_INET", 10, "lc630", host_ip.to_s]
-      #   if not System.instance.acl.allow_addr?(addr)
-      #     # Reject connection
-      #     OpenC3.close_socket(socket)
-      #     Logger.info "#{@name}: Tcpip server rejected connection from #{hostname}(#{host_ip}):#{port}"
-      #     return
-      #   end
-      # end
 
       # Configure TCP_NODELAY option
       socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
@@ -629,6 +653,7 @@ module OpenC3
       result['write_timeout'] = @write_timeout
       result['read_timeout'] = @read_timeout
       result['listen_address'] = @listen_address
+      result['allowed_clients'] = @allowed_clients.map { |allowed| "#{allowed}/#{allowed.prefix}" }
       return result
     end
   end

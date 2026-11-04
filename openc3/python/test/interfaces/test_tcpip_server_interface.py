@@ -47,19 +47,19 @@ class TestTcpipServerInterface(unittest.TestCase):
 
     def test_connection_string(self):
         i = TcpipServerInterface("8889", "8889", "None", "5", "burst")
-        self.assertEqual(i.connection_string(), "listening on 0.0.0.0:8889 (R/W)")
+        self.assertEqual(i.connection_string(), "listening on 127.0.0.1:8889 (R/W)")
 
         i = TcpipServerInterface("8889", "8890", "None", "5", "burst")
         self.assertEqual(
             i.connection_string(),
-            "listening on 0.0.0.0:8889 (write) 0.0.0.0:8890 (read)",
+            "listening on 127.0.0.1:8889 (write) 127.0.0.1:8890 (read)",
         )
 
         i = TcpipServerInterface("8889", "None", "None", "5", "burst")
-        self.assertEqual(i.connection_string(), "listening on 0.0.0.0:8889 (write)")
+        self.assertEqual(i.connection_string(), "listening on 127.0.0.1:8889 (write)")
 
         i = TcpipServerInterface("None", "8889", "None", "5", "burst")
-        self.assertEqual(i.connection_string(), "listening on 0.0.0.0:8889 (read)")
+        self.assertEqual(i.connection_string(), "listening on 127.0.0.1:8889 (read)")
 
     def test_read_raises_if_not_connected(self):
         i = TcpipServerInterface("8888", "8889", "5", "5", "burst")
@@ -112,10 +112,57 @@ class TestTcpipServerInterface(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Interface not connected"):
             i.write_raw(Packet("", ""))
 
+    def test_defaults_the_listen_address_to_localhost(self):
+        i = TcpipServerInterface("8888", "8889", "5", "5", "burst")
+        self.assertEqual(i.listen_address, "127.0.0.1")
+        self.assertEqual(i.allowed_clients, [])
+
     def test_sets_the_listen_address_for_the_tcpip_server(self):
         i = TcpipServerInterface("8888", "8889", "5", "5", "burst")
-        i.set_option("LISTEN_ADDRESS", ["127.0.0.1"])
-        self.assertEqual(i.listen_address, "127.0.0.1")
+        i.set_option("LISTEN_ADDRESS", ["0.0.0.0"])
+        self.assertEqual(i.listen_address, "0.0.0.0")
+
+    def test_sets_the_allowed_clients(self):
+        i = TcpipServerInterface("8888", "8889", "5", "5", "burst")
+        i.set_option("ALLOWED_CLIENTS", ["10.1.2.3", "192.168.1.0/24"])
+        self.assertTrue(i.client_allowed("10.1.2.3"))
+        self.assertTrue(i.client_allowed("192.168.1.200"))
+        self.assertFalse(i.client_allowed("10.1.2.4"))
+        self.assertFalse(i.client_allowed("192.168.2.1"))
+        self.assertFalse(i.client_allowed("not-an-ip"))
+
+    def test_allows_any_client_without_allowed_clients(self):
+        i = TcpipServerInterface("8888", "8889", "5", "5", "burst")
+        self.assertTrue(i.client_allowed("203.0.113.9"))
+
+    def test_rejects_invalid_allowed_clients(self):
+        i = TcpipServerInterface("8888", "8889", "5", "5", "burst")
+        with self.assertRaisesRegex(ValueError, "Invalid ALLOWED_CLIENTS entry"):
+            i.set_option("ALLOWED_CLIENTS", ["10.0.0.999"])
+
+    def test_accepts_allowed_client_connection(self):
+        i = TcpipServerInterface("8891", "8891", "5", "5", "burst")
+        i.set_option("ALLOWED_CLIENTS", ["127.0.0.0/8"])
+        i.connect()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(("127.0.0.1", 8891))
+        time.sleep(0.2)
+        self.assertEqual(i.num_clients(), 1)
+        sock.close()
+        i.disconnect()
+
+    def test_rejects_client_not_in_allowed_clients(self):
+        i = TcpipServerInterface("8892", "8892", "5", "5", "burst")
+        i.set_option("ALLOWED_CLIENTS", ["10.0.0.0/8"])
+        i.connect()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(("127.0.0.1", 8892))
+        time.sleep(0.2)
+        self.assertEqual(i.num_clients(), 0)
+        sock.settimeout(1)
+        self.assertEqual(sock.recv(1), b"")  # server closed the socket
+        sock.close()
+        i.disconnect()
 
     def test_server_read_only(self):
         i = TcpipServerInterface(None, "8889", None, "5", "burst")
@@ -290,7 +337,8 @@ class TestTcpipServerInterface(unittest.TestCase):
         self.assertEqual(details["read_port"], 8889)
         self.assertEqual(details["write_timeout"], 10.0)
         self.assertEqual(details["read_timeout"], 15.0)
-        self.assertEqual(details["listen_address"], "0.0.0.0")  # Default value
+        self.assertEqual(details["listen_address"], "127.0.0.1")  # Default value
+        self.assertEqual(details["allowed_clients"], [])
 
     def test_details_with_none_ports(self):
         i = TcpipServerInterface("None", "8889", "None", "5", "burst")
@@ -312,3 +360,9 @@ class TestTcpipServerInterface(unittest.TestCase):
 
         # Verify the listen address was set correctly
         self.assertEqual(details["listen_address"], "192.168.1.10")
+
+    def test_details_with_allowed_clients_option(self):
+        i = TcpipServerInterface("8888", "8889", "5", "5", "burst")
+        i.set_option("ALLOWED_CLIENTS", ["10.1.2.3", "192.168.1.0/24"])
+        details = i.details()
+        self.assertEqual(details["allowed_clients"], ["10.1.2.3/32", "192.168.1.0/24"])

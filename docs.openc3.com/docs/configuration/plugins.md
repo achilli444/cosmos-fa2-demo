@@ -333,7 +333,7 @@ When an option is set the interface class calls the set_option method. Custom in
 
 | Parameter | Description | Required |
 |-----------|-------------|----------|
-| Name | The option to set. OpenC3 defines several options on the core provided interfaces. The SerialInterface defines FLOW_CONTROL which can be NONE (default) or RTSCTS and DATA_BITS which changes the data bits of the serial interface. The TcpipServerInterface and HttpServerInterface define LISTEN_ADDRESS which is the IP address to accept connections on (default 0.0.0.0). | True |
+| Name | The option to set. OpenC3 defines several options on the core provided interfaces. The SerialInterface defines FLOW_CONTROL which can be NONE (default) or RTSCTS and DATA_BITS which changes the data bits of the serial interface. The TcpipServerInterface and HttpServerInterface define LISTEN_ADDRESS which is the IP address to accept connections on (default 127.0.0.1 for TcpipServerInterface, 0.0.0.0 for HttpServerInterface). The TcpipServerInterface also defines ALLOWED_CLIENTS which is a space separated list of client IP addresses or CIDR ranges allowed to connect (default any). | True |
 | Parameters | Parameters to pass to the option | False |
 
 Example Usage:
@@ -508,7 +508,7 @@ When a bridge option is set the bridge interface class calls the set_option meth
 
 | Parameter | Description | Required |
 |-----------|-------------|----------|
-| Name | The option to set. OpenC3 defines several options on the core provided interfaces. The SerialInterface defines FLOW_CONTROL which can be NONE (default) or RTSCTS and DATA_BITS which changes the data bits of the serial interface. The TcpipServerInterface and HttpServerInterface define LISTEN_ADDRESS which is the IP address to accept connections on (default 0.0.0.0). | True |
+| Name | The option to set. OpenC3 defines several options on the core provided interfaces. The SerialInterface defines FLOW_CONTROL which can be NONE (default) or RTSCTS and DATA_BITS which changes the data bits of the serial interface. The TcpipServerInterface and HttpServerInterface define LISTEN_ADDRESS which is the IP address to accept connections on (default 127.0.0.1 for TcpipServerInterface, 0.0.0.0 for HttpServerInterface). The TcpipServerInterface also defines ALLOWED_CLIENTS which is a space separated list of client IP addresses or CIDR ranges allowed to connect (default any). | True |
 | Parameters | Parameters to pass to the option | False |
 
 Example Usage:

@@ -245,7 +245,11 @@ openc3-operator:
 
 #### LISTEN_ADDRESS
 
-IP address to accept connections on. Default: `0.0.0.0`.
+IP address to accept connections on. Default: `127.0.0.1` (loopback only). Set to `0.0.0.0` to accept connections from other hosts or containers, and pair it with `ALLOWED_CLIENTS` to restrict which hosts may connect.
+
+#### ALLOWED_CLIENTS
+
+Space separated list of client IP addresses or CIDR ranges (e.g. `10.0.0.5 192.168.1.0/24`) that are allowed to connect. Connections from any other address are closed immediately and logged. Default: any client that can reach the listen address.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python">
@@ -258,6 +262,8 @@ INTERFACE INTERFACE_NAME openc3/interfaces/tcpip_server_interface.py 8080 8080 1
 INTERFACE INTERFACE_NAME openc3/interfaces/tcpip_server_interface.py 8080 8080 10.0 10.0 TEMPLATE 0xA 0xA
 INTERFACE INTERFACE_NAME openc3/interfaces/tcpip_server_interface.py 8080 8080 10.0 None PREIDENTIFIED 0xCAFEBABE
 INTERFACE INTERFACE_NAME openc3/interfaces/tcpip_server_interface.py 8080 8080 10.0 10.0 # no built-in protocol
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  OPTION ALLOWED_CLIENTS 10.0.0.5 192.168.1.0/24
 ```
 
 </TabItem>
@@ -271,7 +277,8 @@ INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 10.0 TERMINATE
 INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 10.0 TEMPLATE 0xA 0xA
 INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 nil PREIDENTIFIED 0xCAFEBABE
 INTERFACE INTERFACE_NAME tcpip_server_interface.rb 8080 8080 10.0 10.0 # no built-in protocol
-  OPTION LISTEN_ADDRESS 127.0.0.1
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  OPTION ALLOWED_CLIENTS 10.0.0.5 192.168.1.0/24
 ```
 
 </TabItem>
