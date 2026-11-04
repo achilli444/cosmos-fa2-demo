@@ -110,6 +110,9 @@ module OpenC3
     # @return [Boolean] If this packet is marked as restricted use
     attr_accessor :restricted
 
+    # @return [Boolean] If this command must transmit immediately and may never be queued
+    attr_accessor :emergency
+
     # @return [Boolean] If this packet is marked as a subpacket
     attr_accessor :subpacket
 
@@ -161,6 +164,7 @@ module OpenC3
         @ignore_overlap = false
         @virtual = false
         @restricted = false
+        @emergency = false
         @validator = nil
         @subpacket = false
         @subpacketizer = nil
@@ -1165,6 +1169,9 @@ module OpenC3
       if @restricted
         config << "  RESTRICTED\n"
       end
+      if @emergency
+        config << "  EMERGENCY\n"
+      end
 
       if @processors
         @processors.each do |_processor_name, processor|
@@ -1229,6 +1236,7 @@ module OpenC3
       config['subpacket'] = true if @subpacket
       config['subpacketizer'] = @subpacketizer.class.to_s if @subpacketizer
       config['restricted'] = true if @restricted
+      config['emergency'] = true if @emergency
       config['accessor'] = @accessor.class.to_s
       config['accessor_args'] = @accessor.args
       config['validator'] = @validator.class.to_s if @validator

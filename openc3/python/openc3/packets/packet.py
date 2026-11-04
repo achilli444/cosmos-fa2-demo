@@ -100,6 +100,7 @@ class Packet(Structure):
         self.ignore_overlap = False
         self.virtual = False
         self.restricted = False
+        self.emergency = False
         self.subpacket = False
         self.validator = None
         self.subpacketizer = None
@@ -1078,6 +1079,8 @@ class Packet(Structure):
             config += "  SUBPACKET\n"
         if self.restricted:
             config += "  RESTRICTED\n"
+        if self.emergency:
+            config += "  EMERGENCY\n"
 
         if self.processors:
             for _, processor in self.processors:
@@ -1142,6 +1145,8 @@ class Packet(Structure):
             config["subpacketizer"] = self.subpacketizer.__class__.__name__
         if self.restricted:
             config["restricted"] = True
+        if self.emergency:
+            config["emergency"] = True
         config["accessor"] = self.accessor.__class__.__name__
         # config["accessor_args"] = self.accessor.args
         if self.validator:

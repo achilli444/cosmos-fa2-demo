@@ -16,6 +16,7 @@ COMMAND <%= target_name %> COLLECT BIG_ENDIAN "Starts a collect on the <%= targe
 
 COMMAND <%= target_name %> ABORT BIG_ENDIAN "Aborts a collect on the <%= target_name %> instrument"
   VALIDATOR inst_cmd_validator.rb
+  EMERGENCY
   <%= render "_ccsds_cmd.txt", locals: {id: 2} %>
 
 COMMAND <%= target_name %> CLEAR BIG_ENDIAN "Clears counters on the <%= target_name %> instrument"

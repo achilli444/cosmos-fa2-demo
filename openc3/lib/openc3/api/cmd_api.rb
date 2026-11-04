@@ -539,6 +539,14 @@ module OpenC3
       # user or process that actually executed the command). Command History shows
       # 'username' as "Executed By" and queue_username as "Queued By".
       command['queue_username'] = queue_username if queue_username
+      # EMERGENCY commands (e.g. cease-emission / safe-mode telecommands) must transmit
+      # immediately so they are never routed to a queue where they could be held.
+      if packet['emergency']
+        if queue
+          raise "#{target_name} #{cmd_name} is an EMERGENCY command and cannot be queued (queue: #{queue.inspect})"
+        end
+        queue = false
+      end
       # Users have to explicitly opt into a default queue by setting the OPENC3_DEFAULT_QUEUE
       # At which point ALL commands will go to that queue unless they specifically opt out with queue: false
       if ENV['OPENC3_DEFAULT_QUEUE'] && queue.nil?

@@ -903,6 +903,41 @@ module OpenC3
         end
       end
 
+      context "with EMERGENCY" do
+        it "marks the command as emergency" do
+          tf = Tempfile.new('unittest')
+          tf.puts 'COMMAND tgt1 pkt1 LITTLE_ENDIAN "Description"'
+          tf.puts 'EMERGENCY'
+          tf.puts 'COMMAND tgt1 pkt2 LITTLE_ENDIAN "Description"'
+          tf.close
+          @pc.process_file(tf.path, "TGT1")
+          expect(@pc.commands["TGT1"]["PKT1"].emergency).to be true
+          expect(@pc.commands["TGT1"]["PKT2"].emergency).to be false
+          expect(@pc.commands["TGT1"]["PKT1"].as_json['emergency']).to be true
+          expect(@pc.commands["TGT1"]["PKT2"].as_json).not_to have_key('emergency')
+          expect(@pc.commands["TGT1"]["PKT1"].to_config(:COMMAND)).to include("  EMERGENCY\n")
+          tf.unlink
+        end
+
+        it "complains about parameters" do
+          tf = Tempfile.new('unittest')
+          tf.puts 'COMMAND tgt1 pkt1 LITTLE_ENDIAN "Description"'
+          tf.puts 'EMERGENCY TRUE'
+          tf.close
+          expect { @pc.process_file(tf.path, "TGT1") }.to raise_error(ConfigParser::Error, /Too many parameters for EMERGENCY/)
+          tf.unlink
+        end
+
+        it "complains if used on telemetry" do
+          tf = Tempfile.new('unittest')
+          tf.puts 'TELEMETRY tgt1 pkt1 LITTLE_ENDIAN "Description"'
+          tf.puts 'EMERGENCY'
+          tf.close
+          expect { @pc.process_file(tf.path, "TGT1") }.to raise_error(ConfigParser::Error, /EMERGENCY only applies to COMMAND packets/)
+          tf.unlink
+        end
+      end
+
       context "with READ_CONVERSION and WRITE_CONVERSION", no_ext: true do
         it "complains about missing conversion file" do
           filename = File.join(File.dirname(__FILE__), "../test_only.rb")

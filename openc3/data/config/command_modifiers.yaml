@@ -353,6 +353,17 @@ RESTRICTED:
   summary: Marks this packet as restricted and will require approval if critical commanding is enabled
   description: Used as one of the two types of critical commands (HAZARDOUS and RESTRICTED)
   since: 5.20.0
+EMERGENCY:
+  summary: Marks this command as an emergency command which is never placed in a command queue
+  description: Emergency commands (for example a cease-emission, transmitter-off or safe-mode
+    telecommand) are always sent straight to the interface. They bypass the OPENC3_DEFAULT_QUEUE
+    and raise an error if a script or Command Sender tries to send them with an explicit queue,
+    so a held queue can never delay them. Document which commands carry EMERGENCY in the target's
+    operations procedures.
+  since: 7.5.0
+  example: |
+    COMMAND INST TX_OFF BIG_ENDIAN "Immediately disables the transmitter"
+      EMERGENCY
 SUBPACKET:
   summary: Marks this packet as as a subpacket which will exclude it from Interface level identification
   description: Used with a SUBPACKETIZER to breakup up packets into subpackets at decom time

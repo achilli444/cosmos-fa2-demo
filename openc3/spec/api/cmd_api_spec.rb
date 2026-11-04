@@ -632,5 +632,59 @@ module OpenC3
         expect(message).to eql "cmd(\"INST SET_PASSWORD with USERNAME 'username', PASSWORD *****, KEY *****\")"
       end
     end
+
+    describe "command queue routing" do
+      before(:each) do
+        require 'openc3/models/queue_model'
+        QueueModel.new(name: 'DEFAULT', state: 'HOLD', scope: 'DEFAULT').create
+        @saved_default_queue = ENV['OPENC3_DEFAULT_QUEUE']
+        ENV['OPENC3_DEFAULT_QUEUE'] = 'DEFAULT'
+      end
+
+      after(:each) do
+        if @saved_default_queue
+          ENV['OPENC3_DEFAULT_QUEUE'] = @saved_default_queue
+        else
+          ENV.delete('OPENC3_DEFAULT_QUEUE')
+        end
+      end
+
+      def mark_emergency(cmd_name)
+        packet = TargetModel.packet('INST', cmd_name, type: :CMD, scope: 'DEFAULT')
+        packet['emergency'] = true
+        TargetModel.set_packet('INST', cmd_name, packet, type: :CMD, scope: 'DEFAULT')
+      end
+
+      it "routes normal commands to OPENC3_DEFAULT_QUEUE" do
+        expect(CommandTopic).not_to receive(:send_command)
+        expect(QueueModel).to receive(:queue_command).with('DEFAULT', hash_including(target_name: 'INST', cmd_name: 'ABORT'))
+        @api.cmd("INST ABORT")
+      end
+
+      it "sends EMERGENCY commands directly even when OPENC3_DEFAULT_QUEUE is set" do
+        mark_emergency('ABORT')
+        expect(QueueModel).not_to receive(:queue_command)
+        expect(CommandTopic).to receive(:send_command).with(hash_including('target_name' => 'INST', 'cmd_name' => 'ABORT'), anything)
+        @api.cmd("INST ABORT")
+      end
+
+      it "sends EMERGENCY commands directly when the default queue is held" do
+        mark_emergency('ABORT')
+        @api.cmd("INST ABORT")
+        expect(QueueModel.get_model(name: 'DEFAULT', scope: 'DEFAULT').list).to be_empty
+      end
+
+      it "refuses to put an EMERGENCY command in an explicit queue" do
+        mark_emergency('ABORT')
+        expect(QueueModel).not_to receive(:queue_command)
+        expect { @api.cmd("INST ABORT", queue: 'DEFAULT') }.to raise_error(/EMERGENCY command and cannot be queued/)
+      end
+
+      it "still honors queue: false for EMERGENCY commands" do
+        mark_emergency('ABORT')
+        expect(CommandTopic).to receive(:send_command)
+        @api.cmd("INST ABORT", queue: false)
+      end
+    end
   end
 end

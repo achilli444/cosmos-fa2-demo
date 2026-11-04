@@ -997,6 +997,35 @@ class TestPacketConfig(unittest.TestCase):
             self.assertTrue(self.pc.commands["TGT2"]["PKT1"].restricted)
             self.assertFalse(self.pc.commands["TGT2"]["PKT2"].restricted)
 
+    def test_marks_the_command_as_emergency(self):
+        with tempfile.NamedTemporaryFile(mode="w") as tf:
+            tf.write('COMMAND tgt2 pkt1 LITTLE_ENDIAN "Description"\n')
+            tf.write("EMERGENCY\n")
+            tf.write('COMMAND tgt2 pkt2 LITTLE_ENDIAN "Description"\n')
+            tf.seek(0)
+            self.pc.process_file(tf.name, "SYSTEM")
+            self.assertTrue(self.pc.commands["TGT2"]["PKT1"].emergency)
+            self.assertFalse(self.pc.commands["TGT2"]["PKT2"].emergency)
+            self.assertTrue(self.pc.commands["TGT2"]["PKT1"].as_json()["emergency"])
+            self.assertNotIn("emergency", self.pc.commands["TGT2"]["PKT2"].as_json())
+            self.assertIn("  EMERGENCY\n", self.pc.commands["TGT2"]["PKT1"].to_config("COMMAND"))
+
+    def test_emergency_complains_about_parameters(self):
+        with tempfile.NamedTemporaryFile(mode="w") as tf:
+            tf.write('COMMAND tgt2 pkt1 LITTLE_ENDIAN "Description"\n')
+            tf.write("EMERGENCY TRUE\n")
+            tf.seek(0)
+            with self.assertRaisesRegex(ConfigParser.Error, "Too many parameters for EMERGENCY"):
+                self.pc.process_file(tf.name, "SYSTEM")
+
+    def test_emergency_complains_if_used_on_telemetry(self):
+        with tempfile.NamedTemporaryFile(mode="w") as tf:
+            tf.write('TELEMETRY tgt2 pkt1 LITTLE_ENDIAN "Description"\n')
+            tf.write("EMERGENCY\n")
+            tf.seek(0)
+            with self.assertRaisesRegex(ConfigParser.Error, "EMERGENCY only applies to COMMAND packets"):
+                self.pc.process_file(tf.name, "SYSTEM")
+
     def test_complains_about_missing_conversion_file(self):
         self.pc = PacketConfig()
 
