@@ -36,7 +36,7 @@ class PackagesController < ApplicationController
         FileUtils.cp(file.tempfile.path, package_file_path)
         # The models verify the digest (and allow-list) before installing; record
         # it here with the requesting user so the install is attributable
-        digest = OpenC3::PackageIntegrity.sha256(package_file_path)
+        digest = OpenC3::PackageIntegrity.sha256(file.tempfile.path)
         if File.extname(package_file_path) == '.gem'
           process_name = OpenC3::GemModel.put(package_file_path, gem_install: true, scope: params[:scope])
         else
