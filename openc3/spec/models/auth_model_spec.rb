@@ -136,6 +136,47 @@ module OpenC3
         expect(AuthModel.verify(token)).to eq(false)
       end
 
+      it "only accepts the service password when service_only is requested" do
+        service_password = ENV['OPENC3_SERVICE_PASSWORD']
+        expect(service_password).not_to be_nil
+
+        # /auth/verify_service exchanges it for a session
+        expect(AuthModel.verify(service_password, service_only: true)).to eq(true)
+        expect(AuthModel.verify('badpassword', service_only: true)).to eq(false)
+        expect(AuthModel.verify(nil, service_only: true)).to eq(false)
+        expect(AuthModel.verify('', service_only: true)).to eq(false)
+
+        # but it is never a bearer token on the generic authorize path,
+        # with or without the password mode, and never a user password
+        expect(AuthModel.verify(service_password)).to eq(false)
+        expect(AuthModel.verify(service_password, no_password: true)).to eq(false)
+        expect(AuthModel.verify(service_password, no_password: false)).to eq(false)
+        expect(AuthModel.verify_no_service(service_password, mode: :any)).to eq(false)
+
+        # and service_only never falls through to a user password or session
+        token = AuthModel.generate_session
+        expect(AuthModel.verify(token, service_only: true)).to eq(false)
+        expect(AuthModel.verify(AUTH_INITIAL_PASSWORD, service_only: true)).to eq(false)
+      end
+
+      it "rejects the service password when none is configured" do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with('OPENC3_SERVICE_PASSWORD', nil).and_return(nil)
+        expect(AuthModel.verify('openc3service', service_only: true)).to eq(false)
+        allow(ENV).to receive(:fetch).with('OPENC3_SERVICE_PASSWORD', nil).and_return('')
+        expect(AuthModel.verify('', service_only: true)).to eq(false)
+      end
+
+      it "compares the service password in constant time" do
+        service_password = ENV['OPENC3_SERVICE_PASSWORD']
+        allow(OpenSSL).to receive(:secure_compare).and_call_original
+        expect(AuthModel.verify_service_password('guess')).to eq(false)
+        expect(OpenSSL).to have_received(:secure_compare).with(service_password, 'guess')
+        # A prefix of the real password must not short circuit to true
+        expect(AuthModel.verify_service_password(service_password[0..-2])).to eq(false)
+        expect(AuthModel.verify_service_password(service_password + 'x')).to eq(false)
+      end
+
       it "raises when stored password hash is SHA256" do
         @redis.set(PW_HASH_PRIMARY_KEY, Digest::SHA256.hexdigest(AUTH_INITIAL_PASSWORD))
         expect{ AuthModel.verify_no_service(AUTH_INITIAL_PASSWORD, mode: :any) }.to \

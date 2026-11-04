@@ -148,6 +148,8 @@ The `OPENC3_SERVICE_PASSWORD` is a backend service account password that allows 
 
 Note: In COSMOS Enterprise with Keycloak, user offline access tokens can be used instead when available, but the service password serves as a fallback for automated operations.
 
+The service password is only accepted by the `/openc3-api/auth/verify_service` endpoint, which exchanges it for a regular session token (and is rate limited and logged like the user login). It is never valid directly as an `Authorization` bearer token on the other API or WebSocket endpoints; services that read it from `OPENC3_API_PASSWORD` perform this exchange automatically.
+
 ### Rails Application Secret
 
 | Variable          | Description                                                     |

@@ -103,6 +103,41 @@ RSpec.describe AuthController, :type => :controller do
       post :verify_service, params: { password: 'openc3service' }
       expect(response).to have_http_status(:ok)
     end
+
+    it "logs every exchange of the service password for a session" do
+      expect(OpenC3::Logger).to receive(:info).with("Service password exchanged for session", hash_including(user: 'service'))
+      post :verify_service, params: { password: 'openc3service' }
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "does not log a failed service password attempt as an exchange" do
+      expect(OpenC3::Logger).not_to receive(:info).with("Service password exchanged for session", anything)
+      post :verify_service, params: { password: 'BAD' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "rejects the service password as a bearer token on authorized endpoints" do
+      # The service password may only be exchanged for a session via
+      # verify_service. Presenting it directly as the Authorization header
+      # would bypass that endpoint's rate limiting and logging.
+      $openc3_authorize = true
+      begin
+        request.headers['HTTP_AUTHORIZATION'] = 'openc3service'
+        get :get_otp, params: { scope: 'DEFAULT' }
+        expect(response).to have_http_status(:unauthorized)
+
+        post :verify_service, params: { password: 'openc3service' }
+        expect(response).to have_http_status(:ok)
+        session = response.body
+        expect(session).to start_with(OpenC3::AuthModel::SESSION_PREFIX)
+
+        request.headers['HTTP_AUTHORIZATION'] = session
+        get :get_otp, params: { scope: 'DEFAULT' }
+        expect(response).to have_http_status(:ok)
+      ensure
+        $openc3_authorize = false
+      end
+    end
   end
 
   describe "verify-token" do
