@@ -19,6 +19,33 @@ from requests import Session
 from openc3.environment import *
 
 
+# Request and response fields that are authenticators and must never be logged
+SENSITIVE_KEYS = ("password", "refresh_token", "access_token", "id_token")
+
+
+def mask_sensitive_data(data):
+    """Return a copy of the dict with authenticator values replaced by '***'"""
+    masked = dict(data)
+    for key in SENSITIVE_KEYS:
+        if key in masked:
+            masked[key] = "***"
+    return masked
+
+
+def mask_response_body(text):
+    """Return a loggable form of a token endpoint response body.
+
+    JSON objects are masked field by field; anything else is omitted since it can't be masked.
+    """
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError):
+        return "[non-JSON body omitted]"
+    if isinstance(parsed, dict):
+        return str(mask_sensitive_data(parsed))
+    return "[non-object JSON body omitted]"
+
+
 # Basic exception for known errors
 class OpenC3AuthenticationError(RuntimeError):
     pass
@@ -171,26 +198,16 @@ class OpenC3KeycloakAuthentication(OpenC3Authentication):
         realm = OPENC3_KEYCLOAK_REALM or "openc3"
         url = f"{self.url}/realms/{realm}/protocol/openid-connect/token"
 
-        # Obfuscate password and refresh token in logs unless debug mode is enabled
-        if OPENC3_DEVEL:
-            log_data = str(data)
-        else:
-            # Create a copy of the dict with sensitive values obfuscated
-            log_data = data.copy()
-            if "password" in log_data:
-                log_data["password"] = "***"
-            if "refresh_token" in log_data:
-                log_data["refresh_token"] = "***"
-            log_data = str(log_data)
-
-        self.log[0] = f"request uri: {url} header: {headers} body: {log_data}"
-        # print(self.log[0])
+        # Credentials and tokens are always masked in logs and exception messages,
+        # regardless of OPENC3_DEVEL
+        self.log[0] = f"request uri: {url} header: {headers} body: {mask_sensitive_data(data)}"
 
         # URL encode the data
         resp = self.http.post(url, data=urlencode(data), headers=headers)
 
-        self.log[1] = f"response status: {resp.status_code} header: {resp.headers} body: {resp.text}"
-        # print(self.log[1])
+        self.log[1] = (
+            f"response status: {resp.status_code} header: {resp.headers} body: {mask_response_body(resp.text)}"
+        )
         if resp.status_code >= 200 and resp.status_code <= 299:
             return json.loads(resp.text)
         elif resp.status_code >= 500 and resp.status_code <= 599:

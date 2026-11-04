@@ -20,6 +20,7 @@ import requests
 
 from openc3.__version__ import __title__
 from openc3.environment import *
+from openc3.utilities.authentication import mask_response_body
 
 from .decorators import request_wrapper
 
@@ -138,20 +139,19 @@ class CosmosKeycloakAuthorization(CosmosAuthorization):
         """
         request_kwargs = {
             "url": f"{self.request_url}/realms/{OPENC3_KEYCLOAK_REALM}/protocol/openid-connect/token",
-            "data": f"username={OPENC3_API_USER}&password={OPENC3_API_PASSWORD}&client_id={OPENC3_API_CLIENT}&grant_type=password&scope=openid",
+            "data": {
+                "username": OPENC3_API_USER,
+                "password": OPENC3_API_PASSWORD,
+                "client_id": OPENC3_API_CLIENT,
+                "grant_type": "password",
+                "scope": "openid",
+            },
             "headers": {
                 "User-Agent": OPENC3_USER_AGENT,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
         }
-        resp = requests.post(**request_kwargs)
-        LOGGER.debug(
-            "resp: %s total_seconds: %f content: %s",
-            resp,
-            resp.elapsed.total_seconds(),
-            resp.content,
-        )
-        return resp
+        return self._post_token_request(request_kwargs)
 
     def _refresh_token(self):
         """
@@ -185,18 +185,35 @@ class CosmosKeycloakAuthorization(CosmosAuthorization):
         """
         request_kwargs = {
             "url": f"{self.request_url}/realms/{OPENC3_KEYCLOAK_REALM}/protocol/openid-connect/token",
-            "data": f"client_id={OPENC3_API_CLIENT}&grant_type=refresh_token&refresh_token={self.refresh_token}",
+            "data": {
+                "client_id": OPENC3_API_CLIENT,
+                "grant_type": "refresh_token",
+                "refresh_token": self.refresh_token,
+            },
             "headers": {
                 "User-Agent": OPENC3_USER_AGENT,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
         }
-        LOGGER.debug("calling with %s", request_kwargs)
+        return self._post_token_request(request_kwargs)
+
+    def _post_token_request(self, request_kwargs):
+        """POST to the Keycloak token endpoint. The form body is passed as a dict so
+        requests URL-encodes it. Only non-secret request fields are logged and the
+        response body is masked before logging."""
+        data = request_kwargs["data"]
+        LOGGER.debug(
+            "calling %s grant_type: %s client_id: %s username: %s",
+            request_kwargs["url"],
+            data.get("grant_type"),
+            data.get("client_id"),
+            data.get("username"),
+        )
         resp = requests.post(**request_kwargs)
         LOGGER.debug(
             "resp: %s total_seconds: %f content: %s",
             resp,
             resp.elapsed.total_seconds(),
-            resp.content,
+            mask_response_body(resp.text),
         )
         return resp
