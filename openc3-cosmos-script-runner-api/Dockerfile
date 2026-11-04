@@ -6,12 +6,16 @@ ARG OPENC3_IMAGE=openc3-base
 FROM ${OPENC3_REGISTRY}/${OPENC3_NAMESPACE}/${OPENC3_IMAGE}:${OPENC3_TAG}
 
 WORKDIR /src/
-COPY Gemfile ./
+COPY Gemfile Gemfile.lock ./
 
 USER root
 
-ENV SKIP_DEV_GEMS=1
+# The committed Gemfile.lock pins every gem; frozen mode fails the build if the
+# Gemfile and lockfile disagree instead of silently re-resolving. The lockfile is
+# generated with the development/test groups present, so SKIP_DEV_GEMS must stay
+# unset here (it would make the Gemfile diverge from the lock).
 RUN bundle config set --local without 'development test' && \
+    bundle config set --local frozen true && \
     bundle install --quiet && \
     rm -rf /usr/lib/ruby/gems/*/cache/* /var/cache/apk/* /tmp/* /var/tmp/*
 

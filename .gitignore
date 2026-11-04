@@ -6,6 +6,10 @@ playwright/openc3-cosmos-pw-test/
 *.gem
 Makefile
 *Gemfile.lock
+# Deployable apps commit their lockfiles so container builds are reproducible
+!/openc3/Gemfile.lock
+!/openc3-cosmos-cmd-tlm-api/Gemfile.lock
+!/openc3-cosmos-script-runner-api/Gemfile.lock
 package-lock.json
 .yardoc
 .DS_Store

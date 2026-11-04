@@ -5,9 +5,9 @@ source ENV['RUBYGEMS_URL'] || "https://rubygems.org"
 gemspec :name => 'openc3'
 
 # Include the rails gems for the convenience of custom microservice plugins
-gem 'bootsnap', '>= 1.9.3', require: false
+gem 'bootsnap', '~> 1.18', require: false
 gem 'rack-cors', '~> 3.0'
 gem 'rails', '~> 8.1.0'
-gem 'tzinfo-data'
-gem 'ruby-termios', '>= 1.0'
+gem 'tzinfo-data', '~> 1.2025'
+gem 'ruby-termios', '~> 1.1'
 gem 'argon2', '~> 2.3', '>= 2.3.2'
