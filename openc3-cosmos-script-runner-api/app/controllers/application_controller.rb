@@ -19,6 +19,7 @@ require 'openc3/utilities/authorization'
 
 class ApplicationController < ActionController::API
   include OpenC3::Authorization
+  include AuditLogging
 
   private
 

@@ -263,6 +263,14 @@ module OpenC3
     # @param start_time [Time] The time when the initial request was received
     # @return response_data, error_code [String, Integer/nil] The JSON encoded
     #   response and error code
+    # Client identity for audit records of rejected requests. Only forwarded
+    # address headers are used; the Authorization header is never logged.
+    def _audit_client(request_headers)
+      return '' unless request_headers.respond_to?(:[])
+      client = request_headers['HTTP_X_FORWARDED_FOR'] || request_headers['HTTP_X_REAL_IP']
+      client ? " from #{client.to_s.split(',').first.strip}" : ''
+    end
+
     def process_request(request_data:, request_headers:, start_time:)
       @request_count += 1
       begin
@@ -343,6 +351,9 @@ module OpenC3
             end
           end
         else
+          # Audit record: a caller asked for a method outside the whitelist. Log the
+          # method name and client only, never the params or the Authorization header.
+          Logger.warn("Rejected JSON-RPC call to non-whitelisted method '#{request.method}'#{_audit_client(request_headers)}")
           if request.id
             error_code = JsonRpcError::ErrorCode::OTHER_ERROR
             response = JsonRpcErrorResponse.new(
@@ -353,6 +364,7 @@ module OpenC3
         response_data = process_response(response, start_time) if response
         return response_data, error_code
       rescue => e
+        Logger.warn("Rejected malformed JSON-RPC request (#{e.class})#{_audit_client(request_headers)}")
         error_code = JsonRpcError::ErrorCode::INVALID_REQUEST
         response = JsonRpcErrorResponse.new(JsonRpcError.new(error_code, "Invalid Request", e), nil)
         response_data = process_response(response, start_time)

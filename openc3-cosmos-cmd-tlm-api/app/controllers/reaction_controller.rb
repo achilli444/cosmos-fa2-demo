@@ -110,6 +110,7 @@ class ReactionController < ApplicationController
       model = @model_class.from_json(hash.symbolize_keys, name: name, scope: params[:scope])
       model.create()
       model.deploy()
+      audit("Reaction created: #{name}")
       render json: model.as_json(), status: :created
     rescue OpenC3::ReactionInputError => e
       log_error(e)
@@ -161,6 +162,7 @@ class ReactionController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user updating the reaction
       model.notify(kind: 'updated')
+      audit("Reaction updated: #{params[:name]}")
       render json: model.as_json()
     rescue OpenC3::ReactionInputError => e
       log_error(e)
@@ -202,6 +204,7 @@ class ReactionController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user enabling the reaction
       model.notify_enable
+      audit("Reaction enabled: #{params[:name]}")
       render json: model.as_json()
     rescue StandardError => e
       log_error(e)
@@ -237,6 +240,7 @@ class ReactionController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user disabling the reaction
       model.notify_disable
+      audit("Reaction disabled: #{params[:name]}")
       render json: model.as_json()
     rescue StandardError => e
       log_error(e)
@@ -257,6 +261,7 @@ class ReactionController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user executing the reaction
       model.notify_execute
+      audit("Reaction executed: #{params[:name]}")
       render json: model.as_json()
     rescue StandardError => e
       log_error(e)
@@ -288,6 +293,7 @@ class ReactionController < ApplicationController
       # We don't update directly here to avoid a race condition between the microservice
       # updating state and an asynchronous user deleting the reaction
       model.notify(kind: 'deleted')
+      audit("Reaction deleted: #{params[:name]}")
       render json: model.as_json()
     rescue OpenC3::ReactionInputError => e
       log_error(e)

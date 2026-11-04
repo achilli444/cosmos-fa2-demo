@@ -118,6 +118,7 @@ class TablesController < ApplicationController
     return unless authorize_overlay_write(binary)
     begin
       Table.save(scope, binary, definition, params[:tables])
+      audit("Table saved: #{binary}", scope: scope)
       head :ok
     rescue Table::NotFound => e
       log_error(e)
@@ -132,6 +133,7 @@ class TablesController < ApplicationController
     return unless authorize_overlay_write(new_name)
     begin
       Table.save_as(scope, name, new_name)
+      audit("Table saved as: #{name} -> #{new_name}", scope: scope)
       head :ok
     rescue Table::NotFound => e
       log_error(e)
@@ -148,6 +150,7 @@ class TablesController < ApplicationController
     return unless authorize_overlay_write(definition)
     begin
       filename = Table.generate(scope, definition)
+      audit("Table generated: #{filename} from #{definition}", scope: scope)
       render json: { filename: filename }
     rescue Table::NotFound => e
       log_error(e)
@@ -160,6 +163,7 @@ class TablesController < ApplicationController
     scope, name = sanitize_params([:scope, :name], require_params: true, allow_forward_slash: true)
     return unless scope
     Table.lock(scope, name, username())
+    audit("Table locked: #{name}", scope: scope)
     render status: :ok
   end
 
@@ -168,7 +172,12 @@ class TablesController < ApplicationController
     scope, name = sanitize_params([:scope, :name], require_params: true, allow_forward_slash: true)
     return unless scope
     locked_by = Table.locked?(scope, name)
-    Table.unlock(scope, name) if username() == locked_by
+    if username() == locked_by
+      Table.unlock(scope, name)
+      audit("Table unlocked: #{name}", scope: scope)
+    else
+      audit("Table unlock denied: #{name} locked by #{locked_by}", scope: scope, level: :warn)
+    end
     render status: :ok
   end
 
@@ -179,10 +188,9 @@ class TablesController < ApplicationController
     return unless authorize_overlay_write(name)
     # destroy returns no indication of success or failure so just assume it worked
     Table.destroy(scope, name)
-    OpenC3::Logger.info(
+    audit(
       "Table destroyed: #{name}",
-      scope: scope,
-      user: username()
+      scope: scope
     )
     head :ok
   end

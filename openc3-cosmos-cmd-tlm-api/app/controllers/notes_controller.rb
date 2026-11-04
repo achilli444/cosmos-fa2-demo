@@ -81,10 +81,10 @@ class NotesController < ApplicationController
       hash['stop'] = Time.parse(hash['stop']).to_i
       model = @model_class.from_json(hash.symbolize_keys, scope: params[:scope])
       model.create
-      OpenC3::Logger.info(
+      audit(
         "Note created: #{hash}",
         scope: params[:scope],
-        user: username(),
+      
       )
       render json: model.as_json(), status: :created
     end
@@ -155,10 +155,10 @@ class NotesController < ApplicationController
         color: hash['color'],
         description: hash['description'],
       )
-      OpenC3::Logger.info(
+      audit(
         "Note updated: #{hash}",
         scope: params[:scope],
-        user: username(),
+      
       )
       render json: model.as_json()
     end
@@ -184,10 +184,10 @@ class NotesController < ApplicationController
         render json: { status: 'error', message: NOT_FOUND }, status: :not_found
         return
       end
-      OpenC3::Logger.info(
+      audit(
         "Note destroyed: #{params[:id]}",
         scope: params[:scope],
-        user: username(),
+      
       )
       render json: { status: count }
     end

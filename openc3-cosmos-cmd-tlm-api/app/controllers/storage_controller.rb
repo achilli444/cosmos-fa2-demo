@@ -339,6 +339,7 @@ class StorageController < ApplicationController
       end
 
       file = File.read(filename, mode: 'rb')
+      audit("File downloaded: #{storage_name}/#{object_id}", scope: params[:scope])
 
       # Check if CTRF conversion is requested
       if params[:format] == 'ctrf'
@@ -390,6 +391,7 @@ class StorageController < ApplicationController
       # Read the zip file and encode it
       zip_data = File.read(zip_path, mode: 'rb')
       zip_filename = "download_#{Time.now.strftime('%Y%m%d_%H%M%S')}.zip"
+      audit("Files downloaded: #{storage_name}/#{path} (#{files.length} files)", scope: params[:scope])
 
       render json: { filename: zip_filename, contents: Base64.encode64(zip_data) }
     rescue Exception => e
@@ -421,6 +423,7 @@ class StorageController < ApplicationController
                                       key: path,
                                       method: :get_object,
                                       internal: params[:internal])
+    audit("S3 download presigned request generated: #{bucket_name}/#{path}", scope: params[:scope])
     render json: result, status: :created
   rescue Exception => e
     log_error(e)
@@ -453,8 +456,7 @@ class StorageController < ApplicationController
                                       key: path,
                                       method: :put_object,
                                       internal: params[:internal])
-    OpenC3::Logger.info("S3 upload presigned request generated: #{bucket_name}/#{path}",
-        scope: params[:scope], user: username())
+    audit("S3 upload presigned request generated: #{bucket_name}/#{path}", scope: params[:scope])
     render json: result, status: :created
   rescue Exception => e
     log_error(e)
@@ -546,7 +548,7 @@ class StorageController < ApplicationController
       "reingest", job_id, Time.now + timeout, scope: scope,
     )
 
-    OpenC3::Logger.info("Reingest job #{job_id} enqueued: #{files.length} file(s)", user: username())
+    audit("Reingest job #{job_id} enqueued: #{files.length} file(s)")
     render json: { job_id: job_id, state: 'Queued' }, status: :accepted
   rescue Exception => e
     log_error(e)
@@ -667,7 +669,7 @@ class StorageController < ApplicationController
       end
 
       OpenC3::Bucket.getClient().delete_object(bucket: bucket_name, key: path)
-      OpenC3::Logger.info("Deleted: #{bucket_name}/#{path}", scope: params[:scope], user: username())
+      audit("Deleted: #{bucket_name}/#{path}", scope: params[:scope])
       return true
     else
       return false
@@ -681,7 +683,7 @@ class StorageController < ApplicationController
       filename = "/#{volume}/#{params[:object_id]}"
       filename = sanitize_path(filename)
       FileUtils.rm filename
-      OpenC3::Logger.info("Deleted: #{filename}", scope: params[:scope], user: username())
+      audit("Deleted: #{filename}", scope: params[:scope])
       return true
     else
       return false
@@ -730,8 +732,7 @@ class StorageController < ApplicationController
       end
     end
 
-    OpenC3::Logger.info("Deleted directory: #{bucket_name}/#{path} (#{deleted_count} files)",
-                        scope: params[:scope], user: username())
+    audit("Deleted directory: #{bucket_name}/#{path} (#{deleted_count} files)", scope: params[:scope])
     render json: { deleted_count: deleted_count }
     true
   end
@@ -754,8 +755,7 @@ class StorageController < ApplicationController
 
     FileUtils.rm_rf(full_path)
 
-    OpenC3::Logger.info("Deleted directory: #{full_path} (#{file_count} files)",
-                        scope: params[:scope], user: username())
+    audit("Deleted directory: #{full_path} (#{file_count} files)", scope: params[:scope])
     render json: { deleted_count: file_count }
     true
   end

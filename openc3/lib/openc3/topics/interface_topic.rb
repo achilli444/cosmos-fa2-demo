@@ -77,7 +77,14 @@ module OpenC3
       end
     end
 
-    def self.write_raw(interface_name, data, timeout: nil, scope:)
+    # Directives carry the acting username so the InterfaceMicroservice can
+    # write a user-attributed audit record when it acts on them.
+    def self.write_directive(interface_name, data, username:, scope:, db_shard:)
+      data['username'] = username if username
+      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", data, '*', 100, db_shard: db_shard)
+    end
+
+    def self.write_raw(interface_name, data, timeout: nil, username: nil, scope:)
       interface_name = interface_name.upcase
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
 
@@ -85,7 +92,7 @@ module OpenC3
       ack_topic = "{#{scope}__ACKCMD}INTERFACE__#{interface_name}"
       Topic.update_topic_offsets([ack_topic], db_shard: db_shard)
 
-      cmd_id = Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'raw' => data }, '*', 100, db_shard: db_shard)
+      cmd_id = write_directive(interface_name, { 'raw' => data }, username: username, scope: scope, db_shard: db_shard)
       time = Time.now
       while (Time.now - time) < timeout
         Topic.read_topics([ack_topic], db_shard: db_shard) do |_topic, _msg_id, msg_hash, _redis|
@@ -101,28 +108,26 @@ module OpenC3
       raise "Timeout of #{timeout}s waiting for cmd ack"
     end
 
-    def self.connect_interface(interface_name, *interface_params, scope:)
+    def self.connect_interface(interface_name, *interface_params, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
-      if interface_params && !interface_params.empty?
-        Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'connect' => 'true', 'params' => JSON.generate(interface_params, allow_nan: true) }, '*', 100, db_shard: db_shard)
-      else
-        Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'connect' => 'true' }, '*', 100, db_shard: db_shard)
-      end
+      data = { 'connect' => 'true' }
+      data['params'] = JSON.generate(interface_params, allow_nan: true) if interface_params && !interface_params.empty?
+      write_directive(interface_name, data, username: username, scope: scope, db_shard: db_shard)
     end
 
-    def self.disconnect_interface(interface_name, scope:)
+    def self.disconnect_interface(interface_name, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
-      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'disconnect' => 'true' }, '*', 100, db_shard: db_shard)
+      write_directive(interface_name, { 'disconnect' => 'true' }, username: username, scope: scope, db_shard: db_shard)
     end
 
-    def self.start_raw_logging(interface_name, scope:)
+    def self.start_raw_logging(interface_name, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
-      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'log_stream' => 'true' }, '*', 100, db_shard: db_shard)
+      write_directive(interface_name, { 'log_stream' => 'true' }, username: username, scope: scope, db_shard: db_shard)
     end
 
-    def self.stop_raw_logging(interface_name, scope:)
+    def self.stop_raw_logging(interface_name, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
-      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'log_stream' => 'false' }, '*', 100, db_shard: db_shard)
+      write_directive(interface_name, { 'log_stream' => 'false' }, username: username, scope: scope, db_shard: db_shard)
     end
 
     def self.shutdown(interface, scope:)
@@ -130,22 +135,22 @@ module OpenC3
       Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface.name}", { 'shutdown' => 'true' }, '*', 100, db_shard: db_shard)
     end
 
-    def self.interface_cmd(interface_name, cmd_name, *cmd_params, scope:)
+    def self.interface_cmd(interface_name, cmd_name, *cmd_params, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['cmd_name'] = cmd_name
       data['cmd_params'] = cmd_params
-      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'interface_cmd' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
+      write_directive(interface_name, { 'interface_cmd' => JSON.generate(data, allow_nan: true) }, username: username, scope: scope, db_shard: db_shard)
     end
 
-    def self.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, scope:)
+    def self.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['cmd_name'] = cmd_name
       data['cmd_params'] = cmd_params
       data['read_write'] = read_write.to_s.upcase
       data['index'] = index
-      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'protocol_cmd' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
+      write_directive(interface_name, { 'protocol_cmd' => JSON.generate(data, allow_nan: true) }, username: username, scope: scope, db_shard: db_shard)
     end
 
     def self.inject_tlm(interface_name, target_name, packet_name, item_hash = nil, type: :CONVERTED, stored: false, timeout: nil, received_time: nil, scope:)
@@ -179,24 +184,24 @@ module OpenC3
       raise "Timeout of #{timeout}s waiting for cmd ack"
     end
 
-    def self.interface_target_enable(interface_name, target_name, cmd_only: false, tlm_only: false, scope:)
+    def self.interface_target_enable(interface_name, target_name, cmd_only: false, tlm_only: false, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['target_name'] = target_name.to_s.upcase
       data['cmd_only'] = cmd_only
       data['tlm_only'] = tlm_only
       data['action'] = 'enable'
-      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'target_control' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
+      write_directive(interface_name, { 'target_control' => JSON.generate(data, allow_nan: true) }, username: username, scope: scope, db_shard: db_shard)
     end
 
-    def self.interface_target_disable(interface_name, target_name, cmd_only: false, tlm_only: false, scope:)
+    def self.interface_target_disable(interface_name, target_name, cmd_only: false, tlm_only: false, username: nil, scope:)
       db_shard = _db_shard_for_interface(interface_name, scope: scope)
       data = {}
       data['target_name'] = target_name.to_s.upcase
       data['cmd_only'] = cmd_only
       data['tlm_only'] = tlm_only
       data['action'] = 'disable'
-      Topic.write_topic("{#{scope}__CMD}INTERFACE__#{interface_name}", { 'target_control' => JSON.generate(data, allow_nan: true) }, '*', 100, db_shard: db_shard)
+      write_directive(interface_name, { 'target_control' => JSON.generate(data, allow_nan: true) }, username: username, scope: scope, db_shard: db_shard)
     end
 
     def self.interface_details(interface_name, timeout: nil, scope:)

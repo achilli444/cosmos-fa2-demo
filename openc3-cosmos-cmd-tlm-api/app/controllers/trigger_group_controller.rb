@@ -89,6 +89,7 @@ class TriggerGroupController < ApplicationController
       model = @model_class.new(name: params[:name], scope: params[:scope])
       model.create()
       model.deploy()
+      audit("Trigger group created: #{params[:name]}")
       render json: model.as_json(), status: :created
     rescue OpenC3::TriggerGroupInputError => e
       log_error(e)
@@ -119,6 +120,7 @@ class TriggerGroupController < ApplicationController
     return unless authorization('script_run')
     begin
       @model_class.delete(name: params[:name], scope: params[:scope])
+      audit("Trigger group deleted: #{params[:name]}")
       render json: { delete: true, group: params[:name] }
     rescue OpenC3::TriggerGroupInputError => e
       log_error(e)

@@ -36,6 +36,7 @@ class AuthController < ApplicationController
 
   def verify
     if user_rate_limited?
+      audit("Authentication rate limited: endpoint=verify client=#{client_id}", scope: nil, level: :warn)
       head :too_many_requests
       return
     end
@@ -43,9 +44,11 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
         clear_user_bad_attempts
+        audit("Authentication succeeded: endpoint=verify client=#{client_id}", scope: nil)
         render :plain => OpenC3::AuthModel.generate_session()
       else
         record_user_bad_attempt
+        audit("Authentication failed: endpoint=verify client=#{client_id} reason=invalid_password", scope: nil, level: :warn)
         head :unauthorized
       end
     rescue StandardError => e
@@ -71,14 +74,17 @@ class AuthController < ApplicationController
     # this also keeps an OTP token out of verify_no_service, which would consume
     # it.
     unless OpenC3::AuthModel.session_token?(params[:token])
+      audit("Authentication failed: endpoint=verify_token client=#{client_id} reason=malformed_token", scope: nil, level: :warn)
       head :unauthorized
       return
     end
 
     begin
       if OpenC3::AuthModel.verify_no_service(params[:token], mode: :token)
+        @audit_recorded = true # valid session re-check is routine, not an audit event
         head :ok
       else
+        audit("Authentication failed: endpoint=verify_token client=#{client_id} reason=invalid_token", scope: nil, level: :warn)
         head :unauthorized
       end
     rescue StandardError => e
@@ -89,6 +95,7 @@ class AuthController < ApplicationController
 
   def verify_service
     if service_rate_limited?
+      audit("Authentication rate limited: endpoint=verify_service client=#{client_id}", scope: nil, level: :warn)
       head :too_many_requests
       return
     end
@@ -96,9 +103,11 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
         clear_service_bad_attempts
+        audit("Authentication succeeded: endpoint=verify_service client=#{client_id}", scope: nil)
         render :plain => OpenC3::AuthModel.generate_session()
       else
         record_service_bad_attempt
+        audit("Authentication failed: endpoint=verify_service client=#{client_id} reason=invalid_password", scope: nil, level: :warn)
         head :unauthorized
       end
     rescue StandardError => e
@@ -115,6 +124,7 @@ class AuthController < ApplicationController
 
   def set
     if user_rate_limited?
+      audit("Authentication rate limited: endpoint=set client=#{client_id}", scope: nil, level: :warn)
       head :too_many_requests
       return
     end
@@ -123,11 +133,12 @@ class AuthController < ApplicationController
       # Set throws an exception if it fails for any reason
       OpenC3::AuthModel.set(params[:password], params[:old_password])
       clear_user_bad_attempts
-      OpenC3::Logger.info("Password changed", user: username())
+      audit("Password changed: client=#{client_id}", scope: nil)
       render :plain => OpenC3::AuthModel.generate_session()
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt
+        audit("Password change failed: client=#{client_id} reason=old_password_incorrect", scope: nil, level: :warn)
       end
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error

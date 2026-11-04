@@ -82,10 +82,9 @@ class MetadataController < ApplicationController
       end
       model = @model_class.from_json(hash.symbolize_keys, scope: params[:scope])
       model.create
-      OpenC3::Logger.info(
+      audit(
         "Metadata created: #{hash}",
-        scope: params[:scope],
-        user: username()
+        scope: params[:scope]
       )
       render json: model.as_json(), status: :created
     end
@@ -156,10 +155,9 @@ class MetadataController < ApplicationController
         color: hash['color'],
         metadata: hash['metadata'],
       )
-      OpenC3::Logger.info(
+      audit(
         "Metadata updated: #{hash}",
-        scope: params[:scope],
-        user: username()
+        scope: params[:scope]
       )
       render json: model.as_json()
     end
@@ -185,10 +183,9 @@ class MetadataController < ApplicationController
         render json: { status: 'error', message: NOT_FOUND }, status: :not_found
         return
       end
-      OpenC3::Logger.info(
+      audit(
         "Metadata destroyed: #{params[:id]}",
-        scope: params[:scope],
-        user: username()
+        scope: params[:scope]
       )
       render json: { status: count }
     end

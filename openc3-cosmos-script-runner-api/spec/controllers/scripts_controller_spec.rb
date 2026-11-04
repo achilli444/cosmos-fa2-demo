@@ -148,6 +148,18 @@ RSpec.describe ScriptsController, type: :controller do
       expect(response).to have_http_status(:ok)
     end
 
+    it "writes a user-attributed audit record for every save, not only suites" do
+      s3 = instance_double("Aws::S3::Client")
+      allow(s3).to receive(:get_object).and_return(nil)
+      allow(s3).to receive(:put_object)
+      allow(s3).to receive(:wait_until)
+      allow(Aws::S3::Client).to receive(:new).and_return(s3)
+
+      expect(OpenC3::Logger).to receive(:info).with("Script created: script.rb", scope: "DEFAULT", user: "anonymous")
+      post :create, params: {scope: "DEFAULT", name: "script.rb", text: "text"}
+      expect(response).to have_http_status(:ok)
+    end
+
     it "saves when text changes" do
       s3 = instance_double("Aws::S3::Client")
       # Simulate returning a file with 'new text'

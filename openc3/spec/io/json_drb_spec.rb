@@ -107,6 +107,26 @@ module OpenC3
         response, _error_code = process(json_drb, 'does_not_exist')
         expect(response['error']['message']).to eql('Cannot call unauthorized methods')
       end
+
+      it "logs rejected non-whitelisted calls with the method name and client but not the params" do
+        expect(Logger).to receive(:warn).with("Rejected JSON-RPC call to non-whitelisted method 'secret' from 10.0.0.5")
+        request = { 'jsonrpc' => '2.0', 'method' => 'secret', 'params' => ['sensitive'], 'keyword_params' => { 'scope' => 'DEFAULT' }, 'id' => 1 }
+        json_drb.process_request(
+          request_data: JSON.generate(request),
+          request_headers: { 'HTTP_X_FORWARDED_FOR' => '10.0.0.5, 10.0.0.1', 'HTTP_AUTHORIZATION' => 'token' },
+          start_time: Time.now
+        )
+      end
+
+      it "logs malformed requests without echoing the body" do
+        expect(Logger).to receive(:warn) do |message|
+          expect(message).to start_with("Rejected malformed JSON-RPC request")
+          expect(message).not_to include("not json")
+        end
+        response_data, error_code = json_drb.process_request(request_data: 'not json', request_headers: {}, start_time: Time.now)
+        expect(JSON.parse(response_data)['error']['message']).to eql('Invalid Request')
+        expect(error_code).to eql(JsonRpcError::ErrorCode::INVALID_REQUEST)
+      end
     end
   end
 end

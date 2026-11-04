@@ -39,7 +39,7 @@ class ScreensController < ApplicationController
     text = params.require([:text])[0]
     result << text
     screen = Screen.create(*result)
-    OpenC3::Logger.info("Screen saved: #{params[:target]} #{params[:screen]}", scope: params[:scope], user: username())
+    audit("Screen saved: #{params[:target]} #{params[:screen]}", scope: params[:scope])
     render json: screen
   rescue => e
     log_error(e)
@@ -51,7 +51,7 @@ class ScreensController < ApplicationController
     result = sanitize_params([:scope, :target, :screen])
     return unless result
     screen = Screen.destroy(*result)
-    OpenC3::Logger.info("Screen deleted: #{params[:target]} #{params[:screen]}", scope: params[:scope], user: username())
+    audit("Screen deleted: #{params[:target]} #{params[:screen]}", scope: params[:scope])
     head :ok
   rescue => e
     log_error(e)

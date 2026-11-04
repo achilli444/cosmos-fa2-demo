@@ -93,6 +93,7 @@ class QueuesController < ApplicationController
         state = params[:state] if params[:state]
         model = @model_class.new(name: params[:name], state: state, scope: params[:scope])
         model.create()
+        audit("Queue created: #{params[:name]} state: #{state}")
         render json: model.as_json(), status: :created
       else
         render json: { status: 'error', message: "#{params[:name]} already exists", type: "OpenC3::QueueError" }, status: :bad_request
@@ -190,6 +191,7 @@ class QueuesController < ApplicationController
       id = params[:id]&.to_f
       command_data = model.remove_command(id)
       if command_data
+        audit("Queue command removed: #{params[:name]} id: #{id}")
         render json: command_data
       else
         render json: { status: 'error', message: 'Command not found in queue' }, status: :not_found
@@ -264,6 +266,7 @@ class QueuesController < ApplicationController
       id = params[:id]&.to_f
       command_data = model.remove_command(id)
       if command_data
+        audit("Queue command executed: #{params[:name]} id: #{id}")
         hazardous = false
         token = get_token(username(), scope: params[:scope])
         begin
@@ -325,6 +328,7 @@ class QueuesController < ApplicationController
       return
     end
     model.destroy()
+    audit("Queue destroyed: #{params[:name]}")
     render json: model.as_json()
   end
 
@@ -340,6 +344,7 @@ class QueuesController < ApplicationController
       end
       model.state = state
       model.update()
+      audit("Queue state changed: #{params[:name]} state: #{state}")
       render json: model.as_json()
     rescue StandardError => e
       log_error(e)

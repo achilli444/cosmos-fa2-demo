@@ -105,6 +105,35 @@ RSpec.describe AuthController, :type => :controller do
     end
   end
 
+  describe "audit logging" do
+    it "records failed password attempts with endpoint and client but never the password" do
+      post :set, params: { password: 'PASSWORD' }
+      expect(OpenC3::Logger).to receive(:warn) do |message, scope:, user:|
+        expect(message).to match(/\AAuthentication failed: endpoint=verify client=\S+ reason=invalid_password\z/)
+        expect(message).not_to include('WRONGPASS')
+        expect(user).to eql('anonymous')
+      end
+      post :verify, params: { password: 'WRONGPASS' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "records successful logins" do
+      post :set, params: { password: 'PASSWORD' }
+      expect(OpenC3::Logger).to receive(:info).with(/\AAuthentication succeeded: endpoint=verify client=/, scope: nil, user: 'anonymous')
+      post :verify, params: { password: 'PASSWORD' }
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "records rate limiting" do
+      post :set, params: { password: 'PASSWORD' }
+      allow(OpenC3::Logger).to receive(:warn)
+      AuthController::MAX_BAD_ATTEMPTS.times { post :verify, params: { password: 'WRONGPASS' } }
+      expect(OpenC3::Logger).to receive(:warn).with(/\AAuthentication rate limited: endpoint=verify client=/, scope: nil, user: 'anonymous')
+      post :verify, params: { password: 'WRONGPASS' }
+      expect(response).to have_http_status(:too_many_requests)
+    end
+  end
+
   describe "verify-token" do
     it "requires a token" do
       post :verify_token
