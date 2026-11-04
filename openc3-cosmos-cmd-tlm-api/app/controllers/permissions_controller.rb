@@ -18,6 +18,12 @@
 begin
   require 'openc3-enterprise/controllers/permissions_controller'
 rescue LoadError
-  class PermissionsController < ModelController
+  # Core: expose the fixed role -> permission matrix enforced by
+  # OpenC3::Authorization#authorize so clients can discover what a role grants.
+  class PermissionsController < ApplicationController
+    def index
+      return unless authorization('system')
+      render json: OpenC3::Authorization::ROLE_PERMISSIONS
+    end
   end
 end

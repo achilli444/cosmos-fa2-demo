@@ -47,6 +47,7 @@ class Auth {
   setTokens() {}
   clearTokens() {
     delete localStorage.openc3Token
+    delete localStorage.openc3UserInfo
   }
   // Navigating to login is idempotent: a page load with no token calls
   // updateToken once per request, and each of those would otherwise schedule
@@ -70,15 +71,48 @@ class Auth {
     this.clearTokens()
     location.reload()
   }
+  // Principal recorded by the login page from /openc3-api/auth/user. Roles
+  // are enforced by the API; this only drives what the tools choose to show.
+  userInfo() {
+    try {
+      return JSON.parse(localStorage.openc3UserInfo || 'null')
+    } catch {
+      return null
+    }
+  }
   user() {
-    return { name: 'Anonymous' }
+    const info = this.userInfo()
+    return { name: info?.username || 'Anonymous' }
   }
   userroles() {
-    return ['admin']
+    const info = this.userInfo()
+    return Array.isArray(info?.roles) ? info.roles : []
+  }
+  // Fills in openc3UserInfo for a session that predates it (the login page
+  // normally records it). Resolves either way; the API still enforces roles.
+  refreshUserInfo() {
+    if (!localStorage.openc3Token || localStorage.openc3UserInfo) {
+      return emptyPromise(true)
+    }
+    const scope = window.openc3Scope || 'DEFAULT'
+    return fetch(`/openc3-api/auth/user?scope=${encodeURIComponent(scope)}`, {
+      headers: {
+        Authorization: localStorage.openc3Token,
+        Accept: 'application/json',
+      },
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((info) => {
+        if (info) {
+          localStorage.openc3UserInfo = JSON.stringify(info)
+        }
+        return true
+      })
+      .catch(() => true)
   }
   getInitOptions() {}
   init() {
-    return emptyPromise(true)
+    return this.refreshUserInfo()
   }
 }
 let OpenC3Auth = new Auth()

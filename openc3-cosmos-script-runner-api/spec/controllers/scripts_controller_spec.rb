@@ -617,6 +617,52 @@ RSpec.describe ScriptsController, type: :controller do
       expect(json["history"][1]["to"]).to eq("approved")
     end
 
+    context "with role enforcement" do
+      before(:each) do
+        @authorize = $openc3_authorize
+        $openc3_authorize = true
+        @operator = OpenC3::AuthModel.generate_session(username: 'op', roles: ['operator'])
+        @approver = OpenC3::AuthModel.generate_session(username: 'qa', roles: ['viewer', 'approver'])
+        @viewer = OpenC3::AuthModel.generate_session(username: 'ro', roles: ['viewer'])
+      end
+
+      after(:each) do
+        $openc3_authorize = @authorize
+      end
+
+      it "requires script_edit to move to review and script_approver to approve" do
+        request.headers['HTTP_AUTHORIZATION'] = @viewer
+        post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "review", comment: "ready"}
+        expect(response).to have_http_status(:forbidden)
+
+        request.headers['HTTP_AUTHORIZATION'] = @operator
+        post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "review", comment: "ready"}
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["history"][0]["user"]).to eq("op")
+
+        # The operator who submitted it cannot approve it
+        post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: "self"}
+        expect(response).to have_http_status(:forbidden)
+        get :lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb"}
+        expect(JSON.parse(response.body)["state"]).to eq("review")
+      end
+
+      it "rejects an approver who lacks script_edit" do
+        request.headers['HTTP_AUTHORIZATION'] = @operator
+        post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "review", comment: "ready"}
+        expect(response).to have_http_status(:ok)
+
+        request.headers['HTTP_AUTHORIZATION'] = @approver
+        post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: "ok"}
+        expect(response).to have_http_status(:forbidden)
+      end
+
+      it "rejects an unauthenticated caller" do
+        post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "review", comment: "ready"}
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
     it "rejects an invalid state" do
       post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "bogus", comment: ""}
 

@@ -41,17 +41,45 @@ class AuthController < ApplicationController
     end
 
     begin
-      if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
+      username = params[:username].to_s.strip
+      if username.empty? or username == OpenC3::AuthModel::BUILTIN_ADMIN_USERNAME
+        # Shared password: the built-in administrator
+        username = OpenC3::AuthModel::BUILTIN_ADMIN_USERNAME
+        principal = nil
+        if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
+          principal = { 'username' => username, 'roles' => OpenC3::AuthModel::BUILTIN_ADMIN_ROLES }
+        end
+      else
+        principal = OpenC3::AuthModel.authenticate_user(username, params[:password])
+      end
+
+      if principal
         clear_user_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        OpenC3::Logger.info("Login succeeded for '#{username}' from #{client_id}", user: username)
+        render :plain => OpenC3::AuthModel.generate_session(username: principal['username'], roles: principal['roles'])
       else
         record_user_bad_attempt
+        OpenC3::Logger.warn("Login failed for '#{username}' from #{client_id}", user: username)
         head :unauthorized
       end
     rescue StandardError => e
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
     end
+  end
+
+  # Returns the principal behind the caller's token so the UI can show who is
+  # logged in and which roles they hold. Authorization is enforced server
+  # side; this is informational only.
+  def user
+    user = authorization('system')
+    return unless user
+    user = { 'username' => OpenC3::Authorization::ANONYMOUS_USER, 'roles' => [] } unless user.is_a?(Hash)
+    render json: {
+      username: user['username'],
+      roles: user['roles'],
+      permissions: OpenC3::Authorization.permissions_for(user['roles']),
+    }
   end
 
   # Checks an existing session token. The login page calls this to skip the
@@ -96,7 +124,7 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
         clear_service_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        render :plain => OpenC3::AuthModel.generate_session(username: OpenC3::AuthModel::SERVICE_USERNAME, roles: OpenC3::AuthModel::SERVICE_ROLES)
       else
         record_service_bad_attempt
         head :unauthorized

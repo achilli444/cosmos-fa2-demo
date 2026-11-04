@@ -31,6 +31,14 @@
           label="Old Password"
         />
         <v-text-field
+          v-if="isSet && !reset"
+          v-model="username"
+          type="text"
+          label="Username (leave blank for admin)"
+          autocomplete="username"
+          data-test="username"
+        />
+        <v-text-field
           v-model="password"
           type="password"
           :label="`${!isSet || reset ? 'New ' : ''}Password`"
@@ -87,6 +95,7 @@ export default {
   data() {
     return {
       isSet: true,
+      username: '',
       password: '',
       confirmPassword: '',
       oldPassword: '',
@@ -190,7 +199,22 @@ export default {
     },
     login: function (response) {
       localStorage.openc3Token = response.data
-      this.redirect()
+      // Record who logged in and with which roles so the tools can tailor
+      // what they show. The server enforces roles regardless of this value.
+      Api.get('/openc3-api/auth/user', {
+        params: { scope: window.openc3Scope || 'DEFAULT' },
+        noScope: true,
+        headers: { Accept: 'application/json', 'Ignore-Errors': '401,403' },
+      })
+        .then((userResponse) => {
+          localStorage.openc3UserInfo = JSON.stringify(userResponse.data)
+        })
+        .catch(() => {
+          delete localStorage.openc3UserInfo
+        })
+        .finally(() => {
+          this.redirect()
+        })
     },
     redirect: function () {
       const redirect = new URLSearchParams(window.location.search).get(
@@ -207,6 +231,7 @@ export default {
       this.showAlert = false
       Api.post('/openc3-api/auth/verify', {
         data: {
+          username: this.username,
           password: this.password,
         },
         ...this.options,
@@ -216,7 +241,7 @@ export default {
         })
         .catch((error) => {
           if (isUnauthorizedError(error)) {
-            this.alert = 'Incorrect password'
+            this.alert = 'Incorrect username or password'
           } else if (error?.status === 429 || error?.response?.status === 429) {
             this.alert = 'Please try again later'
           } else if (
