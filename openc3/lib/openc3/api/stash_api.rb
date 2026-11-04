@@ -12,6 +12,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/models/stash_model'
+require 'openc3/io/json_rpc'
 
 module OpenC3
   module Api
@@ -33,7 +34,7 @@ module OpenC3
       authorize(permission: 'script_view', manual: manual, scope: scope, token: token)
       result = StashModel.get(name: key, scope: scope)
       if result
-        JSON.parse(result['value'], allow_nan: true, create_additions: true)
+        JsonRpc.parse(result['value'])
       else
         nil
       end
@@ -41,7 +42,7 @@ module OpenC3
 
     def stash_all(manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'script_view', manual: manual, scope: scope, token: token)
-      StashModel.all(scope: scope).transform_values { |hash| JSON.parse(hash["value"], allow_nan: true, create_additions: true) }
+      StashModel.all(scope: scope).transform_values { |hash| JsonRpc.parse(hash["value"]) }
     end
 
     def stash_keys(manual: false, scope: $openc3_scope, token: $openc3_token)
