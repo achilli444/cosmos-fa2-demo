@@ -85,6 +85,38 @@ module OpenC3
         expect(AuthModel.verify(token)).to eq(false)
       end
 
+      it "stores the user with the session and returns it from session_info" do
+        token = AuthModel.generate_session(user: { 'username' => 'operator-1234abcd', 'service' => false })
+        info = AuthModel.session_info(token)
+        expect(info['username']).to eq('operator-1234abcd')
+        expect(info['service']).to eq(false)
+        expect(info['created_at']).to_not be_nil
+        # session_info does not consume or verify
+        expect(AuthModel.verify(token)).to eq(true)
+      end
+
+      it "returns session_info for a one-time token without consuming it" do
+        token = AuthModel.generate_session(otp: true, user: { 'username' => 'service-abcd1234', 'service' => true })
+        expect(AuthModel.session_info(token)['username']).to eq('service-abcd1234')
+        expect(AuthModel.verify(token)).to eq(true)
+        expect(AuthModel.session_info(token)).to be_nil
+      end
+
+      it "returns nil session_info for unknown tokens and passwords" do
+        expect(AuthModel.session_info(nil)).to be_nil
+        expect(AuthModel.session_info('')).to be_nil
+        expect(AuthModel.session_info('PASSWORD')).to be_nil
+        expect(AuthModel.session_info("ses_#{SecureRandom.urlsafe_base64(nil, false)}")).to be_nil
+      end
+
+      it "reads sessions stored before identities were recorded" do
+        token = "ses_#{SecureRandom.urlsafe_base64(nil, false)}"
+        @redis.hset(AuthModel::SESSIONS_KEY, token, '2026-01-01T00:00:00Z')
+        info = AuthModel.session_info(token)
+        expect(info).to eq({ 'created_at' => '2026-01-01T00:00:00Z' })
+        expect(AuthModel.verify(token)).to eq(true)
+      end
+
       it "revokes all sessions on password change" do
         token = AuthModel.generate_session
         expect(AuthModel.verify(token)).to eq(true)

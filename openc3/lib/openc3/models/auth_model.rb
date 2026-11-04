@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'argon2'
+require 'json'
 require 'securerandom'
 require 'openc3/utilities/store'
 
@@ -93,28 +94,7 @@ module OpenC3
       # Check cached session tokens and password hash
       time = Time.now
       unless mode == :password
-        # Drop the whole cache once it ages out rather than tracking per token
-        # times. This bounds how long a terminated token keeps working to
-        # SESSION_CACHE_TIMEOUT, same as before.
-        if @@session_cache.nil? or (time - @@session_cache_time) >= SESSION_CACHE_TIMEOUT
-          @@session_cache = {}
-          @@session_cache_time = time
-        end
-
-        if @@session_cache[token]
-          terminate_otp(token)
-          return true
-        end
-
-        # Check the stored session tokens for just this token. Deliberately not
-        # HGETALL: verify_token is unauthenticated, so reading the entire
-        # session hash here lets any caller make us pull every session ever
-        # created on every request, and that hash only grows. HGET is O(1) and
-        # can't be amplified. The cache then fills with the tokens actually in
-        # use instead of all of them.
-        stored = Store.hget(SESSIONS_KEY, token)
-        if stored
-          @@session_cache[token] = stored
+        if stored_session(token)
           terminate_otp(token)
           return true
         end
@@ -151,16 +131,66 @@ module OpenC3
 
     # Creates a new session token. DO NOT CALL BEFORE VERIFYING.
     # @param otp [Boolean] whether to create a one-time use token (default: false)
+    # @param user [Hash] identity of the authenticated caller, stored with the
+    #   session so later requests can be attributed to it (see Authorization.session_user)
     # @return [String] the new session token
-    def self.generate_session(otp: false)
+    def self.generate_session(otp: false, user: nil)
       token = SecureRandom.urlsafe_base64(nil, false)
       if otp
         token = OTP_PREFIX + token
       else
         token = SESSION_PREFIX + token
       end
-      Store.hset(SESSIONS_KEY, token, Time.now.iso8601)
+      info = { 'created_at' => Time.now.iso8601 }
+      info.merge!(user) if user
+      Store.hset(SESSIONS_KEY, token, JSON.generate(info))
       return token
+    end
+
+    # The identity stored with a session or one-time token by generate_session.
+    # Does not verify or consume the token. Fills the session cache, so a
+    # verify that follows costs no extra read.
+    # @param token [String] a session or one-time token
+    # @return [Hash, nil] the stored info ('created_at', 'username', ...) or nil if unknown
+    def self.session_info(token)
+      return nil if token.nil? or token.empty?
+      return nil unless token.start_with?(SESSION_PREFIX) or token.start_with?(OTP_PREFIX)
+
+      stored = stored_session(token)
+      return nil unless stored
+
+      begin
+        info = JSON.parse(stored)
+      rescue JSON::ParserError
+        info = nil
+      end
+      # Sessions created before identities were stored hold just a timestamp
+      info = { 'created_at' => stored } unless info.is_a?(Hash)
+      return info
+    end
+
+    # The value stored for a session token, from the cache or Redis.
+    # @return [String, nil] nil if the token is not a known session
+    def self.stored_session(token)
+      time = Time.now
+      # Drop the whole cache once it ages out rather than tracking per token
+      # times. This bounds how long a terminated token keeps working to
+      # SESSION_CACHE_TIMEOUT, same as before.
+      if @@session_cache.nil? or (time - @@session_cache_time) >= SESSION_CACHE_TIMEOUT
+        @@session_cache = {}
+        @@session_cache_time = time
+      end
+      return @@session_cache[token] if @@session_cache[token]
+
+      # Check the stored session tokens for just this token. Deliberately not
+      # HGETALL: verify_token is unauthenticated, so reading the entire
+      # session hash here lets any caller make us pull every session ever
+      # created on every request, and that hash only grows. HGET is O(1) and
+      # can't be amplified. The cache then fills with the tokens actually in
+      # use instead of all of them.
+      stored = Store.hget(SESSIONS_KEY, token)
+      @@session_cache[token] = stored if stored
+      return stored
     end
 
     # Terminates every session.

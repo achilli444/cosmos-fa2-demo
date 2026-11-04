@@ -165,7 +165,7 @@ RSpec.describe AuthController, :type => :controller do
     end
 
     it "does not consume an OTP token" do
-      user = 'anonymous'
+      user = OpenC3::Authorization.session_user
       otp = OpenC3::Authorization.generate_otp(user)
       post :verify_token, params: { token: otp }
       expect(response).to have_http_status(:unauthorized)
