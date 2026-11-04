@@ -72,6 +72,12 @@
 #       - OPENC3_AUTH_RATE_LIMIT_WITHIN=120
 #       # Default language used by the generators (`openc3.sh cli generate`).
 #       - OPENC3_LANGUAGE=python
+#       # Web origins allowed to call this API cross-origin (CORS), comma
+#       # separated with scheme and port. Defaults to OPENC3_EXTERNAL_URL. The
+#       # COSMOS frontend is same-origin through Traefik so this is only needed
+#       # for a tool hosted on another origin. Set the SAME value on
+#       # openc3-cosmos-script-runner-api.
+#       - OPENC3_ALLOWED_ORIGINS=https://cosmos.example.com,https://ops.example.com:2900
 #
 #   # -----------------------------------------------------------------------
 #   # Script Runner API
@@ -80,6 +86,8 @@
 #     environment:
 #       # Raise if you run many scripts concurrently.
 #       - WEB_CONCURRENCY=4
+#       # CORS origins, see openc3-cosmos-cmd-tlm-api above. Keep in sync.
+#       - OPENC3_ALLOWED_ORIGINS=https://cosmos.example.com,https://ops.example.com:2900
 #
 #   # -----------------------------------------------------------------------
 #   # Operator (runs interfaces / targets / microservices)

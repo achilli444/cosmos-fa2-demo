@@ -117,6 +117,7 @@ Set in `.env`, or overridden per service in `compose.override.yaml`:
 | --- | --- | --- |
 | `OPENC3_TAG` | `latest` | Image tag to deploy, e.g. `7.3.0` |
 | `OPENC3_EXTERNAL_URL` | `http://localhost:2900` | External domain name and port used to reach COSMOS |
+| `OPENC3_ALLOWED_ORIGINS` | `OPENC3_EXTERNAL_URL` | Comma separated web origins (scheme, host, port) allowed to call the cmd-tlm and script-runner APIs cross-origin (CORS). The COSMOS frontend is same-origin through Traefik, so only set this for a tool hosted on another origin. Unset and no `OPENC3_EXTERNAL_URL` means no cross-origin access |
 | `OPENC3_LOCAL_MODE` | `1` | Sync plugin and configuration changes to the `plugins` directory on the host. See [Local Mode](../guides/local-mode.md) |
 | `OPENC3_DEMO` | `true` | Install the Demo plugin. Accepts `false` and `0` to disable |
 | `OPENC3_REGISTRY`, `OPENC3_NAMESPACE` | `docker.io`, `openc3inc` | Where to pull COSMOS images from |
@@ -125,7 +126,7 @@ Set in `.env`, or overridden per service in `compose.override.yaml`:
 | `OPENC3_CLOUD` | `local` | Cloud provider, for bucket and secret handling |
 | `RUBYGEMS_URL`, `PYPI_URL`, `NPM_URL`, `MAVEN_URL` | public mirrors | Package sources used at *build* time. To change the URLs COSMOS uses at *run* time, set the `rubygems_url` / `pypi_url` Admin settings |
 
-Per-service runtime flags - `OPENC3_NO_*`, `OPENC3_FORCE_INSTALL`, `OPENC3_ALLOW_HTTP`, `OPENC3_DEFAULT_QUEUE`, `OPENC3_AUTH_RATE_LIMIT_*`, `OPENC3_LANGUAGE`, `OPENC3_LOG_STDERR` - are documented in `compose.override.yaml` under the service each one applies to, because a flag only takes effect on the container that reads it. See [Install and runtime flags](compose.md#install-and-runtime-flags) for how their values are interpreted.
+Per-service runtime flags - `OPENC3_NO_*`, `OPENC3_FORCE_INSTALL`, `OPENC3_ALLOW_HTTP`, `OPENC3_DEFAULT_QUEUE`, `OPENC3_AUTH_RATE_LIMIT_*`, `OPENC3_ALLOWED_ORIGINS`, `OPENC3_LANGUAGE`, `OPENC3_LOG_STDERR` - are documented in `compose.override.yaml` under the service each one applies to, because a flag only takes effect on the container that reads it. See [Install and runtime flags](compose.md#install-and-runtime-flags) for how their values are interpreted.
 
 ## Admin Console settings
 
