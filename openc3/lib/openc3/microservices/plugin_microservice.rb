@@ -28,8 +28,10 @@ module OpenC3
       Dir.chdir @work_dir
       begin
         if @config["cmd"][0] != 'ruby'
-          # Try to make sure the cmd is executable
-          FileUtils.chmod 0777, @config["cmd"][0]
+          # Try to make sure the cmd is executable. Only the owner may write it:
+          # in Core every plugin shares this container, so a world-writable
+          # executable could be replaced by another process before exec.
+          FileUtils.chmod 0755, @config["cmd"][0]
         end
       rescue Exception
         # Its ok if this fails
