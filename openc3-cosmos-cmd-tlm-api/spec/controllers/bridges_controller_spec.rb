@@ -74,6 +74,30 @@ RSpec.describe BridgesController, type: :controller do
   end
 
   describe "DELETE destroy" do
+    it "records the session-tagged user and request source" do
+      request.headers['HTTP_AUTHORIZATION'] = OpenC3::AuthModel.generate_session()
+      secret_client = double("secrets")
+      allow(secret_client).to receive(:delete).and_raise("missing")
+      allow(OpenC3::Secrets).to receive(:getClient).and_return(secret_client)
+
+      expect(OpenC3::Logger).to receive(:warn).with(
+        "Bridge secret: BRIDGE_PENDING_PRIVATE_KEY not found for delete with error missing",
+        scope: "DEFAULT",
+        user: /\Aanonymous@\h{12}\z/,
+        other: hash_including('remote_ip' => "0.0.0.0"),
+      )
+      expect(OpenC3::Logger).to receive(:info).with(
+        "Bridge destroyed: PENDING",
+        scope: "DEFAULT",
+        user: /\Aanonymous@\h{12}\z/,
+        other: hash_including('remote_ip' => "0.0.0.0"),
+      )
+
+      delete :destroy, params: { id: "PENDING", scope: "DEFAULT" }
+
+      expect(response).to have_http_status(:ok)
+    end
+
     it "deletes a pending bridge that has no BridgeModel record" do
       secret_client = double("secrets", delete: nil)
       allow(OpenC3::Secrets).to receive(:getClient).and_return(secret_client)

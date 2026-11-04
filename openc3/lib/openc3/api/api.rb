@@ -43,5 +43,14 @@ module OpenC3
     include Extract
     include Authorization
     include ApiShared
+
+    # Username to record in audit logs and topic messages for the user returned
+    # by authorize. Internal callers without a token (microservices) are
+    # attributed to the microservice name, mirroring _cmd_implementation.
+    def _audit_username(user)
+      return user['username'] if user and user['username']
+
+      ENV.fetch('OPENC3_MICROSERVICE_NAME', nil) || 'anonymous'
+    end
   end
 end

@@ -138,6 +138,12 @@ module OpenC3
           expect { @api.send(method, "INST", "COLLECT", "TYPE", "DURATION") }.to raise_error(/Invalid number of arguments/)
         end
 
+        it "attributes the command to the session-tagged user" do
+          command = @api.send(method, "INST", "ABORT")
+          expect(command['username']).to match(/\Aanonymous@\h{12}\z/)
+          expect(command['username']).to eql "anonymous@#{AuthModel.session_id($openc3_token)}"
+        end
+
         it "records the original queuing user (author) via queue_username" do
           command = @api.send(method, "INST", "ABORT", queue_username: 'original_author')
           # queue_username (author, shown as "Queued By") is recorded separately

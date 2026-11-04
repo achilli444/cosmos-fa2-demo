@@ -171,6 +171,13 @@ module OpenC3
         expect(item['states']['CONNECTED']['color']).to eql("YELLOW")
       end
 
+      it "records the acting user in the log and event" do
+        expect(Logger).to receive(:info).with(/Setting 'INST HEALTH_STATUS GROUND1STATUS' state/, hash_including(scope: "DEFAULT", user: /\Aanonymous@\h{12}\z/))
+        @api.set_state_color("INST", "HEALTH_STATUS", "GROUND1STATUS", "UNAVAILABLE", "RED")
+        event = @api.get_limits_events.last[1]
+        expect(event['username']).to match(/\Aanonymous@\h{12}\z/)
+      end
+
       it "writes a LIMITS_STATE_COLOR event" do
         @api.set_state_color("INST", "HEALTH_STATUS", "GROUND1STATUS", "UNAVAILABLE", "RED")
         event = @api.get_limits_events.last[1]
@@ -473,6 +480,42 @@ module OpenC3
 
       it "returns whether limits are enable for an item" do
         expect(@api.limits_enabled?("INST", "HEALTH_STATUS", "TEMP1")).to be true
+      end
+    end
+
+    describe "limits change attribution" do
+      it "records the acting user when enabling and disabling limits" do
+        expect(Logger).to receive(:info).with("Disabling Limits for 'INST HEALTH_STATUS TEMP1'", scope: "DEFAULT", user: /\Aanonymous@\h{12}\z/)
+        @api.disable_limits("INST", "HEALTH_STATUS", "TEMP1")
+        event = @api.get_limits_events.last[1]
+        expect(event['type']).to eql "LIMITS_ENABLE_STATE"
+        expect(event['enabled']).to be false
+        expect(event['username']).to match(/\Aanonymous@\h{12}\z/)
+
+        expect(Logger).to receive(:info).with("Enabling Limits For 'INST HEALTH_STATUS TEMP1'", scope: "DEFAULT", user: /\Aanonymous@\h{12}\z/)
+        @api.enable_limits("INST", "HEALTH_STATUS", "TEMP1")
+        event = @api.get_limits_events.last[1]
+        expect(event['enabled']).to be true
+        expect(event['username']).to match(/\Aanonymous@\h{12}\z/)
+      end
+
+      it "records the acting user when setting limits and the limits set" do
+        expect(Logger).to receive(:info).with(/Setting 'INST HEALTH_STATUS TEMP1' limits to/, scope: "DEFAULT", user: /\Aanonymous@\h{12}\z/)
+        @api.set_limits("INST", "HEALTH_STATUS", "TEMP1", 0.0, 10.0, 20.0, 30.0)
+        expect(@api.get_limits_events.last[1]['username']).to match(/\Aanonymous@\h{12}\z/)
+
+        expect(Logger).to receive(:info).with("Setting Limits Set: DEFAULT", scope: "DEFAULT", user: /\Aanonymous@\h{12}\z/)
+        @api.set_limits_set("DEFAULT")
+        event = @api.get_limits_events.last[1]
+        expect(event['type']).to eql "LIMITS_SET"
+        expect(event['username']).to match(/\Aanonymous@\h{12}\z/)
+      end
+
+      it "records the acting user when toggling a limits group" do
+        expect(Logger).to receive(:info).with("Disable Limits Group: FIRST", scope: "DEFAULT", user: /\Aanonymous@\h{12}\z/)
+        expect(Logger).to receive(:info).with(/Disabling Limits for 'INST HEALTH_STATUS TEMP/, scope: "DEFAULT", user: /\Aanonymous@\h{12}\z/).at_least(:once)
+        @api.disable_limits_group("FIRST")
+        expect(@api.get_limits_events.last[1]['username']).to match(/\Aanonymous@\h{12}\z/)
       end
     end
 

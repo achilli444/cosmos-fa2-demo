@@ -104,6 +104,47 @@ RSpec.describe RunningScriptController, type: :controller do
   end
 
   describe "script control actions" do
+    describe "audit attribution" do
+      before(:each) do
+        request.headers['HTTP_AUTHORIZATION'] = OpenC3::AuthModel.generate_session()
+      end
+
+      it "records the session-tagged user and request source when stopping a script" do
+        allow_any_instance_of(RunningScriptController).to receive(:running_script_publish)
+        expect(OpenC3::Logger).to receive(:info).with(
+          "Script stopped: INST/procedures/test.rb",
+          scope: "DEFAULT",
+          user: /\Aanonymous@\h{12}\z/,
+          other: hash_including('remote_ip' => "0.0.0.0"),
+        )
+        post :stop, params: {id: "1", scope: "DEFAULT"}
+        expect(response.status).to eq(200)
+      end
+
+      it "records an audit entry when show runs suite analysis" do
+        OpenC3::ScriptStatusModel.new(
+          name: "7",
+          state: "running",
+          scope: "DEFAULT",
+          filename: "INST/procedures/suite.rb",
+          start_time: Time.now.utc.iso8601,
+          username: "test_user",
+          user_full_name: "Test Tester",
+          suite_runner: true,
+        ).create
+        allow(Script).to receive(:body).and_return("class MySuite < OpenC3::Suite; end")
+        allow(Script).to receive(:process_suite).and_return([{}, nil, true])
+        expect(OpenC3::Logger).to receive(:info).with(
+          "Script suite analyzed: INST/procedures/suite.rb",
+          scope: "DEFAULT",
+          user: /\Aanonymous@\h{12}\z/,
+          other: hash_including('remote_ip' => "0.0.0.0"),
+        )
+        get :show, params: {id: "7", scope: "DEFAULT"}
+        expect(response.status).to eq(200)
+      end
+    end
+
     describe "POST stop" do
       context "when script exists" do
         it "stops the script" do
