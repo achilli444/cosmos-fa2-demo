@@ -233,6 +233,7 @@ services:
       - OPENC3_AUTH_RATE_LIMIT_TO
       - OPENC3_AUTH_RATE_LIMIT_WITHIN
       - OPENC3_LOG_STDERR
+      - OPENC3_ALLOW_WEBSOCKET_URL_AUTH
       - OPENC3_SECRET_FILE_DIR
       - OPENC3_LOG_LEVEL
     extra_hosts:
@@ -308,6 +309,7 @@ services:
       - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
       # Optional: bare pass-through (only forwarded if set in host env or .env)
       - OPENC3_LOG_STDERR
+      - OPENC3_ALLOW_WEBSOCKET_URL_AUTH
       - OPENC3_SECRET_FILE_DIR
       - OPENC3_LOG_LEVEL
 

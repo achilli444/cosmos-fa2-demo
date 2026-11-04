@@ -39,6 +39,36 @@ RSpec.describe StreamingChannel, :type => :channel do
     expect(subscription).to have_stream_from('streaming_12345')
   end
 
+  context "subscription authentication" do
+    before(:each) do
+      # A connection that did not authenticate via the URL must present a
+      # token on the subscription params
+      stub_connection uuid: '12345', scope: 'DEFAULT', url_authenticated: false
+    end
+
+    after(:all) do
+      stub_connection uuid: '12345', scope: 'DEFAULT'
+    end
+
+    it "rejects a subscription without a token" do
+      subscribe()
+      expect(subscription).to be_rejected
+    end
+
+    it "accepts a session token on the subscription params" do
+      allow(OpenC3::AuthModel).to receive(:verify).and_return(true)
+      subscribe(token: "ses_#{'a' * 22}")
+      expect(subscription).to be_confirmed
+    end
+
+    it "rejects the service password as a subscription token" do
+      service_password = ENV.fetch('OPENC3_SERVICE_PASSWORD')
+      expect(OpenC3::AuthModel.verify(service_password)).to be true
+      subscribe(token: service_password)
+      expect(subscription).to be_rejected
+    end
+  end
+
   context "adds" do
     it "rejects without scope" do
       subscribe()

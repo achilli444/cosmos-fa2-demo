@@ -47,6 +47,27 @@ module OpenC3
         expect(AuthModel.verify_no_service('newpassword', mode: :any)).to eq(true)
       end
 
+      it "self.service_password?" do
+        service_password = ENV.fetch('OPENC3_SERVICE_PASSWORD')
+        expect(service_password).not_to be_empty
+        expect(AuthModel.service_password?(service_password)).to eq(true)
+        expect(AuthModel.verify(service_password)).to eq(true) # verify still accepts it for REST
+        expect(AuthModel.service_password?("ses_#{'a' * 22}")).to eq(false)
+        expect(AuthModel.service_password?(AUTH_INITIAL_PASSWORD)).to eq(false)
+        expect(AuthModel.service_password?(nil)).to eq(false)
+        expect(AuthModel.service_password?('')).to eq(false)
+      end
+
+      it "self.service_password? is false when no service password is configured" do
+        saved = ENV.delete('OPENC3_SERVICE_PASSWORD')
+        expect(AuthModel.service_password?(nil)).to eq(false)
+        expect(AuthModel.service_password?('')).to eq(false)
+        ENV['OPENC3_SERVICE_PASSWORD'] = ''
+        expect(AuthModel.service_password?('')).to eq(false)
+      ensure
+        saved.nil? ? ENV.delete('OPENC3_SERVICE_PASSWORD') : ENV['OPENC3_SERVICE_PASSWORD'] = saved
+      end
+
       it "self.verify" do
         expect(AuthModel.verify('badpassword')).to eq(false)
         expect(AuthModel.verify(AUTH_INITIAL_PASSWORD, no_password: false)).to eq(true)

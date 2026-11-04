@@ -41,6 +41,32 @@ RSpec.describe RunningScriptChannel, type: :channel do
     end
   end
 
+  describe 'subscription authentication' do
+    before(:each) do
+      stub_connection uuid: uuid, scope: 'DEFAULT', url_authenticated: false
+    end
+
+    it 'rejects a subscription without a token' do
+      subscribe id: '42'
+      expect(subscription).to be_rejected
+      expect(RunningScriptReplayThread).not_to have_received(:new)
+    end
+
+    it 'accepts a session token on the subscription params' do
+      allow(OpenC3::AuthModel).to receive(:verify).and_return(true)
+      subscribe id: '42', token: "ses_#{'a' * 22}"
+      expect(subscription).to be_confirmed
+    end
+
+    it 'rejects the service password as a subscription token' do
+      service_password = ENV.fetch('OPENC3_SERVICE_PASSWORD')
+      expect(OpenC3::AuthModel.verify(service_password)).to be true
+      subscribe id: '42', token: service_password
+      expect(subscription).to be_rejected
+      expect(RunningScriptReplayThread).not_to have_received(:new)
+    end
+  end
+
   describe '#subscribed' do
     it 'transmits the backlog and starts streaming live events bounded by the arm timeout' do
       backlog({ 'type' => 'line', 'line_no' => 1 }, { 'type' => 'output', 'line' => 'hi' })

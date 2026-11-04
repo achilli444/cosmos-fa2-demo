@@ -22,15 +22,19 @@ module ApplicationCable
     private
 
     # Authenticate the subscription using either:
-    #   1. Connection-level URL auth (legacy `?authorization=<token>` path), or
+    #   1. Connection-level URL auth (legacy `?authorization=<token>` path,
+    #      disabled unless OPENC3_ALLOW_WEBSOCKET_URL_AUTH is set — see
+    #      ApplicationCable::Connection), or
     #   2. A token supplied on the channel subscription params (preferred —
     #      keeps tokens out of WebSocket URLs / browser history / proxy logs).
+    # The service password is never accepted here: it is a long-lived shared
+    # secret for internal REST calls, not a WebSocket credential.
     # If neither is present or valid, the subscription is rejected before
     # `subscribed` runs.
     def authenticate_subscription!
       return if connection_url_authenticated?
       token = params[:token]
-      if token
+      if token and !OpenC3::AuthModel.service_password?(token)
         begin
           authorize(permission: 'script_view', scope: connection.scope, token: token)
           return
