@@ -255,6 +255,22 @@ RSpec.describe PluginsController, type: :controller do
       allow(File).to receive(:open).and_yield(double("file", write: true))
     end
 
+    it "writes a user-attributed audit record for the install" do
+      process_result = double("ProcessInfo", name: "process_123")
+      allow(OpenC3::ProcessManager.instance).to receive(:spawn).and_return(process_result)
+
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous POST \S+ plugins#install id=TEST_PLUGIN__1\.0\.0__plugin scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      post :install, params: {
+        id: "TEST_PLUGIN__1.0.0__plugin",
+        plugin_hash: '{"variables": {"VAR1": "value1"}}',
+        scope: "DEFAULT"
+      }
+      expect(response).to have_http_status(:ok)
+    end
+
     it "installs a plugin with hash parameters" do
       plugin_hash = '{"variables": {"VAR1": "value1"}}'
       process_result = double("ProcessInfo", name: "process_123")
@@ -313,6 +329,29 @@ RSpec.describe PluginsController, type: :controller do
   end
 
   describe "DELETE destroy" do
+    it "writes a user-attributed audit record for the uninstall" do
+      process_result = double("ProcessInfo", name: "process_123")
+      allow(OpenC3::ProcessManager.instance).to receive(:spawn).and_return(process_result)
+
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous DELETE \S+ plugins#destroy id=TEST_PLUGIN scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      delete :destroy, params: {id: "TEST_PLUGIN", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "writes an audit record with outcome failure when the uninstall fails" do
+      allow(OpenC3::ProcessManager.instance).to receive(:spawn).and_raise(StandardError.new("Uninstall failed"))
+
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous DELETE \S+ plugins#destroy id=TEST_PLUGIN scope=DEFAULT => failure \(500\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      delete :destroy, params: {id: "TEST_PLUGIN", scope: "DEFAULT"}
+      expect(response).to have_http_status(:internal_server_error)
+    end
+
     it "uninstalls a plugin successfully" do
       process_result = double("ProcessInfo", name: "process_123")
 

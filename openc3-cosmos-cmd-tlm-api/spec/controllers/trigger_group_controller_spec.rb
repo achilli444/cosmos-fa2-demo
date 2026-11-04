@@ -47,6 +47,16 @@ RSpec.describe TriggerGroupController, :type => :controller do
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json['name']).not_to be_nil
     end
+
+    it 'writes a user-attributed audit record' do
+      allow(OpenC3::Logger).to receive(:info)
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous POST \S+ trigger_group#create name=SystemGroup scope=DEFAULT => success \(201\)\z/,
+        hash_including(scope: 'DEFAULT', user: 'anonymous')
+      )
+      post :create, params: generate_trigger_group_hash().merge({'scope'=>'DEFAULT'})
+      expect(response).to have_http_status(:created)
+    end
   end
 
   describe 'POST then GET index with Triggers' do
@@ -127,6 +137,19 @@ RSpec.describe TriggerGroupController, :type => :controller do
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json['status']).to eql('error')
       expect(json['message']).not_to be_nil
+    end
+
+    it 'writes a user-attributed audit record' do
+      allow_any_instance_of(OpenC3::MicroserviceModel).to receive(:undeploy).and_return(nil)
+      allow(OpenC3::Logger).to receive(:info)
+      post :create, params: generate_trigger_group_hash().merge({'scope'=>'DEFAULT'})
+      expect(response).to have_http_status(:created)
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous DELETE \S+ trigger_group#destroy name=SystemGroup scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: 'DEFAULT', user: 'anonymous')
+      )
+      delete :destroy, params: { scope: 'DEFAULT', name: 'SystemGroup' }
+      expect(response).to have_http_status(:success)
     end
 
     it 'returns a json hash of name and status code 200' do

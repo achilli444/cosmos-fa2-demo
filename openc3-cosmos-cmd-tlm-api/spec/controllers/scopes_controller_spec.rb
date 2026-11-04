@@ -129,6 +129,28 @@ RSpec.describe ScopesController, type: :controller do
       expect(response).to have_http_status(:unauthorized)
     end
 
+    it "writes a user-attributed audit record for the destroy" do
+      process_manager = instance_double(OpenC3::ProcessManager)
+      allow(OpenC3::ProcessManager).to receive(:instance).and_return(process_manager)
+      allow(process_manager).to receive(:spawn).and_return({"state" => "SPAWNED"})
+
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous DELETE \S+ scopes#destroy id=SCOPE1 scope=DEFAULT => success \(200\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      delete :destroy, params: {id: "SCOPE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "writes an audit record with outcome denied when authorization fails" do
+      expect(OpenC3::Logger).to receive(:info).with(
+        /\AAudit: anonymous DELETE \S+ scopes#destroy id=SCOPE1 scope=DEFAULT => denied \(401\)\z/,
+        hash_including(scope: "DEFAULT", user: "anonymous")
+      )
+      delete :destroy, params: {id: "SCOPE1"}
+      expect(response).to have_http_status(:unauthorized)
+    end
+
     it "handles errors in ProcessManager" do
       process_manager = instance_double(OpenC3::ProcessManager)
       allow(OpenC3::ProcessManager).to receive(:instance).and_return(process_manager)
