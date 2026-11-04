@@ -142,10 +142,31 @@ RSpec.describe RunningScript, type: :model do
       expect(OpenC3::ScriptStatusModel.count(scope: "DEFAULT", type: "running")).to eq(0)
     end
 
+    it "runs Core scripts under a short-lived token bound to the launching user, never the service password" do
+      process_env_double = {}
+      process_double = double("process")
+      allow(process_double).to receive(:io).and_return(double("io", inherit!: nil))
+      allow(process_double).to receive(:cwd=)
+      allow(process_double).to receive(:environment).and_return(process_env_double)
+      allow(process_double).to receive(:detach=)
+      allow(process_double).to receive(:start)
+      allow(ChildProcess).to receive(:build).and_return(process_double)
+
+      RunningScript.spawn("DEFAULT", "script.rb", nil, false, nil, "Test User", "testuser")
+
+      token = process_env_double["OPENC3_API_PASSWORD"]
+      expect(token).not_to eq(ENV['OPENC3_SERVICE_PASSWORD'])
+      expect(OpenC3::AuthModel.service_token?(token)).to be true
+      expect(OpenC3::AuthModel.verify(token)).to be true
+      expect(OpenC3::AuthModel.identity(token)['username']).to eq("testuser")
+      expect(process_env_double["OPENC3_API_USER"]).to be_nil
+    end
+
     it "raises an error and cleans up script status if no authentication is available" do
-      # Ensure OPENC3_SERVICE_PASSWORD is not set so the fallback auth fails
+      # Enterprise (OPENC3_API_CLIENT set) with no offline access token: the
+      # shared service password is no longer a fallback
       allow(ENV).to receive(:[]).and_call_original
-      allow(ENV).to receive(:[]).with('OPENC3_SERVICE_PASSWORD').and_return(nil)
+      allow(ENV).to receive(:[]).with('OPENC3_API_CLIENT').and_return('api')
 
       expect {
         RunningScript.spawn("DEFAULT", "script.rb")

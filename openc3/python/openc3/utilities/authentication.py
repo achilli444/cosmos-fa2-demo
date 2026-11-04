@@ -9,6 +9,7 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+import hmac
 import json
 import threading
 import time
@@ -34,7 +35,7 @@ class OpenC3Authentication:
         password = OPENC3_API_PASSWORD
         if not password:
             raise OpenC3AuthenticationError("Authentication requires environment variable OPENC3_API_PASSWORD")
-        self.service = password == OPENC3_SERVICE_PASSWORD
+        self.service = OpenC3Authentication.service_credential(password)
         response = Session().post(
             self._generate_auth_url(),
             json={"password": password},
@@ -48,6 +49,39 @@ class OpenC3Authentication:
 
     def token(self, include_bearer=True):
         return self._token
+
+    @staticmethod
+    def service_credential(password):
+        """Per-run service tokens (svc_) and the static service password both use the
+        service endpoint. The static secret is compared in constant time."""
+        if not password:
+            return False
+        if password.startswith("svc_"):
+            return True
+        if not OPENC3_SERVICE_PASSWORD:
+            return False
+        return hmac.compare_digest(password.encode(), OPENC3_SERVICE_PASSWORD.encode())
+
+    @staticmethod
+    def revoke(token):
+        """Revoke a session or service token so it dies with the run that used it"""
+        if not token:
+            return
+        try:
+            Session().post(
+                OpenC3Authentication._auth_url("auth/logout"),
+                headers={"Authorization": token, "Content-Type": "application/json"},
+                timeout=5,
+            )
+        except Exception as error:
+            print(f"Failed to revoke API token: {error}")
+
+    @staticmethod
+    def _auth_url(endpoint):
+        schema = OPENC3_API_SCHEMA or "http"
+        hostname = OPENC3_API_HOSTNAME or ("127.0.0.1" if OPENC3_DEVEL else "openc3-cosmos-cmd-tlm-api")
+        port = int(OPENC3_API_PORT or "2901")
+        return f"{schema}://{hostname}:{port}/openc3-api/{endpoint}"
 
     def get_otp(self, scope="DEFAULT"):
         session_token = self.token()

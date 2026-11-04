@@ -545,6 +545,25 @@ RSpec.describe QueuesController, type: :controller do
   end
 
   describe "DELETE exec_command" do
+    it "executes the command under the executing user's own token, not the service password" do
+      queue_model = double("QueueModel")
+      command_data = { "username" => "queuer", "value" => "TEST COMMAND", "timestamp" => 1000, "id" => 1.0 }
+      allow(OpenC3::QueueModel).to receive(:get_model).and_return(queue_model)
+      allow(queue_model).to receive(:remove_command).and_return(command_data)
+      executor_token = OpenC3::AuthModel.generate_session(username: "executor")
+      request.headers['Authorization'] = executor_token
+      api_password_before = ENV['OPENC3_API_PASSWORD']
+
+      expect(controller).to receive(:cmd).with("TEST COMMAND",
+        hash_including(queue_username: "queuer", token: executor_token)
+      )
+      expect(OpenC3::OpenC3Authentication).not_to receive(:new)
+
+      post :exec_command, params: {name: "QUEUE1", scope: "DEFAULT"}
+      expect(response).to have_http_status(:ok)
+      expect(ENV['OPENC3_API_PASSWORD']).to eq(api_password_before)
+    end
+
     it "executes a command from a queue without id and returns status code 200" do
       queue_model = double("QueueModel")
       command_data = {

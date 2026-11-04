@@ -100,8 +100,78 @@ RSpec.describe AuthController, :type => :controller do
       post :verify_service, params: { password: 'BAD' }
       expect(response).to have_http_status(:unauthorized)
 
-      post :verify_service, params: { password: 'openc3service' }
+      post :verify_service, params: { password: ENV['OPENC3_SERVICE_PASSWORD'] }
       expect(response).to have_http_status(:ok)
+    end
+  end
+
+  describe "individual accounts" do
+    it "logs each user in with their own password and binds the session to them" do
+      post :set, params: { username: 'alice', password: 'alicepass1' }
+      expect(response).to have_http_status(:ok)
+      alice = response.body
+      expect(OpenC3::AuthModel.identity(alice)['username']).to eq('alice')
+
+      # Creating a second account requires an authenticated caller
+      post :set, params: { username: 'bob', password: 'bobpassword', scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      post :verify, params: { username: 'bob', password: 'bobpassword' }
+      expect(response).to have_http_status(:ok)
+      bob = response.body
+      expect(OpenC3::AuthModel.identity(bob)['username']).to eq('bob')
+
+      # Passwords are per user
+      post :verify, params: { username: 'bob', password: 'alicepass1' }
+      expect(response).to have_http_status(:unauthorized)
+      post :verify, params: { username: 'alice', password: 'bobpassword' }
+      expect(response).to have_http_status(:unauthorized)
+      post :verify, params: { username: 'nobody', password: 'alicepass1' }
+      expect(response).to have_http_status(:unauthorized)
+
+      get :users, params: { scope: 'DEFAULT' }
+      expect(JSON.parse(response.body)).to eq(['alice', 'bob'])
+    end
+
+    it "reports and terminates the caller's own token" do
+      post :set, params: { username: 'alice', password: 'alicepass1' }
+      alice = response.body
+      request.headers['Authorization'] = alice
+      get :whoami, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)['username']).to eq('alice')
+
+      post :logout, params: { scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      OpenC3::AuthModel.logout # drop the verification cache
+      expect(OpenC3::AuthModel.verify(alice)).to be false
+    end
+
+    it "deletes one account without touching the others" do
+      post :set, params: { username: 'alice', password: 'alicepass1' }
+      alice = response.body
+      post :set, params: { username: 'bob', password: 'bobpassword', scope: 'DEFAULT' }
+      post :verify, params: { username: 'bob', password: 'bobpassword' }
+      bob = response.body
+
+      delete :delete_user, params: { username: 'bob', scope: 'DEFAULT' }
+      expect(response).to have_http_status(:ok)
+      expect(OpenC3::AuthModel.users).to eq(['alice'])
+      OpenC3::AuthModel.logout # drop the verification cache
+      expect(OpenC3::AuthModel.verify(bob)).to be false
+      expect(OpenC3::AuthModel.verify(alice)).to be false # logout above
+
+      delete :delete_user, params: { username: 'alice', scope: 'DEFAULT' }
+      expect(response).to have_http_status(:bad_request)
+    end
+
+    it "accepts a per-run service token on verify_service and never the default service password" do
+      token = OpenC3::AuthModel.generate_service_token(username: 'alice', purpose: 'script')
+      post :verify_service, params: { password: token }
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to eq(token)
+
+      post :verify_service, params: { password: 'openc3service' }
+      expect(response).to have_http_status(:unauthorized)
     end
   end
 
@@ -354,7 +424,7 @@ RSpec.describe AuthController, :type => :controller do
       expect(response).to have_http_status(:too_many_requests)
 
       set_client_ip('5.6.7.8')
-      post :verify_service, params: { password: 'openc3service' }
+      post :verify_service, params: { password: ENV['OPENC3_SERVICE_PASSWORD'] }
       expect(response).to have_http_status(:ok)
     end
 

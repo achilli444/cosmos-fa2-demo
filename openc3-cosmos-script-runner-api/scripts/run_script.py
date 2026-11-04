@@ -9,6 +9,7 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+import atexit
 import contextlib
 import json
 import os
@@ -24,6 +25,7 @@ working_dir = os.getcwd()
 from openc3.environment import OPENC3_CONFIG_BUCKET  # noqa: E402
 from openc3.models.script_status_model import ScriptStatusModel  # noqa: E402
 from openc3.script import get_overrides  # noqa: E402
+from openc3.utilities.authentication import OpenC3Authentication  # noqa: E402
 from openc3.utilities.bucket import Bucket  # noqa: E402
 from openc3.utilities.extract import convert_to_value  # noqa: E402
 from openc3.utilities.logger import Logger  # noqa: E402
@@ -54,6 +56,12 @@ Bucket.get_client()
 # Preload Store and remove Redis secrets from ENV
 Store.instance()
 EphemeralStore.instance()
+
+# The per-run token minted for this script by RunningScript.spawn; revoked when
+# the script exits so it cannot be reused
+script_run_token = os.environ.get("OPENC3_API_PASSWORD")
+if script_run_token and script_run_token.startswith("svc_"):
+    atexit.register(OpenC3Authentication.revoke, script_run_token)
 
 # Clear ENV vars for security purposes
 # Use pop with default to avoid KeyError if vars don't exist (e.g. Enterprise/Keycloak)

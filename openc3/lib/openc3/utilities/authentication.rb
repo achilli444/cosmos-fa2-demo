@@ -18,6 +18,7 @@
 require 'openc3/version'
 require 'openc3/io/json_drb'
 require 'faraday'
+require 'openssl'
 require 'uri'
 
 module OpenC3
@@ -27,12 +28,14 @@ module OpenC3
 
   # OpenC3 COSMOS Core authentication code
   class OpenC3Authentication
+    # Prefix of per-run service tokens minted by AuthModel.generate_service_token
+    SERVICE_TOKEN_PREFIX = 'svc_'
     def initialize()
       password = ENV.fetch('OPENC3_API_PASSWORD', nil)
       if password.nil?
         raise OpenC3AuthenticationError, "Authentication requires environment variable OPENC3_API_PASSWORD"
       end
-      @service = password == ENV['OPENC3_SERVICE_PASSWORD']
+      @service = OpenC3Authentication.service_credential?(password)
       retry_faraday_request do
         response = _make_auth_request(password)
         @token = response.body
@@ -45,6 +48,31 @@ module OpenC3
     # Load the token from the environment
     def token(include_bearer: true)
       @token
+    end
+
+    # Per-run service tokens (svc_) and the static service password both use
+    # the service endpoint. The static secret is compared in constant time.
+    def self.service_credential?(password)
+      return false if password.nil?
+      return true if password.start_with?(SERVICE_TOKEN_PREFIX)
+      service_password = ENV.fetch('OPENC3_SERVICE_PASSWORD', nil)
+      return false if service_password.nil? or service_password.bytesize != password.bytesize
+      return OpenSSL.fixed_length_secure_compare(service_password, password)
+    end
+
+    # Revoke a session or service token so it dies with the run that used it
+    def self.revoke(token)
+      return if token.nil? or token.empty?
+      Faraday.new.post(new_auth_url('auth/logout'), '', { 'Authorization' => token, 'Content-Type' => 'application/json' })
+    rescue StandardError => e
+      STDOUT.puts "Failed to revoke API token: #{e.message}"
+    end
+
+    def self.new_auth_url(endpoint)
+      schema = ENV['OPENC3_API_SCHEMA'] || 'http'
+      hostname = ENV['OPENC3_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-cmd-tlm-api')
+      port = (ENV['OPENC3_API_PORT'] || '2901').to_i
+      return "#{schema}://#{hostname}:#{port}/openc3-api/#{endpoint}"
     end
 
     def get_otp(scope: 'DEFAULT')

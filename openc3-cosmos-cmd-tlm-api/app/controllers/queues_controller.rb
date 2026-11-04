@@ -349,8 +349,10 @@ class QueuesController < ApplicationController
 
   def get_token(username, scope:)
     if ENV['OPENC3_API_CLIENT'].nil?
-      ENV['OPENC3_API_PASSWORD'] ||= ENV.fetch('OPENC3_SERVICE_PASSWORD', nil)
-      return OpenC3::OpenC3Authentication.new().token
+      # Core: the command runs under the token of the user who pressed Execute,
+      # so it is authorized and attributed to them rather than to a shared
+      # service account. Nothing is written to the process environment.
+      return request.headers['HTTP_AUTHORIZATION']
     else
       # Check for offline access token
       model = nil

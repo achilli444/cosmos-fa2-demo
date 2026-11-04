@@ -34,18 +34,24 @@ class AuthController < ApplicationController
     }
   end
 
+  # Individual login: username + that user's password (IA-2). Deployments that
+  # predate individual accounts have one account, AuthModel::LEGACY_USERNAME,
+  # holding the password everyone used to share; it is the default username so
+  # those logins keep working until individual accounts are created.
   def verify
     if user_rate_limited?
       head :too_many_requests
       return
     end
-
     begin
-      if OpenC3::AuthModel.verify_no_service(params[:password], mode: :password)
+      username = login_username
+      if OpenC3::AuthModel.verify_user(username, params[:password])
         clear_user_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        OpenC3::Logger.info("Login", user: username)
+        render :plain => OpenC3::AuthModel.generate_session(username: username)
       else
         record_user_bad_attempt
+        OpenC3::Logger.warn("Failed login", user: username)
         head :unauthorized
       end
     rescue StandardError => e
@@ -54,12 +60,39 @@ class AuthController < ApplicationController
     end
   end
 
-  # Checks an existing session token. The login page calls this to skip the
-  # login form when the browser already holds a valid session. Deliberately
-  # separate from verify: a session token is never a valid password, so passing
-  # one to verify always failed and counted as a bad password attempt, letting a
-  # stale token in localStorage eat into the rate limit. Session tokens are
-  # 128 bits of randomness, so there is nothing here to brute force.
+  # Who the caller's token belongs to
+  def whoami
+    user = authorization('system')
+    return unless user
+    render json: { username: username(), name: user_full_name() }
+  end
+
+  # Terminate the caller's own session or service token
+  def logout
+    user = authorization('system')
+    return unless user
+    OpenC3::AuthModel.terminate(request.headers['HTTP_AUTHORIZATION'])
+    OpenC3::Logger.info("Logout", user: username())
+    head :ok
+  end
+
+  def users
+    return unless authorization('system')
+    render json: OpenC3::AuthModel.users
+  end
+
+  def delete_user
+    return unless authorization('admin')
+    begin
+      OpenC3::AuthModel.delete_user(params[:username])
+      OpenC3::Logger.info("Account deleted: #{params[:username]}", user: username())
+      head :ok
+    rescue StandardError => e
+      log_error(e)
+      render json: { status: 'error', message: e.message, type: e.class }, status: :bad_request
+    end
+  end
+
   def verify_token
     # Reject anything that isn't shaped like a session token before touching
     # Redis. Verification is an HGET, so it's O(1), but this endpoint is
@@ -87,16 +120,23 @@ class AuthController < ApplicationController
     end
   end
 
+  # Service authentication for non-interactive callers. The static service
+  # password is compared in constant time by AuthModel and the shipped default
+  # is never accepted; per-run service tokens (svc_) are the preferred path.
   def verify_service
     if service_rate_limited?
       head :too_many_requests
       return
     end
-
     begin
-      if OpenC3::AuthModel.verify(params[:password], service_only: true)
+      token = params[:password]
+      if OpenC3::AuthModel.service_token?(token) and OpenC3::AuthModel.verify(token)
         clear_service_bad_attempts
-        render :plain => OpenC3::AuthModel.generate_session()
+        # The token already identifies the run and the user; hand it straight back
+        render :plain => token
+      elsif OpenC3::AuthModel.verify(token, service_only: true)
+        clear_service_bad_attempts
+        render :plain => OpenC3::AuthModel.generate_session(username: 'service')
       else
         record_service_bad_attempt
         head :unauthorized
@@ -113,18 +153,38 @@ class AuthController < ApplicationController
     render :plain => OpenC3::Authorization.generate_otp(user)
   end
 
+  # Create an account or change a password.
+  # - No account exists yet: anyone may create the first one (first-run setup).
+  # - Changing your own password: requires old_password.
+  # - Creating another account: requires an authenticated caller.
   def set
     if user_rate_limited?
       head :too_many_requests
       return
     end
-
     begin
-      # Set throws an exception if it fails for any reason
-      OpenC3::AuthModel.set(params[:password], params[:old_password])
-      clear_user_bad_attempts
-      OpenC3::Logger.info("Password changed", user: username())
-      render :plain => OpenC3::AuthModel.generate_session()
+      target = login_username
+      caller_token = request.headers['HTTP_AUTHORIZATION']
+      unless OpenC3::AuthModel.set?
+        OpenC3::AuthModel.set_user(target, params[:password])
+        clear_user_bad_attempts
+        OpenC3::Logger.info("Initial account created: #{target}", user: target)
+        render :plain => OpenC3::AuthModel.generate_session(username: target)
+        return
+      end
+
+      if OpenC3::AuthModel.user?(target)
+        OpenC3::AuthModel.set_user(target, params[:password], params[:old_password])
+        clear_user_bad_attempts
+        OpenC3::Logger.info("Password changed: #{target}", user: username())
+        render :plain => OpenC3::AuthModel.generate_session(username: target)
+      else
+        return unless authorization('admin')
+        OpenC3::AuthModel.set_user(target, params[:password])
+        OpenC3::Logger.info("Account created: #{target}", user: username())
+        # The creator keeps their own session; hand back nothing to log in as
+        head :ok
+      end
     rescue StandardError => e
       if e.message == "old_password incorrect"
         record_user_bad_attempt
@@ -132,6 +192,14 @@ class AuthController < ApplicationController
       log_error(e)
       render json: { status: 'error', message: e.message, type: e.class }, status: :internal_server_error
     end
+  end
+
+  private
+
+  def login_username
+    username = params[:username].to_s.strip
+    username = OpenC3::AuthModel::LEGACY_USERNAME if username.empty?
+    return username
   end
 
   private
