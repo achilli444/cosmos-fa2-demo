@@ -74,7 +74,8 @@ module OpenC3
       SettingModel.set({ name: name, data: data }, scope: scope)
       LocalMode.save_setting(scope, name, data)
       username = user_info(token)['username'] || 'Anonymous'
-      Logger.info("User #{username} saved setting '#{name}': #{data}", scope: scope, user: username)
+      logged_data = Logger.sensitive_key?(name) ? Logger::REDACTED : Logger.redact(data)
+      Logger.info("User #{username} saved setting '#{name}': #{logged_data}", scope: scope, user: username)
     end
     # save_setting is DEPRECATED
     alias save_setting set_setting

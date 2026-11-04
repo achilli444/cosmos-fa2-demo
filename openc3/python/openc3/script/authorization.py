@@ -20,6 +20,7 @@ import requests
 
 from openc3.__version__ import __title__
 from openc3.environment import *
+from openc3.utilities.redact import redact
 
 from .decorators import request_wrapper
 
@@ -145,11 +146,12 @@ class CosmosKeycloakAuthorization(CosmosAuthorization):
             },
         }
         resp = requests.post(**request_kwargs)
+        # The token response holds access/refresh/id tokens so it is redacted before logging
         LOGGER.debug(
             "resp: %s total_seconds: %f content: %s",
             resp,
             resp.elapsed.total_seconds(),
-            resp.content,
+            redact(resp.content),
         )
         return resp
 
@@ -191,12 +193,13 @@ class CosmosKeycloakAuthorization(CosmosAuthorization):
                 "Content-Type": "application/x-www-form-urlencoded",
             },
         }
-        LOGGER.debug("calling with %s", request_kwargs)
+        # The request body carries the refresh token and the response new tokens, both are redacted
+        LOGGER.debug("calling with %s", redact(request_kwargs))
         resp = requests.post(**request_kwargs)
         LOGGER.debug(
             "resp: %s total_seconds: %f content: %s",
             resp,
             resp.elapsed.total_seconds(),
-            resp.content,
+            redact(resp.content),
         )
         return resp

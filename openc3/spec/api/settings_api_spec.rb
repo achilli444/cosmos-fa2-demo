@@ -52,6 +52,22 @@ module OpenC3
         @api.set_setting('key', data)
         expect(@api.get_setting('key')).to eql({ 'key' => 'val', 'more' => 1 })
       end
+
+      it "logs ordinary setting values" do
+        expect(Logger).to receive(:info).with(a_string_including("saved setting 'theme'", 'dark'), anything)
+        @api.set_setting('theme', 'dark')
+      end
+
+      it "redacts secret setting values from the log" do
+        expect(Logger).to receive(:info).with(a_string_including("saved setting 'store_api_key'", '[REDACTED]').and(satisfy { |m| !m.include?('STORE_KEY_VALUE') }), anything)
+        @api.set_setting('store_api_key', 'STORE_KEY_VALUE')
+        expect(@api.get_setting('store_api_key')).to eql 'STORE_KEY_VALUE'
+      end
+
+      it "redacts secret keys nested inside setting values" do
+        expect(Logger).to receive(:info).with(satisfy { |m| !m.include?('NESTED_SECRET') }, anything)
+        @api.set_setting('plugin_store', { 'url' => 'https://example.com', 'password' => 'NESTED_SECRET' })
+      end
     end
 
     describe "get_setting" do

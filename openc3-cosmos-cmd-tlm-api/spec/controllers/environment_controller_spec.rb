@@ -90,7 +90,20 @@ RSpec.describe EnvironmentController, :type => :controller do
       expect(response).to have_http_status(409)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json['status']).to eql('error')
-      expect(json['message']).to eql("Key: 'NAME' value: 'Jason' already exists")
+      expect(json['message']).to eql("Key: 'NAME' with this value already exists")
+    end
+
+    it "does not log the value" do
+      expect(OpenC3::Logger).to receive(:info).with(a_string_including('Environment variable created', 'API_TOKEN').and(satisfy { |m| !m.include?('SECRET_VALUE') }), anything)
+      post :create, params: { 'scope' => 'DEFAULT', 'key' => 'API_TOKEN', 'value' => 'SECRET_VALUE' }
+      expect(response).to have_http_status(:created)
+    end
+
+    it "does not expose the value in the duplicate error" do
+      post :create, params: { 'scope' => 'DEFAULT', 'key' => 'API_TOKEN', 'value' => 'SECRET_VALUE' }
+      post :create, params: { 'scope' => 'DEFAULT', 'key' => 'API_TOKEN', 'value' => 'SECRET_VALUE' }
+      expect(response).to have_http_status(:conflict)
+      expect(response.body).not_to include('SECRET_VALUE')
     end
 
     it "updates an existing value" do

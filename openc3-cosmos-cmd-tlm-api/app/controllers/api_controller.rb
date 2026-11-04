@@ -18,6 +18,11 @@
 require 'openc3/utilities/open_telemetry'
 
 class ApiController < ApplicationController
+  # JSON-RPC methods whose positional params are credentials and are never logged
+  SECRET_PARAM_METHODS = %w(set_offline_access).freeze
+  # JSON-RPC methods taking a (name, value) pair where the value is a secret when the name is sensitive
+  NAMED_VALUE_METHODS = %w(set_setting save_setting).freeze
+
   def ping
     render plain: 'OK'
   end
@@ -29,14 +34,15 @@ class ApiController < ApplicationController
       if request.post?
         request_headers = Hash[*request.env.select {|k,_v| k.start_with? 'HTTP_'}.sort.flatten]
         request_data = req.body.read
-        span.add_attributes({ "request_data" => request_data }) if span and request_data.length <= 1000
+        loggable_data = redact_request_data(request_data)
+        span.add_attributes({ "request_data" => loggable_data }) if span and request_data.length <= 1000
         status = nil
         content_type = nil
         body = nil
         begin
           # Intentionally log to the nil scope so we don't clog the CmdTlmServer log messages
-          OpenC3::Logger.info("API data: #{request_data}", scope: nil, user: username())
-          OpenC3::Logger.debug("API headers: #{request_headers}", scope: nil, user: username())
+          OpenC3::Logger.info("API data: #{loggable_data}", scope: nil, user: username())
+          OpenC3::Logger.debug("API headers: #{OpenC3::Logger.redact(request_headers)}", scope: nil, user: username())
           status, content_type, body = handle_post(request_data, request_headers)
         rescue OpenC3::AuthError, OpenC3::ForbiddenError => e
           id = 1
@@ -79,6 +85,36 @@ class ApiController < ApplicationController
       self.response = ActionDispatch::Response.new(*rack_response.to_a)
       self.response.close
     end
+  end
+
+  # Build the loggable form of a JSON-RPC request body. Credentials passed as
+  # parameters (set_offline_access tokens, secret settings, sensitive keyword
+  # params) are replaced with OpenC3::Logger::REDACTED while the method, id and
+  # non-sensitive params are preserved so the log remains useful.
+  #
+  # @param request_data [String] - A String of the post body from the request
+  # @return [String] - Redacted request body
+  def redact_request_data(request_data)
+    parsed = JSON.parse(request_data, allow_nan: true)
+    return OpenC3::Logger.redact(request_data) unless parsed.is_a?(Hash)
+
+    method = parsed['method'].to_s
+    params = parsed['params']
+    keyword_params = parsed['keyword_params']
+    if SECRET_PARAM_METHODS.include?(method) or method =~ /secret|password|token|offline_access/i
+      parsed['params'] = OpenC3::Logger::REDACTED if params
+    elsif NAMED_VALUE_METHODS.include?(method)
+      if params.is_a?(Array) and params.length > 1 and OpenC3::Logger.sensitive_key?(params[0])
+        parsed['params'] = [params[0], OpenC3::Logger::REDACTED]
+      end
+      if keyword_params.is_a?(Hash) and OpenC3::Logger.sensitive_key?(keyword_params['name']) and keyword_params.key?('data')
+        keyword_params['data'] = OpenC3::Logger::REDACTED
+      end
+    end
+    JSON.generate(OpenC3::Logger.redact(parsed), allow_nan: true)
+  rescue StandardError
+    # Not valid JSON-RPC (handle_post reports the parse error), fall back to pattern based redaction
+    OpenC3::Logger.redact(request_data)
   end
 
   # Handles an http post.
