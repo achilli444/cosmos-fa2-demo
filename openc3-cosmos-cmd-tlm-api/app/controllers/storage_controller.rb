@@ -19,6 +19,7 @@ require 'openc3/utilities/local_mode'
 require 'openc3/utilities/bucket'
 require 'openc3/utilities/config_overlay'
 require 'openc3/utilities/bucket_utilities'
+require 'openc3/utilities/log_retention'
 require 'openc3/utilities/ctrf'
 require 'openc3/utilities/process_manager'
 require 'openc3/utilities/questdb_client'
@@ -662,12 +663,23 @@ class StorageController < ApplicationController
     authorized = non_admin_config_overlay_write?(params[:bucket], path) || authorization('admin')
 
     if authorized
+      cutoff = nil
+      if params[:bucket] == 'OPENC3_LOGS_BUCKET'
+        cutoff = enforce_log_retention([path])
+        return false unless cutoff
+      end
+
       if ENV.fetch('OPENC3_LOCAL_MODE', false)
         OpenC3::LocalMode.delete_local(path)
       end
 
       OpenC3::Bucket.getClient().delete_object(bucket: bucket_name, key: path)
-      OpenC3::Logger.info("Deleted: #{bucket_name}/#{path}", scope: params[:scope], user: username())
+      if cutoff
+        OpenC3::LogRetention.audit(bucket: bucket_name, prefix: path, cutoff: cutoff, keys: [path],
+                                   scope: params[:scope], user: username())
+      else
+        OpenC3::Logger.info("Deleted: #{bucket_name}/#{path}", scope: params[:scope], user: username())
+      end
       return true
     else
       return false
@@ -718,6 +730,13 @@ class StorageController < ApplicationController
       return true
     end
 
+    # Refuse the whole directory if any cmd/tlm log in it is inside the retention floor
+    cutoff = nil
+    if params[:bucket] == 'OPENC3_LOGS_BUCKET'
+      cutoff = enforce_log_retention(keys)
+      return false unless cutoff
+    end
+
     # Delete in batches of 1000 (S3 limit)
     deleted_count = 0
     keys.each_slice(1000) do |key_batch|
@@ -730,10 +749,26 @@ class StorageController < ApplicationController
       end
     end
 
-    OpenC3::Logger.info("Deleted directory: #{bucket_name}/#{path} (#{deleted_count} files)",
-                        scope: params[:scope], user: username())
+    if cutoff
+      OpenC3::LogRetention.audit(bucket: bucket_name, prefix: path, cutoff: cutoff, keys: keys,
+                                 scope: params[:scope], user: username())
+    else
+      OpenC3::Logger.info("Deleted directory: #{bucket_name}/#{path} (#{deleted_count} files)",
+                          scope: params[:scope], user: username())
+    end
     render json: { deleted_count: deleted_count }
     true
+  end
+
+  # Logs bucket deletes must clear the OPENC3_LOG_MIN_RETAIN_TIME floor for
+  # raw_logs/cmd, raw_logs/tlm and decom_logs. Returns the cutoff Time the keys
+  # were checked against, or nil after rendering the refusal (fail closed).
+  def enforce_log_retention(keys)
+    OpenC3::LogRetention.check_deletable!(keys)
+  rescue OpenC3::LogRetention::RetentionError => e
+    OpenC3::Logger.warn("Delete refused: #{e.message}", scope: params[:scope], user: username())
+    render json: { status: 'error', message: e.message }, status: :forbidden
+    nil
   end
 
   def delete_volume_directory(params)
