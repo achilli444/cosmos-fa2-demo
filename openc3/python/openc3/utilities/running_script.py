@@ -1418,7 +1418,7 @@ def start(procedure_name, line_no=1, end_line_no=None, bind_variables=False, com
 
     running = ScriptStatusModel.all(scope=RunningScript.instance.scope(), type="running")
     running_script_anycable_publish(
-        "all-scripts-channel",
+        f"all-scripts-channel:{RunningScript.instance.scope()}",
         {
             "type": "start",
             "filename": procedure_name,

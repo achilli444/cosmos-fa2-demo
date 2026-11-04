@@ -122,7 +122,7 @@ try:
     # Notify frontend of number of running scripts in this scope
     running = ScriptStatusModel.all(scope=scope, type="running")
     running_script_anycable_publish(
-        "all-scripts-channel",
+        f"all-scripts-channel:{scope}",
         {
             "type": "start",
             "filename": script_status.filename,
@@ -279,7 +279,7 @@ finally:
 
         # Inform frontend of number of running scripts in this scope
         running_script_anycable_publish(
-            "all-scripts-channel",
+            f"all-scripts-channel:{scope}",
             {
                 "type": "complete",
                 "filename": script_status.filename,

@@ -18,6 +18,8 @@
 class RunningScriptChannel < ApplicationCable::Channel
   @@broadcasters = {}
 
+  before_subscribe :authorize_script_scope!
+
   # Upper bound on how long the live event broadcaster waits for the client's
   # 'ready' before starting to read anyway. This is the correctness floor for
   # the stream-registration race described in #subscribed, not a legacy-client
@@ -126,6 +128,21 @@ class RunningScriptChannel < ApplicationCable::Channel
   end
 
   private
+
+  # Script ids come from one global counter and the replay stream key is not
+  # namespaced by scope, so the requested id must belong to the scope this
+  # subscription was authorized for (the same lookup RunningScriptController
+  # does). Otherwise any script_view user could read another scope's script
+  # source and output by guessing an id.
+  def authorize_script_scope!
+    scope = connection.scope.to_s
+    unless scope.strip.empty?
+      return if OpenC3::ScriptStatusModel.get(name: params[:id].to_s, scope: scope)
+    end
+
+    reject
+    throw :abort
+  end
 
   # The stream (and @@broadcasters) key must identify this subscription, not
   # just its connection. `uuid` is an identified_by on the connection, so it is
