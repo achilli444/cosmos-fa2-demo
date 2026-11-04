@@ -489,8 +489,9 @@ class BridgeMicroservice(Microservice):
         openc3-app opens the bi-stream and sends a JSON request ``{"code": ...}``.
         The connector's identity is taken cryptographically from the connection
         (not a claimed value). If the code matches the bridge's pending
-        unexpired ``enroll_code``, that identity becomes the authorized app key
-        and the code is cleared (one-time). Responds with JSON
+        unexpired ``enroll_code_hash``, that identity becomes the authorized app
+        key and the code hash is cleared (one-time; an expired hash is also
+        cleared). Responds with JSON
         ``{"ok": bool, ...}``.
         """
         bi = await conn.accept_bi()
@@ -501,14 +502,18 @@ class BridgeMicroservice(Microservice):
         try:
             code = json.loads(request or b"{}").get("code")
             model = BridgeModel.get_model(self.bridge_name, scope=self.scope)
-            if model and model.enrollment_code_valid(code, time.time()):
+            now = time.time()
+            if model and model.enrollment_code_valid(code, now):
                 model.app_public_key = str(conn.remote_id())
-                model.enroll_code = None  # one-time
-                model.enroll_code_generated_at = None
+                model.clear_enrollment_code()  # one-time
                 model.create(force=True)
                 response = {"ok": True, "app_public_key": model.app_public_key}
                 self.logger.info(f"Enrolled openc3-app identity {model.app_public_key} for '{self.bridge_name}'")
             else:
+                if model and model.enrollment_code_expired(now):
+                    # Don't leave a stale (expired) code hash in the store
+                    model.clear_enrollment_code()
+                    model.create(force=True)
                 self.logger.warn(f"Rejected enrollment attempt from {conn.remote_id()} (bad/absent code)")
         except Exception as error:
             response = {"ok": False, "error": _iroh_error_detail(error)}
