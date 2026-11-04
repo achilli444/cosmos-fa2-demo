@@ -72,11 +72,11 @@ class TestCosmosKeycloakAuthorization(unittest.TestCase):
         self.assertEqual(auth.refresh_token, "refresh_token_123")
 
         output = "\n".join(logs.output)
-        self.assertIn("'password': '***'", output)
+        self.assertIn("grant_type: password client_id: api username: testuser", output)
+        self.assertNotIn("password:", output.replace("grant_type: password", ""))
         self.assertIn("'access_token': '***'", output)
         self.assertIn("'refresh_token': '***'", output)
         self.assertIn("'id_token': '***'", output)
-        self.assertIn("'username': 'testuser'", output)
         for secret in SECRETS:
             self.assertNotIn(secret, output)
 
@@ -101,6 +101,7 @@ class TestCosmosKeycloakAuthorization(unittest.TestCase):
         self.assertEqual(auth.refresh_token, "refresh_token_123")
 
         output = "\n".join(logs.output)
+        self.assertIn("grant_type: refresh_token client_id: api username: None", output)
         self.assertIn("'refresh_token': '***'", output)
         self.assertIn("'access_token': '***'", output)
         for secret in SECRETS:

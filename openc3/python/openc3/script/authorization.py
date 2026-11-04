@@ -20,7 +20,7 @@ import requests
 
 from openc3.__version__ import __title__
 from openc3.environment import *
-from openc3.utilities.authentication import mask_response_body, mask_sensitive_data
+from openc3.utilities.authentication import mask_response_body
 
 from .decorators import request_wrapper
 
@@ -199,8 +199,16 @@ class CosmosKeycloakAuthorization(CosmosAuthorization):
 
     def _post_token_request(self, request_kwargs):
         """POST to the Keycloak token endpoint. The form body is passed as a dict so
-        requests URL-encodes it. Credentials and tokens are masked before logging."""
-        LOGGER.debug("calling with %s", {**request_kwargs, "data": mask_sensitive_data(request_kwargs["data"])})
+        requests URL-encodes it. Only non-secret request fields are logged and the
+        response body is masked before logging."""
+        data = request_kwargs["data"]
+        LOGGER.debug(
+            "calling %s grant_type: %s client_id: %s username: %s",
+            request_kwargs["url"],
+            data.get("grant_type"),
+            data.get("client_id"),
+            data.get("username"),
+        )
         resp = requests.post(**request_kwargs)
         LOGGER.debug(
             "resp: %s total_seconds: %f content: %s",
