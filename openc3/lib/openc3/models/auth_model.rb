@@ -16,6 +16,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'argon2'
+require 'openssl'
 require 'securerandom'
 require 'openc3/utilities/store'
 
@@ -63,21 +64,41 @@ module OpenC3
       Store.exists(key) == 1
     end
 
-    # Checks whether the provided token is a valid user password, service password, or session token.
+    # Checks whether the provided token is a valid user password, session token, or
+    # (only when service_only is set) the service password.
+    #
+    # The service password is deliberately not accepted here unless the caller
+    # asks for it. It is a static shared secret with no identity behind it, so
+    # it must only be exchanged for a session via /auth/verify_service (which is
+    # rate limited and logged), never presented directly as a bearer token on
+    # the API or cable paths that call verify with the defaults.
     # @param token [String] the plaintext password or session token to check (required)
-    # @param no_password [Boolean] enforces use of a session token or service password (default: true)
-    # @param service_only [Boolean] enforces use of a service password (default: false)
+    # @param no_password [Boolean] enforces use of a session token (default: true)
+    # @param service_only [Boolean] only accept the service password (default: false)
     # @return [Boolean] whether the provided password/token is valid
     def self.verify(token, no_password: true, service_only: false)
-      # Handle a service password - Generally only used by ScriptRunner
-      # TODO: Replace this with temporary service tokens
-      service_password = ENV.fetch('OPENC3_SERVICE_PASSWORD', nil)
-      return true if service_password and service_password == token
-
-      return false if service_only
+      return verify_service_password(token) if service_only
 
       mode = no_password ? :token : :any
       return verify_no_service(token, mode: mode)
+    end
+
+    # Checks whether the provided token is the service password from
+    # OPENC3_SERVICE_PASSWORD. Generally only used by ScriptRunner and other
+    # internal services, via /auth/verify_service.
+    # TODO: Replace this with temporary service tokens
+    # @param token [String] the plaintext service password to check (required)
+    # @return [Boolean] whether the provided token is the service password
+    def self.verify_service_password(token)
+      service_password = ENV.fetch('OPENC3_SERVICE_PASSWORD', nil)
+      return false if service_password.nil? or service_password.empty?
+      return false if token.nil? or token.empty?
+
+      # Constant-time comparison so response time doesn't leak how many leading
+      # bytes of the service password a guess got right. OpenSSL.secure_compare
+      # hashes both sides to a fixed length before comparing, so the length
+      # isn't leaked either.
+      return OpenSSL.secure_compare(service_password, token.to_s)
     end
 
     # Checks whether the provided token is a valid user password or session token.

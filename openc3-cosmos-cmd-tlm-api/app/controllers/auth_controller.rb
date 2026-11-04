@@ -96,6 +96,9 @@ class AuthController < ApplicationController
     begin
       if OpenC3::AuthModel.verify(params[:password], service_only: true)
         clear_service_bad_attempts
+        # The service password is the only credential that isn't tied to a
+        # person, so record every time it's exchanged for a session.
+        OpenC3::Logger.info("Service password exchanged for session", user: 'service', other: { client: client_id })
         render :plain => OpenC3::AuthModel.generate_session()
       else
         record_service_bad_attempt
