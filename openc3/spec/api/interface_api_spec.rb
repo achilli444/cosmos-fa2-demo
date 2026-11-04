@@ -264,27 +264,113 @@ module OpenC3
 
     describe "interface_target_enable" do
       it "enables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_enable("INST_INT", "INST", tlm_only: true)
       end
     end
 
     describe "interface_target_disable" do
       it "disables a target on an interface" do
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST")
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: true, tlm_only: false, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", cmd_only: true)
 
-        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, scope: "DEFAULT")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: "anonymous", scope: "DEFAULT")
         @api.interface_target_disable("INST_INT", "INST", tlm_only: true)
+      end
+    end
+
+    describe "command authority on interface directives" do
+      def deny(permission)
+        allow(@api).to receive(:authorize).and_wrap_original do |original, **kwargs|
+          raise ForbiddenError, "#{kwargs[:permission]} denied for #{kwargs[:target_name]}" if kwargs[:permission] == permission
+
+          original.call(**kwargs)
+        end
+      end
+
+      it "requires cmd on every cmd target before dispatching interface_cmd" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system_set', interface_name: 'INST_INT')).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd', interface_name: 'INST_INT', target_name: 'INST')).and_call_original
+        expect(InterfaceTopic).to receive(:interface_cmd).with("INST_INT", "cmd1", username: "anonymous", scope: "DEFAULT")
+        @api.interface_cmd("INST_INT", "cmd1")
+      end
+
+      it "does not dispatch interface_cmd when target command authority is denied" do
+        deny('cmd')
+        expect(InterfaceTopic).not_to receive(:interface_cmd)
+        expect { @api.interface_cmd("INST_INT", "cmd1") }.to raise_error(ForbiddenError, /cmd denied for INST/)
+      end
+
+      it "requires cmd_raw on every cmd target before dispatching interface_protocol_cmd" do
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'system_set', interface_name: 'INST_INT')).and_call_original
+        expect(@api).to receive(:authorize).with(hash_including(permission: 'cmd_raw', interface_name: 'INST_INT', target_name: 'INST')).and_call_original
+        expect(InterfaceTopic).to receive(:protocol_cmd).with("INST_INT", "cmd1", read_write: :READ_WRITE, index: -1, username: "anonymous", scope: "DEFAULT")
+        @api.interface_protocol_cmd("INST_INT", "cmd1")
+      end
+
+      it "does not dispatch interface_protocol_cmd when target raw command authority is denied" do
+        deny('cmd_raw')
+        expect(InterfaceTopic).not_to receive(:protocol_cmd)
+        expect { @api.interface_protocol_cmd("INST_INT", "cmd1") }.to raise_error(ForbiddenError, /cmd_raw denied for INST/)
+      end
+
+      it "raises on unknown interfaces without writing a directive" do
+        expect(InterfaceTopic).not_to receive(:interface_cmd)
+        expect { @api.interface_cmd("BLAH_INT", "cmd1") }.to raise_error("Interface 'BLAH_INT' does not exist")
+      end
+
+      it "requires cmd on the target being mapped" do
+        TargetModel.new(name: "INST2", scope: "DEFAULT").create
+        deny('cmd')
+        expect { @api.map_target_to_interface("INST2", "INST_INT") }.to raise_error(ForbiddenError, /cmd denied for INST2/)
+        expect(InterfaceModel.get_model(name: "INST_INT", scope: "DEFAULT").target_names).to eq ["INST"]
+      end
+
+      it "does not require cmd when mapping tlm_only" do
+        TargetModel.new(name: "INST", scope: "DEFAULT").create
+        TargetModel.new(name: "INST2", scope: "DEFAULT").create
+        umodel = double(MicroserviceModel)
+        allow(umodel).to receive(:target_names).and_return([])
+        allow(umodel).to receive(:update)
+        allow(MicroserviceModel).to receive(:get_model).and_return(umodel)
+        expect(@api).not_to receive(:authorize).with(hash_including(permission: 'cmd'))
+        allow(@api).to receive(:authorize).with(hash_including(permission: 'system_set')).and_call_original
+        @api.map_target_to_interface("INST2", "INST_INT", tlm_only: true)
+        expect(InterfaceModel.get_model(name: "INST_INT", scope: "DEFAULT").tlm_target_names).to eq ["INST", "INST2"]
+      end
+
+      it "requires cmd on the target before interface_target_enable" do
+        deny('cmd')
+        expect(InterfaceTopic).not_to receive(:interface_target_enable)
+        expect { @api.interface_target_enable("INST_INT", "INST") }.to raise_error(ForbiddenError, /cmd denied for INST/)
+        expect(InterfaceModel.get_model(name: "INST_INT", scope: "DEFAULT").cmd_target_enabled["INST"]).to be true # unchanged default
+      end
+
+      it "does not require cmd for a tlm_only interface_target_enable" do
+        deny('cmd')
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: true, username: "anonymous", scope: "DEFAULT")
+        @api.interface_target_enable("INST_INT", "INST", tlm_only: true)
+      end
+
+      it "records the authorized username in the directive" do
+        allow(@api).to receive(:authorize).and_return({ 'username' => 'operator1' })
+        expect(InterfaceTopic).to receive(:interface_cmd).with("INST_INT", "cmd1", username: "operator1", scope: "DEFAULT")
+        @api.interface_cmd("INST_INT", "cmd1")
+        expect(InterfaceTopic).to receive(:protocol_cmd).with("INST_INT", "cmd1", read_write: :READ_WRITE, index: -1, username: "operator1", scope: "DEFAULT")
+        @api.interface_protocol_cmd("INST_INT", "cmd1")
+        expect(InterfaceTopic).to receive(:interface_target_enable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: "operator1", scope: "DEFAULT")
+        @api.interface_target_enable("INST_INT", "INST")
+        expect(InterfaceTopic).to receive(:interface_target_disable).with("INST_INT", "INST", cmd_only: false, tlm_only: false, username: "operator1", scope: "DEFAULT")
+        @api.interface_target_disable("INST_INT", "INST")
       end
     end
 

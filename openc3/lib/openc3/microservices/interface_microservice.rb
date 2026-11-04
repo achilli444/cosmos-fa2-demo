@@ -158,7 +158,7 @@ module OpenC3
             if msg_hash.key?('interface_cmd')
               params = JSON.parse(msg_hash['interface_cmd'], allow_nan: true, create_additions: true)
               begin
-                @logger.info "#{@interface.name}: interface_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')}"
+                @logger.info("#{@interface.name}: interface_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')}", user: params['username'])
                 @interface.interface_cmd(params['cmd_name'], *params['cmd_params'])
                 InterfaceStatusModel.set(@interface.as_json(), queued: true, scope: @scope)
               rescue => e
@@ -170,7 +170,7 @@ module OpenC3
             if msg_hash.key?('protocol_cmd')
               params = JSON.parse(msg_hash['protocol_cmd'], allow_nan: true, create_additions: true)
               begin
-                @logger.info "#{@interface.name}: protocol_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')} read_write: #{params['read_write']} index: #{params['index']}"
+                @logger.info("#{@interface.name}: protocol_cmd: #{params['cmd_name']} #{params['cmd_params'].join(' ')} read_write: #{params['read_write']} index: #{params['index']}", user: params['username'])
                 @interface.protocol_cmd(params['cmd_name'], *params['cmd_params'], read_write: params['read_write'], index: params['index'])
                 InterfaceStatusModel.set(@interface.as_json(), queued: true, scope: @scope)
               rescue => e
@@ -208,11 +208,11 @@ module OpenC3
                 if action == 'disable'
                   @interface.cmd_target_enabled[target_name] = false unless tlm_only
                   @interface.tlm_target_enabled[target_name] = false unless cmd_only
-                  @logger.info "#{@interface.name}: target_disable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}"
+                  @logger.info("#{@interface.name}: target_disable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}", user: params['username'])
                 else # enable
                   @interface.cmd_target_enabled[target_name] = true unless tlm_only
                   @interface.tlm_target_enabled[target_name] = true unless cmd_only
-                  @logger.info "#{@interface.name}: target_enable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}"
+                  @logger.info("#{@interface.name}: target_enable: #{target_name} cmd_only:#{cmd_only} tlm_only:#{tlm_only}", user: params['username'])
                 end
               rescue => e
                 @logger.error "#{@interface.name}: target_control: #{e.formatted}"

@@ -135,17 +135,26 @@ module OpenC3
     # @param target_name [String/Array] The name of the target(s)
     # @param interface_name (see #connect_interface)
     def map_target_to_interface(target_name, interface_name, cmd_only: false, tlm_only: false, unmap_old: true, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this interface
-      authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
+      user = authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
       interface = InterfaceModel.get_model(name: interface_name, scope: scope)
+      raise "Interface '#{interface_name}' does not exist" unless interface
+
       if Array === target_name
         target_names = target_name
       else
         target_names = [target_name]
       end
+      # Mapping a target routes its commands over this interface so the caller
+      # must hold command authority on every target being mapped
+      unless tlm_only
+        target_names.each do |name|
+          user = authorize(permission: 'cmd', interface_name: interface_name, target_name: name, manual: manual, scope: scope, token: token)
+        end
+      end
+      username = _authorized_username(user)
       target_names.each do |name|
         interface.map_target(name, cmd_only: cmd_only, tlm_only: tlm_only, unmap_old: unmap_old)
-        Logger.info("Target #{name} mapped to Interface #{interface_name}", scope: scope)
+        Logger.info("Target #{name} mapped to Interface #{interface_name}", user: username, scope: scope)
       end
       nil
     end
@@ -175,36 +184,38 @@ module OpenC3
     end
 
     def interface_cmd(interface_name, cmd_name, *cmd_params, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this interface
-      authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      InterfaceTopic.interface_cmd(interface_name, cmd_name, *cmd_params, scope: scope)
+      username = _authorize_interface_targets(interface_name, permission: 'cmd', manual: manual, scope: scope, token: token)
+      InterfaceTopic.interface_cmd(interface_name, cmd_name, *cmd_params, username: username, scope: scope)
     end
 
     def interface_protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: :READ_WRITE, index: -1, manual: false, scope: $openc3_scope, token: $openc3_token)
-      # TODO: Check if they have command authority for the targets mapped to this interface
-      authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
-      InterfaceTopic.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: read_write, index: index, scope: scope)
+      username = _authorize_interface_targets(interface_name, permission: 'cmd_raw', manual: manual, scope: scope, token: token)
+      InterfaceTopic.protocol_cmd(interface_name, cmd_name, *cmd_params, read_write: read_write, index: index, username: username, scope: scope)
     end
 
     def interface_target_enable(interface_name, target_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
-      authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
+      user = authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
       interface = InterfaceModel.get_model(name: interface_name, scope: scope)
+      raise "Interface '#{interface_name}' does not exist" unless interface
+
       if cmd_only and tlm_only
         cmd_only = false
         tlm_only = false
       end
       if not tlm_only
+        # Enabling commanding for a target requires command authority on that target
+        user = authorize(permission: 'cmd', interface_name: interface_name, target_name: target_name.upcase, manual: manual, scope: scope, token: token)
         interface.cmd_target_enabled[target_name.upcase] = true
       end
       if not cmd_only
         interface.tlm_target_enabled[target_name.upcase] = true
       end
       interface.update
-      InterfaceTopic.interface_target_enable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
+      InterfaceTopic.interface_target_enable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, username: _authorized_username(user), scope: scope)
     end
 
     def interface_target_disable(interface_name, target_name, cmd_only: false, tlm_only: false, manual: false, scope: $openc3_scope, token: $openc3_token)
-      authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
+      user = authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
       interface = InterfaceModel.get_model(name: interface_name, scope: scope)
       if cmd_only and tlm_only
         cmd_only = false
@@ -217,12 +228,34 @@ module OpenC3
         interface.tlm_target_enabled[target_name.upcase] = false
       end
       interface.update
-      InterfaceTopic.interface_target_disable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, scope: scope)
+      InterfaceTopic.interface_target_disable(interface_name, target_name, cmd_only: cmd_only, tlm_only: tlm_only, username: _authorized_username(user), scope: scope)
     end
 
     def interface_details(interface_name, manual: false, scope: $openc3_scope, token: $openc3_token)
       authorize(permission: 'system', interface_name: interface_name, manual: manual, scope: scope, token: token)
       InterfaceTopic.interface_details(interface_name, scope: scope)
+    end
+
+    # Directives sent to an interface affect every target commanded over it, so
+    # require system_set on the interface plus the given command permission on
+    # each of its cmd_target_names (mirrors send_raw). Returns the username to
+    # record with the directive.
+    def _authorize_interface_targets(interface_name, permission:, manual:, scope:, token:)
+      user = authorize(permission: 'system_set', interface_name: interface_name, manual: manual, scope: scope, token: token)
+      interface = InterfaceModel.get_model(name: interface_name, scope: scope)
+      raise "Interface '#{interface_name}' does not exist" unless interface
+
+      interface.cmd_target_names.each do |target_name|
+        user = authorize(permission: permission, interface_name: interface_name, target_name: target_name, manual: manual, scope: scope, token: token)
+      end
+      _authorized_username(user)
+    end
+
+    # Same username resolution as cmd(): nil means an internal microservice call
+    def _authorized_username(user)
+      return ENV['OPENC3_MICROSERVICE_NAME'] || 'anonymous' if user.nil?
+
+      user.is_a?(Hash) && user['username'] ? user['username'] : 'anonymous'
     end
   end
 end
