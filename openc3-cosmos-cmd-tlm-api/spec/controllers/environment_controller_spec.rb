@@ -90,7 +90,21 @@ RSpec.describe EnvironmentController, :type => :controller do
       expect(response).to have_http_status(409)
       json = JSON.parse(response.body, allow_nan: true, create_additions: true)
       expect(json['status']).to eql('error')
-      expect(json['message']).to eql("Key: 'NAME' value: 'Jason' already exists")
+      expect(json['message']).to match(/Key: 'NAME' with the given value already exists/)
+      expect(json['message']).not_to include('Jason')
+    end
+
+    it "does not write the value to the log or the conflict error" do
+      messages = []
+      allow(OpenC3::Logger).to receive(:info) { |message, *_args, **_kwargs| messages << message }
+      allow(controller).to receive(:log_error) { |e| messages << e.message }
+      post :create, params: { 'scope' => 'DEFAULT', 'key' => 'API_TOKEN', 'value' => 'hunter2secret' }
+      expect(response).to have_http_status(:created)
+      post :create, params: { 'scope' => 'DEFAULT', 'key' => 'API_TOKEN', 'value' => 'hunter2secret' }
+      expect(response).to have_http_status(409)
+      expect(messages).not_to be_empty
+      expect(messages.grep(/API_TOKEN/)).not_to be_empty
+      expect(messages.grep(/hunter2secret/)).to be_empty
     end
 
     it "updates an existing value" do
