@@ -69,11 +69,11 @@ rescue LoadError
 
       # Raises AuthError if the caller is not authenticated and ForbiddenError if
       # the caller's role lacks the permission or the target. Returns the user
-      # ({'username', 'roles'}) or nil when authorization is not enabled, i.e. for
-      # in-process calls from trusted microservices.
+      # ({'username', 'roles'}) or ANONYMOUS_USER when authorization is not enabled,
+      # i.e. for in-process calls from trusted microservices.
       def authorize(permission: nil, target_name: nil, packet_name: nil, interface_name: nil, router_name: nil, manual: false, scope: nil, token: nil)
         raise AuthError.new("Scope is required") unless scope
-        return nil unless $openc3_authorize
+        return ANONYMOUS_USER unless $openc3_authorize
 
         raise AuthError.new("Token is required") unless token
         role = OpenC3::AuthModel.role(token)

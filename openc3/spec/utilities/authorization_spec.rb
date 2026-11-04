@@ -54,9 +54,9 @@ module OpenC3
         expect { api.send(:authorize, permission: 'tlm', token: @admin) }.to raise_error(AuthError, /Scope is required/)
       end
 
-      it "returns nil when authorization is disabled" do
+      it "returns the anonymous user when authorization is disabled" do
         $openc3_authorize = false
-        expect(authorize(permission: 'admin')).to be_nil
+        expect(authorize(permission: 'admin')).to eql OpenC3::Authorization::ANONYMOUS_USER
       end
 
       it "requires a valid session or service token" do
