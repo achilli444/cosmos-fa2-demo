@@ -73,5 +73,38 @@ module OpenC3
         expect(@methods).to eql %i(tlm get_cmd stash_get list_configs)
       end
     end
+
+    describe "API proxy urls" do
+      around(:each) do |example|
+        saved = ENV.to_h.slice('OPENC3_PLAINTEXT_TRANSPORT', 'OPENC3_API_SCHEMA', 'OPENC3_SCRIPT_API_SCHEMA')
+        ENV.delete('OPENC3_PLAINTEXT_TRANSPORT')
+        ENV.delete('OPENC3_API_SCHEMA')
+        ENV.delete('OPENC3_SCRIPT_API_SCHEMA')
+        example.run
+      ensure
+        ENV.delete('OPENC3_PLAINTEXT_TRANSPORT')
+        ENV.delete('OPENC3_API_SCHEMA')
+        ENV.delete('OPENC3_SCRIPT_API_SCHEMA')
+        ENV.update(saved)
+      end
+
+      it "default to https" do
+        expect(ServerProxy.allocate.generate_url).to start_with('https://')
+        expect(ScriptServerProxy.allocate.generate_url).to start_with('https://')
+      end
+
+      it "use http only when OPENC3_PLAINTEXT_TRANSPORT is set" do
+        ENV['OPENC3_PLAINTEXT_TRANSPORT'] = '1'
+        expect(ServerProxy.allocate.generate_url).to start_with('http://')
+        expect(ScriptServerProxy.allocate.generate_url).to start_with('http://')
+      end
+
+      it "honor the explicit schema variables" do
+        ENV['OPENC3_API_SCHEMA'] = 'http'
+        ENV['OPENC3_SCRIPT_API_SCHEMA'] = 'http'
+        expect(ServerProxy.allocate.generate_url).to start_with('http://')
+        expect(ScriptServerProxy.allocate.generate_url).to start_with('http://')
+      end
+    end
   end
 end

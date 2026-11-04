@@ -50,6 +50,8 @@ _openc3_local_mode = "OPENC3_LOCAL_MODE"
 _openc3_local_mode_path = "OPENC3_LOCAL_MODE_PATH"
 _openc3_no_bucket_policy = "OPENC3_NO_BUCKET_POLICY"
 _openc3_log_stderr = "OPENC3_LOG_STDERR"
+_openc3_plaintext_transport = "OPENC3_PLAINTEXT_TRANSPORT"
+_openc3_tls_ca_file = "OPENC3_TLS_CA_FILE"
 
 # The following variables are only used with COSMOS Enterprise
 _openc3_api_user = "OPENC3_API_USER"
@@ -98,7 +100,16 @@ def get_env_bool(key: str, default: bool = False) -> bool:
     return value.lower() in ("true", "1", "yes", "on")
 
 
-OPENC3_API_SCHEMA = os.environ.get(_openc3_api_schema, "http")
+# Internal service clients (API auth, script API proxies, Redis / Valkey, the
+# QuestDB PG wire and the local bucket) use TLS by default. Setting
+# OPENC3_PLAINTEXT_TRANSPORT opts a development stack back into plaintext;
+# OPENC3_TLS_CA_FILE adds a private CA bundle. Mirrors Ruby TransportSecurity.
+OPENC3_PLAINTEXT_TRANSPORT = get_env_bool(_openc3_plaintext_transport)
+OPENC3_TLS_CA_FILE = os.environ.get(_openc3_tls_ca_file) or None
+OPENC3_DEFAULT_HTTP_SCHEMA = "http" if OPENC3_PLAINTEXT_TRANSPORT else "https"
+OPENC3_TSDB_DEFAULT_SSLMODE = "prefer" if OPENC3_PLAINTEXT_TRANSPORT else "verify-full"
+
+OPENC3_API_SCHEMA = os.environ.get(_openc3_api_schema, OPENC3_DEFAULT_HTTP_SCHEMA)
 OPENC3_API_HOSTNAME = os.environ.get(_openc3_api_hostname, "openc3-cosmos-cmd-tlm-api")
 try:
     OPENC3_API_PORT = int(os.environ.get(_openc3_api_port))
@@ -115,7 +126,7 @@ try:
 except TypeError:
     OPENC3_API_READ_TIMEOUT = None
 
-OPENC3_SCRIPT_API_SCHEMA = os.environ.get(_openc3_script_api_schema, "http")
+OPENC3_SCRIPT_API_SCHEMA = os.environ.get(_openc3_script_api_schema, OPENC3_DEFAULT_HTTP_SCHEMA)
 OPENC3_SCRIPT_API_HOSTNAME = os.environ.get(_openc3_script_api_hostname, "openc3-cosmos-script-runner-api")
 try:
     OPENC3_SCRIPT_API_PORT = int(os.environ.get(_openc3_script_api_port))

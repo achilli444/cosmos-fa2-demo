@@ -228,6 +228,9 @@ services:
       # Misc
       - OPENC3_LOCAL_MODE=${OPENC3_LOCAL_MODE}
       - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
+      # Transport security for the service clients (see .env)
+      - OPENC3_PLAINTEXT_TRANSPORT
+      - OPENC3_TLS_CA_FILE
       # Optional: bare pass-through (only forwarded if set in host env or .env)
       - OPENC3_DEFAULT_QUEUE
       - OPENC3_AUTH_RATE_LIMIT_TO
@@ -306,6 +309,9 @@ services:
       # Misc
       - OPENC3_LOCAL_MODE=${OPENC3_LOCAL_MODE}
       - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
+      # Transport security for the service clients (see .env)
+      - OPENC3_PLAINTEXT_TRANSPORT
+      - OPENC3_TLS_CA_FILE
       # Optional: bare pass-through (only forwarded if set in host env or .env)
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
@@ -388,6 +394,9 @@ services:
       # Misc
       - OPENC3_LOCAL_MODE=${OPENC3_LOCAL_MODE}
       - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
+      # Transport security for the service clients (see .env)
+      - OPENC3_PLAINTEXT_TRANSPORT
+      - OPENC3_TLS_CA_FILE
       # Optional: bare pass-through (only forwarded if set in host env or .env)
       - OPENC3_LOG_STDERR
       - OPENC3_SECRET_FILE_DIR
@@ -510,6 +519,9 @@ services:
       # Misc
       - OPENC3_LOCAL_MODE=${OPENC3_LOCAL_MODE}
       - OPENC3_SERVICE_PASSWORD=${OPENC3_SERVICE_PASSWORD}
+      # Transport security for the service clients (see .env)
+      - OPENC3_PLAINTEXT_TRANSPORT
+      - OPENC3_TLS_CA_FILE
       # Install-time flags consumed by init.sh / openc3cli.
       # Bare pass-through: only forwarded if set in host env or .env.
       - OPENC3_DEMO

@@ -19,6 +19,7 @@ require 'pg'
 require 'set'
 require 'time'
 require 'openc3/models/target_model'
+require 'openc3/utilities/transport_security'
 
 module OpenC3
   # Utility class for QuestDB data encoding and decoding.
@@ -89,13 +90,7 @@ module OpenC3
           # Will need to reconnect
         end
       end
-      conn = PG::Connection.new(
-        host: hostname_for_db_shard(db_shard),
-        port: ENV['OPENC3_TSDB_QUERY_PORT'],
-        user: ENV['OPENC3_TSDB_USERNAME'],
-        password: ENV['OPENC3_TSDB_PASSWORD'],
-        dbname: 'qdb'
-      )
+      conn = PG::Connection.new(**connection_params(db_shard))
       conn.type_map_for_results = PG::BasicTypeMapForResults.new(conn)
       conns[db_shard] = conn
       @thread_conns.value = conns
@@ -124,15 +119,27 @@ module OpenC3
     # Health check - attempt to connect and immediately close.
     # Returns true if successful, raises on failure.
     def self.check_connection(db_shard: 0)
-      conn = PG::Connection.new(
+      conn = PG::Connection.new(**connection_params(db_shard))
+      conn.close
+      true
+    end
+
+    # libpq connection parameters shared by connection and check_connection.
+    # sslmode defaults to verify-full (TransportSecurity) so a missing or
+    # untrusted server certificate fails instead of falling back to plaintext;
+    # OPENC3_TSDB_SSLMODE overrides it (e.g. 'require' for a self-signed cert).
+    def self.connection_params(db_shard = 0)
+      params = {
         host: hostname_for_db_shard(db_shard),
         port: ENV['OPENC3_TSDB_QUERY_PORT'],
         user: ENV['OPENC3_TSDB_USERNAME'],
         password: ENV['OPENC3_TSDB_PASSWORD'],
-        dbname: 'qdb'
-      )
-      conn.close
-      true
+        dbname: 'qdb',
+        sslmode: ENV['OPENC3_TSDB_SSLMODE'] || TransportSecurity.pg_sslmode
+      }
+      ca_file = TransportSecurity.ca_file
+      params[:sslrootcert] = ca_file if ca_file
+      params
     end
 
     # Special timestamp items that are calculated from PACKET_TIMESECONDS/RECEIVED_TIMESECONDS columns

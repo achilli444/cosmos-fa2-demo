@@ -306,5 +306,53 @@ module OpenC3
         end
       end
     end
+
+    describe "transport security" do
+      around(:each) do |example|
+        saved = ENV.to_h.slice('OPENC3_PLAINTEXT_TRANSPORT', 'OPENC3_API_SCHEMA', 'OPENC3_TLS_CA_FILE')
+        ENV.delete('OPENC3_PLAINTEXT_TRANSPORT')
+        ENV.delete('OPENC3_API_SCHEMA')
+        ENV.delete('OPENC3_TLS_CA_FILE')
+        example.run
+      ensure
+        ENV.delete('OPENC3_PLAINTEXT_TRANSPORT')
+        ENV.delete('OPENC3_API_SCHEMA')
+        ENV.delete('OPENC3_TLS_CA_FILE')
+        ENV.update(saved)
+      end
+
+      let(:auth) { OpenC3Authentication.allocate }
+
+      it "sends the password and token over https by default" do
+        expect(auth._generate_auth_url).to start_with('https://')
+        expect(auth._generate_auth_url('/auth/otp')).to start_with('https://')
+      end
+
+      it "uses http only when OPENC3_PLAINTEXT_TRANSPORT is set" do
+        ENV['OPENC3_PLAINTEXT_TRANSPORT'] = '1'
+        expect(auth._generate_auth_url).to start_with('http://')
+      end
+
+      it "lets OPENC3_API_SCHEMA override the default" do
+        ENV['OPENC3_API_SCHEMA'] = 'http'
+        expect(auth._generate_auth_url).to start_with('http://')
+        ENV['OPENC3_PLAINTEXT_TRANSPORT'] = '1'
+        ENV['OPENC3_API_SCHEMA'] = 'https'
+        expect(auth._generate_auth_url).to start_with('https://')
+      end
+
+      it "passes OPENC3_TLS_CA_FILE to Faraday" do
+        ENV['OPENC3_TLS_CA_FILE'] = '/etc/openc3/ca.pem'
+        expect(Faraday).to receive(:new).with(ssl: { ca_file: '/etc/openc3/ca.pem' }).and_call_original
+        auth._http_client
+      end
+
+      it "JSON-encodes the password instead of concatenating it" do
+        password = 'p"ss{word}\\'
+        body = auth._auth_request_body(password)
+        expect(body).to eq '{"password":"p\\"ss{word}\\\\"}'
+        expect(JSON.parse(body)).to eq({ 'password' => password })
+      end
+    end
   end
 end

@@ -259,7 +259,7 @@ module OpenC3
   class ServerProxy
     # pull openc3-cosmos-cmd-tlm-api url from environment variables
     def generate_url
-      schema = ENV['OPENC3_API_SCHEMA'] || 'http'
+      schema = ENV['OPENC3_API_SCHEMA'] || TransportSecurity.http_scheme
       hostname = ENV['OPENC3_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-cmd-tlm-api')
       port = ENV['OPENC3_API_PORT'] || '2901'
       port = port.to_i
@@ -329,7 +329,7 @@ module OpenC3
   class ScriptServerProxy
     # pull openc3-cosmos-script-runner-api url from environment variables
     def generate_url
-      schema = ENV['OPENC3_SCRIPT_API_SCHEMA'] || 'http'
+      schema = ENV['OPENC3_SCRIPT_API_SCHEMA'] || TransportSecurity.http_scheme
       hostname = ENV['OPENC3_SCRIPT_API_HOSTNAME'] || (ENV['OPENC3_DEVEL'] ? '127.0.0.1' : 'openc3-cosmos-script-runner-api')
       port = ENV['OPENC3_SCRIPT_API_PORT'] || '2902'
       port = port.to_i

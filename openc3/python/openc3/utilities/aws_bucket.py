@@ -25,9 +25,9 @@ s3_config = Config(s3={"addressing_style": "path"})
 if OPENC3_BUCKET_URL:
     s3_endpoint_url = OPENC3_BUCKET_URL
 elif OPENC3_DEVEL:
-    s3_endpoint_url = "http://127.0.0.1:9000"
+    s3_endpoint_url = f"{OPENC3_DEFAULT_HTTP_SCHEMA}://127.0.0.1:9000"
 else:
-    s3_endpoint_url = "http://openc3-buckets:9000"
+    s3_endpoint_url = f"{OPENC3_DEFAULT_HTTP_SCHEMA}://openc3-buckets:9000"
 
 if OPENC3_CLOUD == "local":
     s3_session = boto3.session.Session(
@@ -51,7 +51,10 @@ class AwsBucket(Bucket):
     def __init__(self):
         # Check whether the session is a real Session or a MockS3
         # print(f"\nAwsBucket INIT session:{s3_session}\n")
-        self.client = s3_session.client("s3", endpoint_url=s3_endpoint_url, config=s3_config)
+        client_kwargs = {"endpoint_url": s3_endpoint_url, "config": s3_config}
+        if OPENC3_TLS_CA_FILE:
+            client_kwargs["verify"] = OPENC3_TLS_CA_FILE
+        self.client = s3_session.client("s3", **client_kwargs)
 
     def create(self, bucket):
         if not self.exist(bucket):

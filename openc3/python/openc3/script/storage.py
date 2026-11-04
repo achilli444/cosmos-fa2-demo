@@ -17,7 +17,7 @@ import traceback
 import requests
 
 import openc3.script
-from openc3.environment import OPENC3_SCOPE
+from openc3.environment import OPENC3_DEFAULT_HTTP_SCHEMA, OPENC3_SCOPE
 from openc3.utilities.extract import *
 from openc3.utilities.local_mode import LocalMode
 
@@ -183,7 +183,7 @@ def _get_uri(url):
     if openc3.script.OPENC3_IN_CLUSTER:
         match OPENC3_CLOUD:
             case "local":
-                bucket_url = os.environ.get("OPENC3_BUCKET_URL", "http://openc3-buckets:9000")
+                bucket_url = os.environ.get("OPENC3_BUCKET_URL", f"{OPENC3_DEFAULT_HTTP_SCHEMA}://openc3-buckets:9000")
                 return f"{bucket_url}{url}"
             case "aws":
                 return f"https://s3.{os.getenv('AWS_REGION')}.amazonaws.com{url}"
