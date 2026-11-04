@@ -72,6 +72,54 @@ module OpenC3
         expect(i.connected?).to be true
       end
 
+      it "defaults to ssl when not specified" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        expect(double).to receive(:ssl=).with(true)
+        expect(double).to receive(:connected?).and_return(true)
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        i = MqttStreamInterface.new('mqtt-server', '8883')
+        expect(i.instance_variable_get(:@ssl)).to be true
+        i.connect()
+        expect(i.connected?).to be true
+      end
+
+      it "warns when connecting without ssl to a non-loopback host" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        capture_io do |stdout|
+          i = MqttStreamInterface.new('mqtt-server', '1883', false, 'write_topic', 'read_topic')
+          i.connect()
+          expect(stdout.string).to match(/without TLS/)
+        end
+      end
+
+      it "does not warn when connecting without ssl to loopback" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        capture_io do |stdout|
+          i = MqttStreamInterface.new('localhost', '1883', false, 'write_topic', 'read_topic')
+          i.connect()
+          i = MqttStreamInterface.new('127.0.0.1', '1883', false, 'write_topic', 'read_topic')
+          i.connect()
+          expect(stdout.string).not_to match(/without TLS/)
+        end
+      end
+
+      it "does not warn when a ca_file enables ssl" do
+        double = double(MY_MQTT_CLIENT).as_null_object
+        allow(MQTT::Client).to receive(:new).and_return(double)
+
+        capture_io do |stdout|
+          i = MqttStreamInterface.new('mqtt-server', '8883', false, 'write_topic', 'read_topic')
+          i.set_option('CA_FILE', ['ca_file_content'])
+          i.connect()
+          expect(stdout.string).not_to match(/without TLS/)
+        end
+      end
+
       it "sets ssl even without cert_file, key_file, or ca_file" do
         double = double(MY_MQTT_CLIENT).as_null_object
         expect(double).to receive(:ssl=).with(true)

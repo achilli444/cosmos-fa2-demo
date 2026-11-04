@@ -476,7 +476,7 @@ The MQTT streaming interface is typically used for connecting to Internet of Thi
 | ------------------ | --------------------------------------------------------------------------------------- | -------- | ---------- |
 | Host               | Host name or IP address of the MQTT broker                                              | Yes      |            |
 | Port               | Port on the MQTT broker to connect to. Keep in mind whether you're using SSL or not.    | No       | 1883       |
-| SSL                | Whether to use SSL to connect                                                           | No       | false      |
+| SSL                | Whether to use SSL/TLS to connect. Pass false to opt in to cleartext (a warning is logged for non-loopback brokers). | No       | true       |
 | Write Topic        | Name of the write topic for all commands. Pass nil / None to make interface read only.  | No       | nil / None |
 | Read Topic         | Name of the read topic for all telemetry. Pass nil / None to make interface write only. | No       | nil / None |
 | Protocol Type      | See Protocols.                                                                          | No       |

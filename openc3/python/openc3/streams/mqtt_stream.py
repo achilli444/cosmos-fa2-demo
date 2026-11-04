@@ -10,6 +10,7 @@
 # if purchased from OpenC3, Inc.
 
 import queue
+import re
 import threading
 from time import sleep
 
@@ -25,7 +26,7 @@ class MqttStream:
         self,
         hostname,
         port=1883,
-        ssl=False,
+        ssl=True,
         write_topic=None,
         read_topic=None,
         ack_timeout=5,
@@ -81,6 +82,12 @@ class MqttStream:
         elif self.ca_file:
             self.client.tls_set(ca_certs=self.ca_file.name)
 
+        if not (self.ssl or self.ca_file or (self.cert and self.key)) and not self._loopback_host():
+            Logger.warn(
+                f"MqttStream: connecting to {self.hostname}:{self.port} without TLS; "
+                "MQTT credentials and cmd/tlm traffic are sent in cleartext"
+            )
+
         self.client.loop_start()
         # Connect doesn't fully establish the connection, it just sends the CONNECT packet
         # When the client loop receives an ONNACK packet from the broker in response to the CONNECT packet
@@ -99,6 +106,11 @@ class MqttStream:
             # our subscribed is persisted across reconnections.
             if self.read_topic:
                 client.subscribe(self.read_topic)
+
+    def _loopback_host(self):
+        return (
+            re.fullmatch(r"localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1", str(self.hostname), re.IGNORECASE) is not None
+        )
 
     def connected(self):
         if self.client:

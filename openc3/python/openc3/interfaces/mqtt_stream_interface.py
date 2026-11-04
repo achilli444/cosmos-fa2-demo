@@ -24,11 +24,12 @@ from openc3.streams.mqtt_stream import MqttStream
 class MqttStreamInterface(StreamInterface):
     # @param hostname [String] MQTT server to connect to
     # @param port [Integer] MQTT port
+    # @param ssl [Boolean] Whether to use TLS (default True). Pass False to opt in to cleartext.
     def __init__(
         self,
         hostname,
         port=1883,
-        ssl=False,
+        ssl=True,
         write_topic=None,
         read_topic=None,
         protocol_type=None,
