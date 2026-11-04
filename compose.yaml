@@ -181,6 +181,8 @@ services:
       ANYCABLE_REDIS_URL: "redis://${OPENC3_REDIS_USERNAME}:${OPENC3_REDIS_PASSWORD}@${OPENC3_REDIS_HOSTNAME}:${OPENC3_REDIS_PORT}"
     env_file:
       - .env
+      - path: .env.local
+        required: false
     extra_hosts:
       - host.docker.internal:host-gateway
 
@@ -210,6 +212,8 @@ services:
       ANYCABLE_REDIS_URL: "redis://${OPENC3_REDIS_USERNAME}:${OPENC3_REDIS_PASSWORD}@${OPENC3_REDIS_HOSTNAME}:${OPENC3_REDIS_PORT}"
     env_file:
       - .env
+      - path: .env.local
+        required: false
 
   openc3-operator:
     read_only: true
@@ -246,6 +250,8 @@ services:
       - PYTHONUSERBASE=/gems/python_packages
     env_file:
       - .env
+      - path: .env.local
+        required: false
     extra_hosts:
       - host.docker.internal:host-gateway
 
@@ -320,6 +326,8 @@ services:
       - PYTHONUSERBASE=/gems/python_packages
     env_file:
       - .env
+      - path: .env.local
+        required: false
 
 volumes:
   openc3-tsdb-v: {}

@@ -10,6 +10,7 @@
 # if purchased from OpenC3, Inc.
 
 from openc3.models.secret_model import SecretModel
+from openc3.utilities import secret_encryption
 from openc3.utilities.secrets import Secrets
 
 
@@ -20,7 +21,7 @@ class RedisSecrets(Secrets):
     def get(self, key, secret_store=None, scope=None):
         data = SecretModel.get(name=key, scope=scope)
         if data is not None:
-            return data["value"]
+            return secret_encryption.decrypt(data["value"], SecretModel.encryption_context(key, scope))
         else:
             return None
 

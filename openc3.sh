@@ -68,6 +68,22 @@ fi
 
 set -e
 
+# Secrets and offline access tokens are encrypted at rest in Redis with
+# OPENC3_SECRET_ENCRYPTION_KEY. The key is supplied outside of source control:
+# either in the environment, or generated once into the git-ignored .env.local
+# which compose.yaml loads after .env.
+ensure_secret_encryption_key() {
+  local local_env="$(dirname -- "$0")/.env.local"
+  if [[ -n "$OPENC3_SECRET_ENCRYPTION_KEY" ]]; then
+    return
+  fi
+  if [[ -f "$local_env" ]] && grep -q '^OPENC3_SECRET_ENCRYPTION_KEY=' "$local_env"; then
+    return
+  fi
+  echo "Generating OPENC3_SECRET_ENCRYPTION_KEY in $local_env (back this file up; secrets can not be recovered without it)"
+  (umask 077; echo "OPENC3_SECRET_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> "$local_env")
+}
+
 usage() {
   if [[ "$OPENC3_DEVEL" -eq 1 ]] && [[ "$OPENC3_ENTERPRISE" -eq 1 ]]; then
     cat >&2 << EOF
@@ -621,6 +637,7 @@ case $1 in
       exit 0
     fi
     check_root
+    ensure_secret_encryption_key
     ${DOCKER_COMPOSE_COMMAND} -f "$(dirname -- "$0")/compose.yaml" up -d
     ;;
   run-ubi )
@@ -662,6 +679,7 @@ case $1 in
     else
       OPENC3_TSDB_PLATFORM=linux/amd64
     fi
+    ensure_secret_encryption_key
     DOCKER_DEFAULT_PLATFORM=linux/amd64 OPENC3_IMAGE_SUFFIX=-ubi OPENC3_TSDB_PLATFORM=$OPENC3_TSDB_PLATFORM ${DOCKER_COMPOSE_COMMAND} -f "$(dirname -- "$0")/compose.yaml" up -d
     ;;
   test )

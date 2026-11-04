@@ -73,6 +73,7 @@ ENV['OPENC3_CONFIG_BUCKET'] = 'config'
 # Set some usernames / passwords
 ENV['OPENC3_API_PASSWORD'] = 'password'
 ENV['OPENC3_SERVICE_PASSWORD'] = 'openc3service'
+ENV['OPENC3_SECRET_ENCRYPTION_KEY'] = '00' * 32
 ENV['OPENC3_REDIS_USERNAME'] = 'openc3'
 ENV['OPENC3_REDIS_PASSWORD'] = 'openc3password'
 ENV['OPENC3_BUCKET_USERNAME'] = 'openc3bucket'

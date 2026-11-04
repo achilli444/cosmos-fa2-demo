@@ -12,6 +12,7 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/models/model'
+require 'openc3/utilities/secret_encryption'
 
 module OpenC3
   # Note: This model is locked to the DEFAULT scope
@@ -35,16 +36,29 @@ module OpenC3
     end
     # END NOTE
 
-    def initialize(name:, offline_access_token: nil, updated_at: nil, scope: 'DEFAULT')
-      super(PRIMARY_KEY, name: name, updated_at: updated_at, scope: 'DEFAULT')
-      @offline_access_token = offline_access_token
+    # @return [String] additional authenticated data binding a ciphertext to
+    #   the Redis key and field it is stored under
+    def self.encryption_context(name:)
+      "#{PRIMARY_KEY}:#{name}"
     end
 
-    # @return [Hash] JSON encoding of this model
+    # The offline access token is a long lived Keycloak refresh token so it
+    # is held in memory as plaintext but encrypted with SecretEncryption
+    # whenever it is written to Redis.
+    def initialize(name:, offline_access_token: nil, updated_at: nil, scope: 'DEFAULT')
+      super(PRIMARY_KEY, name: name, updated_at: updated_at, scope: 'DEFAULT')
+      @offline_access_token = SecretEncryption.decrypt(offline_access_token, context: self.class.encryption_context(name: name))
+    end
+
+    # @return [Hash] JSON encoding of this model with the token encrypted
     def as_json(*a)
+      token = @offline_access_token
+      if token and !SecretEncryption.encrypted?(token)
+        token = SecretEncryption.encrypt(token.to_s, context: self.class.encryption_context(name: @name))
+      end
       { 'name' => @name,
         'updated_at' => @updated_at,
-        'offline_access_token' => @offline_access_token,
+        'offline_access_token' => token,
         'scope' => @scope }
     end
   end
