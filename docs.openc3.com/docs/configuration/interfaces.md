@@ -350,22 +350,48 @@ INTERFACE INTERFACE_NAME http_client_interface.rb myserver.com 80
 
 ### HTTP Server Interface
 
-The HTTP server interface creates a simple unencrypted, unauthenticated HTTP server. This interface is commonly used with the [HttpAccessor](accessors#http-accessor) and [JsonAccessor](accessors#json-accessor). See the [openc3-cosmos-http-example](https://github.com/OpenC3/cosmos/tree/main/examples/openc3-cosmos-http-example) for more information.
+The HTTP server interface creates a HTTP server that turns incoming requests into telemetry. By default it only listens on `127.0.0.1` and serves plain, unauthenticated HTTP, so it must be explicitly opened up (`LISTEN_ADDRESS`) and should be protected with TLS (`CERT` / `KEY`, optionally `CA_FILE` for client certificates) and/or a shared secret (`AUTH_TOKEN`) whenever it is reachable from other hosts or containers. This interface is commonly used with the [HttpAccessor](accessors#http-accessor) and [JsonAccessor](accessors#json-accessor). See the [openc3-cosmos-http-example](https://github.com/OpenC3/cosmos/tree/main/examples/openc3-cosmos-http-example) for more information.
 
 | Parameter | Description                                       | Required | Default |
 | --------- | ------------------------------------------------- | -------- | ------- |
 | Port      | Port to write commands to and read telemetry from | No       | 80      |
 
+Options are added directly beneath the interface definition as shown in the example.
+
 #### LISTEN_ADDRESS
 
-IP address to accept connections on. Default: `0.0.0.0`.
+IP address to accept connections on. Default: `127.0.0.1` (local host only). Set to `0.0.0.0` to accept connections from any address, e.g. when the port is exposed to other containers or via [ROUTE_PREFIX](plugins#route_prefix). A warning is logged when the interface listens on `0.0.0.0` without `CERT` / `KEY` or `AUTH_TOKEN`.
+
+#### MAX_QUEUE_SIZE
+
+Maximum number of received requests buffered before they are processed as telemetry. Additional requests are rejected with HTTP 503 (and a `Retry-After` header) until the queue drains. Default: `1000`.
+
+#### CERT
+
+PEM encoded server certificate (either the PEM text, e.g. injected from a [SECRET](plugins#secret), or a filename). Given together with `KEY` this enables HTTPS (TLS 1.2 or higher).
+
+#### KEY
+
+PEM encoded server private key (PEM text or filename). Required with `CERT`.
+
+#### CA_FILE
+
+PEM encoded certificate authority bundle (PEM text or filename). When given, clients must present a certificate signed by this CA (mutual TLS). Requires `CERT` and `KEY`.
+
+#### AUTH_TOKEN
+
+Shared secret that clients must send in the `Authorization: Bearer <token>` header. Requests without a matching token are rejected with HTTP 401 and are not processed as telemetry.
 
 <Tabs groupId="script-language">
 <TabItem value="python" label="Python">
 
 ```cosmos
 INTERFACE INTERFACE_NAME openc3/interfaces/http_server_interface.py 88
-  LISTEN_ADDRESS 127.0.0.1
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  OPTION CERT <%= server_cert %>
+  OPTION KEY <%= server_key %>
+  OPTION AUTH_TOKEN <%= auth_token %>
+  OPTION MAX_QUEUE_SIZE 500
 ```
 
 </TabItem>
@@ -373,7 +399,11 @@ INTERFACE INTERFACE_NAME openc3/interfaces/http_server_interface.py 88
 
 ```cosmos
 INTERFACE INTERFACE_NAME http_server_interface.rb 88
-  LISTEN_ADDRESS 127.0.0.1
+  OPTION LISTEN_ADDRESS 0.0.0.0
+  OPTION CERT <%= server_cert %>
+  OPTION KEY <%= server_key %>
+  OPTION AUTH_TOKEN <%= auth_token %>
+  OPTION MAX_QUEUE_SIZE 500
 ```
 
 </TabItem>

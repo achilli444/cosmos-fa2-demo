@@ -76,6 +76,8 @@ VARIABLE my_port 2888
 INTERFACE <%= my_interface_name %> http_server_interface.rb <%= my_port %>
   ROUTE_PREFIX <%= my_route_prefix %>
   PORT <%= my_port %>
+  OPTION LISTEN_ADDRESS 0.0.0.0 # HttpServerInterface only listens on 127.0.0.1 by default
+  OPTION AUTH_TOKEN <%= my_auth_token %> # Reject requests without 'Authorization: Bearer <token>'
 ```
 
 - The interface will be exposed internally to Docker (Core or Enterprise) at: `http://openc3-operator:2888`
