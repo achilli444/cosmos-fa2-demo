@@ -13,6 +13,7 @@
 
 require 'openc3/models/secret_model'
 require 'openc3/utilities/secrets'
+require 'openc3/utilities/secret_encryption'
 
 module OpenC3
   class RedisSecrets < Secrets
@@ -23,7 +24,7 @@ module OpenC3
     def get(key, secret_store: nil, scope:)
       data = SecretModel.get(name: key, scope: scope)
       if data
-        return data['value']
+        return SecretEncryption.decrypt(data['value'], context: SecretModel.encryption_context(name: key, scope: scope))
       else
         return nil
       end

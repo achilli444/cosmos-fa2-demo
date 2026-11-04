@@ -127,6 +127,22 @@ You can generate a new secret key with:
 openssl rand -hex 64
 ```
 
+### Secret Encryption Key
+
+| Variable                       | Description                                                                       |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| `OPENC3_SECRET_ENCRYPTION_KEY` | A 64-character hexadecimal string (256-bit key) used to encrypt secrets in Redis |
+
+Secrets created through the Admin Secrets tab or the plugin `SECRET` keyword, and Keycloak offline access tokens (Enterprise), are encrypted with AES-256-GCM (OpenSSL) before they are written to Redis and decrypted only when an interface, microservice or script reads them. The key is never stored in Redis or committed to source control: `openc3.sh run` / `openc3.sh start` generate it once into the git-ignored `.env.local` file, which `compose.yaml` loads after `.env`. Every container that reads or writes secrets (cmd-tlm-api, script-runner-api, operator and init) receives the same key this way. If the key is missing, creating or reading an encrypted secret raises an error rather than falling back to plaintext.
+
+To supply your own key (for example from a secrets manager), set it in the environment or in `.env.local`:
+
+```bash
+echo "OPENC3_SECRET_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.local
+```
+
+Back up `.env.local` with the rest of your deployment configuration. Changing the key makes previously encrypted secrets unreadable, so re-enter secrets after rotating it. Secrets that were stored before encryption was introduced are re-written in encrypted form by the `encrypt_secrets` migration, which runs automatically at startup (`openc3cli runmigrations`) once the key is configured.
+
 ### COSMOS Enterprise Credentials
 
 COSMOS Enterprise has additional credentials for Keycloak and PostgreSQL. See the `DockerComposeSecurity.md` file in your project directory for Enterprise-specific credential documentation.
@@ -236,6 +252,14 @@ openssl rand -hex 64
 ```
 
 Then update `.env` with the new value.
+
+### Rotating OPENC3_SECRET_ENCRYPTION_KEY
+
+```bash
+openssl rand -hex 32
+```
+
+Then update `.env.local` (or your secrets manager) with the new value and re-enter secrets in the Admin Secrets tab, because secrets encrypted under the old key can not be decrypted with the new one.
 
 ### Removing Cleartext Passwords from .env
 

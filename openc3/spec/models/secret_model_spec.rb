@@ -47,6 +47,26 @@ module OpenC3
         model = SecretModel.new(name: 'secreter', value: 'silent', scope: 'DEFAULT')
         expect(model.as_json()['name']).to eq('secreter')
       end
+
+      it "encrypts the value in as_json and decrypts it in value" do
+        model = SecretModel.new(name: 'secreter', value: 'silent', scope: 'DEFAULT')
+        json = model.as_json()
+        expect(json['value']).to start_with('enc:v1:')
+        expect(json['value']).not_to include('silent')
+        expect(model.value).to eq('silent')
+        expect(model.legacy_plaintext?).to be true
+      end
+
+      it "stores only ciphertext and does not re-encrypt on reload" do
+        SecretModel.set({ name: 'secret', value: 'tacit' }, scope: 'DEFAULT')
+        stored = SecretModel.get(name: 'secret', scope: 'DEFAULT')
+        expect(stored['value']).to start_with('enc:v1:')
+        expect(SecretModel.all(scope: 'DEFAULT')['secret']['value']).to eq(stored['value'])
+        model = SecretModel.get_model(name: 'secret', scope: 'DEFAULT')
+        expect(model.legacy_plaintext?).to be false
+        expect(model.as_json()['value']).to eq(stored['value'])
+        expect(model.value).to eq('tacit')
+      end
     end
   end
 end

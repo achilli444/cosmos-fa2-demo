@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 
 os.environ["OPENC3_NO_STORE"] = "true"
+os.environ["OPENC3_SECRET_ENCRYPTION_KEY"] = "00" * 32
 os.environ["OPENC3_CLOUD"] = "local"
 os.environ["OPENC3_LOGS_BUCKET"] = "logs"
 os.environ["OPENC3_TOOLS_BUCKET"] = "tools"
