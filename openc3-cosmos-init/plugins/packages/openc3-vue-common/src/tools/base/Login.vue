@@ -179,6 +179,9 @@ export default {
         ...this.options,
       })
         .then(() => {
+          return this.storeUser()
+        })
+        .then(() => {
           this.redirect()
         })
         .catch((error) => {
@@ -199,7 +202,27 @@ export default {
     },
     login: function (response) {
       localStorage.openc3Token = response.data
-      this.redirect()
+      this.storeUser().then(() => {
+        this.redirect()
+      })
+    },
+    // Cache the identity bound to the token so OpenC3Auth.user() /
+    // userroles() (tool-base auth.js) reflect who actually signed in.
+    storeUser: function () {
+      return Api.get('/openc3-api/auth/user', {
+        ...this.options,
+        headers: {
+          Accept: 'application/json',
+          Authorization: localStorage.openc3Token,
+        },
+      })
+        .then((response) => {
+          localStorage.openc3User = JSON.stringify(response.data)
+        })
+        .catch(() => {
+          // Older API without /auth/user: fall back to the anonymous display
+          delete localStorage.openc3User
+        })
     },
     redirect: function () {
       const redirect = new URLSearchParams(window.location.search).get(

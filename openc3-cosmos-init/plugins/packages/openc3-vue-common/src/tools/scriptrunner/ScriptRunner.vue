@@ -1704,7 +1704,19 @@ export default {
     // serialized round trip per role
     await Promise.all(
       customRoles.map(async (role) => {
-        const response = await Api.get(`/openc3-api/roles/${role}`)
+        let response
+        try {
+          response = await Api.get(`/openc3-api/roles/${role}`)
+        } catch {
+          // Core has no roles API; its built-in approver role is
+          // operator + script_approver (see openc3/utilities/authorization.rb)
+          if (role == 'approver') {
+            this.readOnlyUser = false
+            this.executeUser = true
+            this.canApprove = true
+          }
+          return
+        }
         if (response.data !== null && response.data.permissions !== undefined) {
           if (
             response.data.permissions.some((i) => i.permission == 'script_edit')

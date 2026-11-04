@@ -141,6 +141,21 @@ RSpec.describe AuthController, :type => :controller do
       $openc3_authorize = false
     end
 
+    it "returns the identity bound to the caller's own token" do
+      get :user
+      expect(response).to have_http_status(:unauthorized)
+      request.headers['HTTP_AUTHORIZATION'] = 'ses_bogus'
+      get :user
+      expect(response).to have_http_status(:unauthorized)
+      request.headers['HTTP_AUTHORIZATION'] = @ops_token
+      get :user
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to eql({ 'username' => 'ops', 'name' => 'ops', 'roles' => ['operator'] })
+      request.headers['HTTP_AUTHORIZATION'] = @admin_token
+      get :user
+      expect(JSON.parse(response.body)).to eql({ 'username' => 'admin', 'name' => 'admin', 'roles' => ['admin'] })
+    end
+
     it "requires a valid token" do
       get :users, params: { scope: 'DEFAULT' }
       expect(response).to have_http_status(:unauthorized)

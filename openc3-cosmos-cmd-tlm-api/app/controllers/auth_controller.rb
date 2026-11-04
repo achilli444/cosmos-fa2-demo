@@ -139,6 +139,17 @@ class AuthController < ApplicationController
     end
   end
 
+  # Returns the identity bound to the caller's session token so the UI can show
+  # who is signed in. Any valid session may ask about itself.
+  def user
+    identity = user_info(request.headers['HTTP_AUTHORIZATION'])
+    if identity.nil? or identity.empty?
+      head :unauthorized
+      return
+    end
+    render json: identity.slice('username', 'name', 'roles')
+  end
+
   # Lists configured users (no password hashes). Admin only.
   def users
     return unless authorization('admin')
