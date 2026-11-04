@@ -82,10 +82,15 @@ module OpenC3
           data = @read_socket.read_nonblock(65535, exception: false)
           raise EOFError, 'end of file reached' unless data
 
-          if data == :wait_readable
+          if data == :wait_readable or data == :wait_writable
             # Wait for the socket to be ready for reading or for the timeout
+            # (:wait_writable is only returned by TLS sockets during a renegotiation)
             begin
-              result = IO.fast_select([@read_socket, @pipe_reader], nil, nil, @read_timeout)
+              if data == :wait_writable
+                result = IO.fast_select([@pipe_reader], [@read_socket], nil, @read_timeout)
+              else
+                result = IO.fast_select([@read_socket, @pipe_reader], nil, nil, @read_timeout)
+              end
               # If select returns something it means the socket is now available for
               # reading so retry the read. If it returns nil it means we timed out.
               # If the pipe is present that means we closed the socket
@@ -117,7 +122,7 @@ module OpenC3
       begin
         data = @read_socket.read_nonblock(65535, exception: false)
         raise EOFError, 'end of file reached' unless data
-        data = '' if data == :wait_readable
+        data = '' if data == :wait_readable or data == :wait_writable
       rescue Errno::EAGAIN, Errno::EWOULDBLOCK, Errno::ECONNRESET, Errno::ECONNABORTED, IOError
         data = ''
       end
@@ -137,7 +142,8 @@ module OpenC3
         loop do
           begin
             bytes_sent = @write_socket.write_nonblock(data_to_send)
-          rescue Errno::EAGAIN, Errno::EWOULDBLOCK
+          rescue Errno::EAGAIN, Errno::EWOULDBLOCK, IO::WaitWritable, IO::WaitReadable
+            # IO::WaitWritable / IO::WaitReadable cover the OpenSSL::SSL::SSLErrorWait* raised by TLS sockets
             # Wait for the socket to be ready for writing or for the timeout
             result = IO.fast_select(nil, [@write_socket], nil, @write_timeout)
             # If select returns something it means the socket is now available for
