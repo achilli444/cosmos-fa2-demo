@@ -769,6 +769,67 @@ module OpenC3
         expect(details["read_protocols"]).to eql([{"type" => "read"}])
         expect(details["write_protocols"]).to eql([{"type" => "write"}])
       end
+
+      it "masks options set from the secret store" do
+        i = Interface.new
+        i.set_option("PLAIN", ["visible"])
+        i.set_secret_option("BROKER_AUTH", ["s3cr3t"])
+
+        details = i.details
+        expect(details["options"]["PLAIN"]).to eql(["visible"])
+        expect(details["options"]["BROKER_AUTH"]).to eql(["Set"])
+        expect(details.to_json).not_to include("s3cr3t")
+        # The live option is untouched so the interface still works
+        expect(i.options["BROKER_AUTH"]).to eql(["s3cr3t"])
+        expect(i.secret_option_names).to eql(["BROKER_AUTH"])
+      end
+
+      it "masks sensitive option names regardless of source" do
+        i = Interface.new
+        i.set_option("PASSWORD", ["pw"])
+        i.set_option("api_token", ["tok"])
+        i.set_option("KEY", ["key"])
+        i.set_option("CERT", ["cert"])
+        i.set_option("CA_FILE", ["ca"])
+        i.set_option("CLIENT_SECRET", ["cs"])
+        i.set_option("HOSTNAME", ["host"])
+
+        details = i.details
+        %w(PASSWORD API_TOKEN KEY CERT CA_FILE CLIENT_SECRET).each do |name|
+          expect(details["options"][name]).to eql(["Set"]), "#{name} not masked"
+        end
+        expect(details["options"]["HOSTNAME"]).to eql(["host"])
+        %w(pw tok key cert ca cs).each do |value|
+          expect(details["options"].to_json).not_to include(value)
+        end
+      end
+
+      it "returns a copy so callers cannot mutate the live options" do
+        i = Interface.new
+        i.set_option("PERIODIC_CMD", ["LOG", "1.0", "INST COLLECT"])
+        i.set_option("PASSWORD", ["pw"])
+
+        details = i.details
+        details["options"].delete("PASSWORD")
+        details["options"]["PERIODIC_CMD"] << ["LOG", "2.0", "INST ABORT"]
+        expect(i.options["PASSWORD"]).to eql(["pw"])
+        expect(i.options["PERIODIC_CMD"]).to eql([["LOG", "1.0", "INST COLLECT"]])
+      end
+    end
+
+    describe "set_secret_option" do
+      it "records the name once and copies it with copy_to" do
+        i = Interface.new
+        i.set_secret_option("token", ["one"])
+        i.set_secret_option("TOKEN", ["two"])
+        expect(i.options["TOKEN"]).to eql(["two"])
+        expect(i.secret_option_names).to eql(["TOKEN"])
+
+        other = Interface.new
+        i.copy_to(other)
+        expect(other.secret_option_names).to eql(["TOKEN"])
+        expect(other.details["options"]["TOKEN"]).to eql(["Set"])
+      end
     end
   end
 end

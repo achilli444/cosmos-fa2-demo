@@ -137,6 +137,13 @@ module OpenC3
 
     # @return [Secrets] Interface secrets manager class
     attr_accessor :secrets
+    # @return [Array<String>] Upcased option names whose values came from the
+    #   secret store and must never be returned by details
+    attr_accessor :secret_option_names
+
+    # Option names which are always masked in details regardless of source
+    SECRET_OPTION_NAME_PATTERN = /PASSWORD|PASSWD|SECRET|TOKEN|KEY|CERT|CA_FILE/
+    SECRET_OPTION_MASK = 'Set'
 
     # @return [Scheduler] Scheduler used for periodic commanding
     attr_accessor :scheduler
@@ -168,6 +175,7 @@ module OpenC3
       @write_allowed = true
       @write_raw_allowed = true
       @options = {}
+      @secret_option_names = []
       @read_protocols = []
       @write_protocols = []
       @protocol_info = []
@@ -511,6 +519,7 @@ module OpenC3
           other_interface.set_option(option_name, option_values)
         end
       end
+      other_interface.secret_option_names = self.secret_option_names.clone
       other_interface.protocol_info = []
       self.protocol_info.each do |protocol_class, protocol_args, read_write|
         unless read_write == :PARAMS
@@ -534,6 +543,37 @@ module OpenC3
       else
         @options[option_name_upcase] = option_values.clone
       end
+    end
+
+    # Set an option whose value was read from the secret store. The value is
+    # stored like any other option but is masked in details().
+    # @param option_name name of the option
+    # @param option_values array of option values
+    def set_secret_option(option_name, option_values)
+      set_option(option_name, option_values)
+      option_name_upcase = option_name.upcase
+      @secret_option_names << option_name_upcase unless @secret_option_names.include?(option_name_upcase)
+    end
+
+    # @param option_name name of the option
+    # @return [Boolean] Whether the option value must be masked in details()
+    def secret_option?(option_name)
+      option_name_upcase = option_name.to_s.upcase
+      @secret_option_names.include?(option_name_upcase) or !!(option_name_upcase =~ SECRET_OPTION_NAME_PATTERN)
+    end
+
+    # @return [Hash] Copy of the options with secret values replaced by
+    #   SECRET_OPTION_MASK. Safe to return to API callers and to modify.
+    def masked_options
+      masked = {}
+      @options.each do |option_name, option_values|
+        if secret_option?(option_name)
+          masked[option_name] = [SECRET_OPTION_MASK]
+        else
+          masked[option_name] = option_values.clone
+        end
+      end
+      masked
     end
 
     # Called to convert the read data into a OpenC3 Packet object
@@ -694,7 +734,7 @@ module OpenC3
         result['stream_log'] = false
       end
 
-      result['options'] = @options
+      result['options'] = masked_options()
       result['read_protocols'] = []
       @read_protocols.each do |read_protocol|
         result['read_protocols'] << read_protocol.read_details

@@ -246,6 +246,20 @@ module OpenC3
         interface = model.build
         expect(interface.class).to eq TcpipClientInterface
       end
+
+      it "sets secret options on the interface and masks them in details" do
+        model = InterfaceModel.new(name: "TEST_INT", scope: "DEFAULT", config_params: ["interface.rb"],
+                                   options: [["option1", "with", "options"]],
+                                   secret_options: [["BROKER_AUTH", "AUTH_SECRET"]])
+        RedisSecrets.new.set("AUTH_SECRET", "abc123", scope: "DEFAULT")
+        interface = model.build
+        expect(interface.options["OPTION1"]).to eq ["with", "options"]
+        expect(interface.options["BROKER_AUTH"]).to eq ["abc123"]
+        details = interface.details
+        expect(details["options"]["OPTION1"]).to eq ["with", "options"]
+        expect(details["options"]["BROKER_AUTH"]).to eq ["Set"]
+        expect(details.to_json).not_to include("abc123")
+      end
     end
 
     describe "as_json" do

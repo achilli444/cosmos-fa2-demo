@@ -9,6 +9,7 @@
 # This file may also be used under the terms of a commercial license
 # if purchased from OpenC3, Inc.
 
+import json
 import threading
 import time
 import unittest
@@ -813,3 +814,59 @@ class TestInterfaceNewFeatures(unittest.TestCase):
         self.assertEqual(details["options"], {"TEST_OPTION": ["value1"]})
         self.assertEqual(details["read_protocols"], [{"type": "read"}])
         self.assertEqual(details["write_protocols"], [{"type": "write"}])
+
+    def test_details_masks_options_set_from_the_secret_store(self):
+        i = Interface()
+        i.set_option("PLAIN", ["visible"])
+        i.set_secret_option("BROKER_AUTH", ["s3cr3t"])
+
+        details = i.details()
+        self.assertEqual(details["options"]["PLAIN"], ["visible"])
+        self.assertEqual(details["options"]["BROKER_AUTH"], ["Set"])
+        self.assertNotIn("s3cr3t", json.dumps(details, default=str))
+        # The live option is untouched so the interface still works
+        self.assertEqual(i.options["BROKER_AUTH"], ["s3cr3t"])
+        self.assertEqual(i.secret_option_names, ["BROKER_AUTH"])
+
+    def test_details_masks_sensitive_option_names_regardless_of_source(self):
+        i = Interface()
+        for name, value in [
+            ("PASSWORD", "pw"),
+            ("api_token", "tok"),
+            ("KEY", "key"),
+            ("CERT", "cert"),
+            ("CA_FILE", "ca"),
+            ("CLIENT_SECRET", "cs"),
+            ("HOSTNAME", "host"),
+        ]:
+            i.set_option(name, [value])
+
+        details = i.details()
+        for name in ["PASSWORD", "API_TOKEN", "KEY", "CERT", "CA_FILE", "CLIENT_SECRET"]:
+            self.assertEqual(details["options"][name], ["Set"], f"{name} not masked")
+        self.assertEqual(details["options"]["HOSTNAME"], ["host"])
+        for value in ["pw", "tok", "key", "cert", "ca", "cs"]:
+            self.assertNotIn(value, json.dumps(details["options"]))
+
+    def test_details_returns_a_copy_so_callers_cannot_mutate_the_live_options(self):
+        i = Interface()
+        i.set_option("PERIODIC_CMD", ["LOG", "1.0", "INST COLLECT"])
+        i.set_option("PASSWORD", ["pw"])
+
+        details = i.details()
+        del details["options"]["PASSWORD"]
+        details["options"]["PERIODIC_CMD"].append(["LOG", "2.0", "INST ABORT"])
+        self.assertEqual(i.options["PASSWORD"], ["pw"])
+        self.assertEqual(i.options["PERIODIC_CMD"], [["LOG", "1.0", "INST COLLECT"]])
+
+    def test_set_secret_option_records_the_name_once_and_copies_it(self):
+        i = Interface()
+        i.set_secret_option("token", ["one"])
+        i.set_secret_option("TOKEN", ["two"])
+        self.assertEqual(i.options["TOKEN"], ["two"])
+        self.assertEqual(i.secret_option_names, ["TOKEN"])
+
+        other = Interface()
+        i.copy_to(other)
+        self.assertEqual(other.secret_option_names, ["TOKEN"])
+        self.assertEqual(other.details()["options"]["TOKEN"], ["Set"])
