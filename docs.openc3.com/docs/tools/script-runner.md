@@ -116,9 +116,8 @@ The dialog displays the current state, lets you move the script to another state
 | -------------- | ------------- | ------------------- |
 | In Development | In Review     | script_edit         |
 | In Review      | Approved      | script_approver     |
-| In Development | Approved      | script_approver     |
 
-Users with the script_edit permission (e.g. Operators) can move scripts between In Development and In Review. Only users with the script_approver permission can approve a script or move an approved script back to In Review or In Development. Role-based restrictions require COSMOS Enterprise. Ensure that a new role that has the `script_approver` permission is created, and assigned to your users of choice.
+Users with the script_edit permission (e.g. Operators) can move scripts between In Development and In Review. Only users with the script_approver permission can approve a script or move an approved script back to In Review or In Development. A script can only be approved from In Review, and it must be approved by someone other than the user who last edited it or who moved it into In Review (separation of duties); the server rejects self-approval even for users holding the script_approver permission. Role-based restrictions require COSMOS Enterprise. Ensure that a new role that has the `script_approver` permission is created, and assigned to your users of choice.
 
 ### Approved Scripts
 

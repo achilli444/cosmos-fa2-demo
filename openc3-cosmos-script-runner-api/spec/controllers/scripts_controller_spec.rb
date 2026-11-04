@@ -23,6 +23,7 @@ class FakeVersionStore
   class << self
     def reset!
       @store = {}
+      @versions = {}
     end
 
     def enabled?
@@ -43,10 +44,19 @@ class FakeVersionStore
       @store["#{scope}/#{name}"] = { 'state' => to, 'history' => history }
     end
 
-    # Content-versioning methods the create/destroy actions call; no-ops here
-    # since these controller specs only exercise the lifecycle behavior.
-    def commit(**_kwargs)
-      nil
+    # Content versioning: record who committed so the self-approval check can
+    # look up the last editor. Newest-first, like the Enterprise store.
+    def commit(scope:, name:, username: nil, **_kwargs)
+      @versions ||= {}
+      versions = @versions["#{scope}/#{name}"] ||= []
+      versions.unshift({ 'version_id' => "v#{versions.length + 1}", 'username' => username,
+                         'last_modified' => Time.now.utc.iso8601 })
+      versions.first['version_id']
+    end
+
+    def versions(scope:, name:)
+      @versions ||= {}
+      @versions["#{scope}/#{name}"] || []
     end
 
     def delete(**_kwargs)
@@ -605,8 +615,11 @@ RSpec.describe ScriptsController, type: :controller do
     end
 
     it "moves a script through review to approved" do
+      FakeVersionStore.commit(scope: "DEFAULT", name: "INST/procedures/test.rb", text: "", username: "author")
       post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "review", comment: "ready"}
       expect(response).to have_http_status(:ok)
+      # A different user approves (separation of duties)
+      allow(controller).to receive(:username).and_return("approver")
       post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: "looks good"}
       expect(response).to have_http_status(:ok)
 
@@ -615,6 +628,64 @@ RSpec.describe ScriptsController, type: :controller do
       expect(json["history"].length).to eq(2)
       expect(json["history"][1]["from"]).to eq("review")
       expect(json["history"][1]["to"]).to eq("approved")
+      expect(json["history"][1]["user"]).to eq("approver")
+    end
+
+    it "rejects moving a script directly from development to approved" do
+      post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: "skip review"}
+
+      expect(response).to have_http_status(:bad_request)
+      json = JSON.parse(response.body)
+      expect(json["message"]).to match(/Cannot move script from development to approved/)
+      expect(FakeVersionStore.lifecycle(scope: "DEFAULT", name: "INST/procedures/test.rb")["state"]).to eq("development")
+    end
+
+    it "rejects approval by the user who submitted the script for review" do
+      # Same user (anonymous) submits and then tries to approve
+      post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "review", comment: "ready"}
+      expect(response).to have_http_status(:ok)
+      post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: "self approve"}
+
+      expect(response).to have_http_status(:forbidden)
+      json = JSON.parse(response.body)
+      expect(json["message"]).to match(/approved by someone other than/)
+      expect(FakeVersionStore.lifecycle(scope: "DEFAULT", name: "INST/procedures/test.rb")["state"]).to eq("review")
+    end
+
+    it "rejects approval by the user who last edited the script" do
+      FakeVersionStore.commit(scope: "DEFAULT", name: "INST/procedures/test.rb", text: "", username: "other")
+      FakeVersionStore.commit(scope: "DEFAULT", name: "INST/procedures/test.rb", text: "", username: "author")
+      Script.set_lifecycle("DEFAULT", "INST/procedures/test.rb", "review", "submitter", "")
+
+      allow(controller).to receive(:username).and_return("author")
+      post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: "my own work"}
+
+      expect(response).to have_http_status(:forbidden)
+      json = JSON.parse(response.body)
+      expect(json["message"]).to match(/approved by someone other than/)
+      expect(FakeVersionStore.lifecycle(scope: "DEFAULT", name: "INST/procedures/test.rb")["state"]).to eq("review")
+    end
+
+    it "allows approval by a user who neither edited nor submitted the script" do
+      FakeVersionStore.commit(scope: "DEFAULT", name: "INST/procedures/test.rb", text: "", username: "author")
+      Script.set_lifecycle("DEFAULT", "INST/procedures/test.rb", "review", "submitter", "")
+
+      allow(controller).to receive(:username).and_return("approver")
+      post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: "reviewed"}
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["state"]).to eq("approved")
+    end
+
+    it "does not apply the self-approval check when the store has no version metadata" do
+      # A store without #versions (or with none for the script) only enforces
+      # the submitter rule, so a second user can still approve.
+      Script.set_lifecycle("DEFAULT", "INST/procedures/test.rb", "review", "anonymous", "")
+      allow(controller).to receive(:username).and_return("approver")
+      post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: ""}
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["state"]).to eq("approved")
     end
 
     it "rejects an invalid state" do
@@ -648,7 +719,9 @@ RSpec.describe ScriptsController, type: :controller do
 
     it "moves an approved script back to development" do
       post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "review", comment: ""}
+      allow(controller).to receive(:username).and_return("approver")
       post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "approved", comment: ""}
+      expect(response).to have_http_status(:ok)
       post :set_lifecycle, params: {scope: "DEFAULT", name: "INST/procedures/test.rb", state: "development", comment: "needs rework"}
 
       expect(response).to have_http_status(:ok)

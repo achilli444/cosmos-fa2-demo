@@ -26,10 +26,12 @@ require 'openc3/tools/test_runner/test'
 OpenC3.require_file 'openc3/utilities/store'
 
 class Script < OpenC3::TargetFile
-  # Script lifecycle states and the transitions allowed from each state
+  # Script lifecycle states and the transitions allowed from each state.
+  # Approval is only reachable from review so every approved script has
+  # passed through a review step (separation of duties, AC-5).
   LIFECYCLE_STATES = %w(development review approved)
   LIFECYCLE_TRANSITIONS = {
-    'development' => %w(review approved),
+    'development' => %w(review),
     'review' => %w(development approved),
     'approved' => %w(review development),
   }
@@ -70,6 +72,37 @@ class Script < OpenC3::TargetFile
     return { 'state' => 'development', 'history' => [] } if temp_file?(name)
     return { 'state' => 'development', 'history' => [] } unless lifecycle_enabled?
     ::VersionStore.lifecycle(scope: scope, name: strip_modified(name))
+  end
+
+  # Username of the most recent content version of the script, or nil when the
+  # version store does not expose version metadata (or has none for the script).
+  # Versions are newest-first, matching the Enterprise /versions endpoint.
+  def self.last_editor(scope, name)
+    return nil unless lifecycle_enabled? and ::VersionStore.respond_to?(:versions)
+    versions = ::VersionStore.versions(scope: scope, name: strip_modified(name))
+    versions = (versions['versions'] || versions[:versions]) if versions.is_a?(Hash)
+    latest = Array(versions).first
+    return nil unless latest.is_a?(Hash)
+    editor = latest['username'] || latest[:username]
+    editor = editor.to_s.strip
+    editor.empty? ? nil : editor
+  end
+
+  # Username of the user who most recently moved the script into review (the
+  # submitter), or nil if the script has never been submitted.
+  def self.submitter(lifecycle)
+    entry = Array(lifecycle['history']).reverse.find { |h| h['to'] == 'review' }
+    entry && entry['user']
+  end
+
+  # Separation of duties: a script may not be approved by the user who last
+  # edited its content or by the user who submitted it for review.
+  # lifecycle: the caller-known lifecycle hash; pass it to avoid a redundant
+  # git read when the controller has already fetched it.
+  def self.self_approval?(scope, name, username, lifecycle: nil)
+    name = strip_modified(name)
+    lifecycle ||= lifecycle(scope, name)
+    [last_editor(scope, name), submitter(lifecycle)].compact.include?(username)
   end
 
   # current: the caller-known current state; pass it to avoid a redundant git

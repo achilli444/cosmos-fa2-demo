@@ -160,12 +160,20 @@ class ScriptsController < ApplicationController
       render json: { status: 'error', message: "Comment must be #{MAX_LIFECYCLE_COMMENT_LENGTH} characters or less" }, status: :bad_request
       return
     end
-    current = Script.lifecycle(scope, name)['state']
+    lifecycle = Script.lifecycle(scope, name)
+    current = lifecycle['state']
     unless Script::LIFECYCLE_TRANSITIONS[current].include?(state)
       render json: { status: 'error', message: "Cannot move script from #{current} to #{state}" }, status: :bad_request
       return
     end
     if (state == 'approved' or current == 'approved') and !authorization('script_approver')
+      return
+    end
+    # Separation of duties: the author (last editor) or submitter of a script
+    # cannot also be its approver, regardless of permissions held.
+    if state == 'approved' and Script.self_approval?(scope, name, username(), lifecycle: lifecycle)
+      OpenC3::Logger.warn("Script self-approval rejected: #{name} (#{username()} is the last editor or submitter)", scope: scope, user: username())
+      render json: { status: 'error', message: 'Scripts must be approved by someone other than the user who last edited or submitted them' }, status: :forbidden
       return
     end
     result = Script.set_lifecycle(scope, name, state, username(), comment, current: current)

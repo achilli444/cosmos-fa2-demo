@@ -167,16 +167,14 @@ const historyHeaders = [
 
 // Transitions available to this user from the current state.
 // dev <-> review requires edit permission, review <-> approved requires the
-// script_approver permission (props.canApprove).
+// script_approver permission (props.canApprove). Approval is only reachable
+// from review (mirrors Script::LIFECYCLE_TRANSITIONS on the server).
 const allowedStates = computed(() => {
   let states = []
   switch (props.state) {
     case 'development':
       if (props.canEdit) {
         states.push('review')
-      }
-      if (props.canApprove) {
-        states.push('approved')
       }
       break
     case 'review':
