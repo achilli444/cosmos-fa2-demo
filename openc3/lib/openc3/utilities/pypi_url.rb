@@ -15,11 +15,14 @@ require 'uri'
 
 module OpenC3
   # Validates the user-configurable pypi_url setting (and PYPI_URL ENV fallback)
-  # before it is handed to a subprocess. Only absolute http(s) URLs with a host,
-  # no userinfo and no whitespace or shell metacharacters are accepted.
+  # before it is handed to a subprocess. Only absolute https URLs with a host,
+  # no userinfo and no whitespace or shell metacharacters are accepted. Packages
+  # fetched from the index are executable code, so cleartext http is rejected;
+  # internal mirrors must present a certificate the container trusts
+  # (SSL_CERT_FILE / SSL_CERT_DIR) rather than relying on --trusted-host.
   module PypiUrl
     DEFAULT_URL = 'https://pypi.org'
-    ALLOWED_SCHEMES = ['http', 'https'].freeze
+    ALLOWED_SCHEMES = ['https'].freeze
     # Conservative allowlist of URL characters. Deliberately excludes
     # whitespace, quotes, '@' and every shell metacharacter.
     ALLOWED_CHARACTERS = %r{\A[A-Za-z0-9\-._~:/%+]+\z}

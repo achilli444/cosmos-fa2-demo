@@ -17,6 +17,7 @@
 
 require 'spec_helper'
 require 'openc3/models/plugin_model'
+require 'openc3/utilities/package_integrity'
 require 'openc3/models/scope_model'
 require 'openc3/utilities/aws_bucket'
 
@@ -69,6 +70,34 @@ module OpenC3
     end
 
     describe "self.install_phase1" do
+      before(:each) do
+        # The spec file stands in for the gem so it is not allow-listed; integrity is tested separately
+        allow(PackageIntegrity).to receive(:verify!)
+      end
+
+      it "rejects a gem that is not allow-listed before it reaches the gem server" do
+        allow(PackageIntegrity).to receive(:verify!).and_call_original
+        allow(PackageIntegrity).to receive(:allowed_digests).and_return(Set.new)
+        allow(Logger).to receive(:error)
+        expect(GemModel).not_to receive(:put)
+        expect(Gem::Package).not_to receive(:new)
+        expect { PluginModel.install_phase1(__FILE__, scope: "DEFAULT") }.to raise_error(PackageIntegrityError, /not in the package allow-list/)
+      end
+
+      it "does not verify integrity when only validating" do
+        expect(PackageIntegrity).not_to receive(:verify!)
+        expect(GemModel).not_to receive(:put)
+        gem = double("gem")
+        expect(gem).to receive(:extract_files) do |path|
+          File.open("#{path}/plugin.txt", 'w') { |file| file.puts "" }
+        end
+        spec = double("spec")
+        allow(spec).to receive(:metadata).and_return({})
+        allow(gem).to receive(:spec).and_return(spec)
+        expect(Gem::Package).to receive(:new).and_return(gem)
+        PluginModel.install_phase1(__FILE__, scope: "DEFAULT", validate_only: true)
+      end
+
       it "parses the plugin variables" do
         expect(GemModel).to receive(:put)
         gem = double("gem")
@@ -517,7 +546,11 @@ module OpenC3
           gem = double("gem")
           expect(gem).to receive(:extract_files) do |path|
             File.open("#{path}/plugin.txt", 'w') { |f| f.puts "" }
-            File.open("#{path}/requirements.txt", 'w') { |f| f.puts "requests" }
+            if @pyproject_only
+              File.open("#{path}/pyproject.toml", 'w') { |f| f.puts "[project]\nname = 'test'\ndependencies = ['requests']" }
+            else
+              File.open("#{path}/requirements.txt", 'w') { |f| f.puts "requests==2.32.3 --hash=sha256:#{'0' * 64}" }
+            end
           end
           expect(Gem::Package).to receive(:new).and_return(gem)
           spec = double("spec")
@@ -540,6 +573,8 @@ module OpenC3
           allow(Logger).to receive(:warn)
           @saved_pypi_url = ENV['PYPI_URL']
           ENV.delete('PYPI_URL')
+          @saved_trusted_host = ENV['PIP_ENABLE_TRUSTED_HOST']
+          ENV.delete('PIP_ENABLE_TRUSTED_HOST')
         end
 
         after(:each) do
@@ -547,6 +582,11 @@ module OpenC3
             ENV['PYPI_URL'] = @saved_pypi_url
           else
             ENV.delete('PYPI_URL')
+          end
+          if @saved_trusted_host
+            ENV['PIP_ENABLE_TRUSTED_HOST'] = @saved_trusted_host
+          else
+            ENV.delete('PIP_ENABLE_TRUSTED_HOST')
           end
         end
 
@@ -557,19 +597,42 @@ module OpenC3
             expect(argv[0]).to eql '/openc3/bin/pipinstall'
             expect(argv[1]).to eql '-i'
             expect(argv[2]).to eql 'https://mirror.example.com/simple'
-            expect(argv[3]).to eql '-r'
-            expect(argv[4]).to end_with '/requirements.txt'
-            expect(argv.length).to eql 5
+            expect(argv[3]).to eql '--require-hashes'
+            expect(argv[4]).to eql '-r'
+            expect(argv[5]).to end_with '/requirements.txt'
+            expect(argv.length).to eql 6
             ["Command succeeded", status]
           end
           plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
           expect(plugin_model['needs_dependencies']).to eql true
         end
 
+        it "never passes --trusted-host even when PIP_ENABLE_TRUSTED_HOST is set" do
+          ENV['PIP_ENABLE_TRUSTED_HOST'] = '1'
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return('https://mirror.example.com')
+          status = double("status", success?: true)
+          expect(Open3).to receive(:capture2e) do |*argv|
+            expect(argv).not_to include('--trusted-host')
+            expect(argv).to include('--require-hashes')
+            ["Command succeeded", status]
+          end
+          PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+        end
+
+        it "fails closed for pyproject.toml-only plugins because their dependencies cannot be hash-verified" do
+          @pyproject_only = true
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return('https://mirror.example.com')
+          expect(Open3).not_to receive(:capture2e)
+          expect(Logger).to receive(:error).with(/pyproject.toml dependencies cannot be hash-verified/)
+          plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+          # Plugin install is still non-fatal
+          expect(plugin_model['needs_dependencies']).to eql true
+        end
+
         it "warns but does not fail the plugin install when pipinstall fails" do
           allow(PluginModel).to receive(:get_setting).and_return('https://mirror.example.com')
           status = double("status", success?: false)
-          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://mirror.example.com/simple', '-r', anything).and_return(["ERROR: uv pip install failed", status])
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://mirror.example.com/simple', '--require-hashes', '-r', anything).and_return(["ERROR: uv pip install failed", status])
           expect(Logger).to receive(:warn).with(/Python package installation failed/)
           plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
           expect(plugin_model['needs_dependencies']).to eql true
@@ -577,7 +640,7 @@ module OpenC3
 
         it "warns but does not fail the plugin install when pipinstall cannot be started" do
           allow(PluginModel).to receive(:get_setting).and_return('https://mirror.example.com')
-          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://mirror.example.com/simple', '-r', anything).and_raise(Errno::ENOENT, '/openc3/bin/pipinstall')
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://mirror.example.com/simple', '--require-hashes', '-r', anything).and_raise(Errno::ENOENT, '/openc3/bin/pipinstall')
           expect(Logger).to receive(:error).with(/Failed to run pipinstall/)
           expect(Logger).to receive(:warn).with(/Python package installation failed/)
           plugin_model = PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
@@ -614,18 +677,33 @@ module OpenC3
           PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
         end
 
-        it "uses a valid PYPI_URL environment fallback when the setting is missing" do
+        it "uses a valid https PYPI_URL environment fallback when the setting is missing" do
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return(nil)
+          ENV['PYPI_URL'] = 'https://10.0.0.5:3141/root/pypi'
+          status = double("status", success?: true)
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://10.0.0.5:3141/root/pypi/simple', '--require-hashes', '-r', anything).and_return(["Command succeeded", status])
+          PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+        end
+
+        it "rejects a cleartext http pypi_url setting" do
+          allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return('http://10.0.0.5:3141/root/pypi')
+          expect(Open3).not_to receive(:capture2e)
+          expect(Logger).to receive(:error).with(/Invalid pypi_url/)
+          PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
+        end
+
+        it "rejects a cleartext http PYPI_URL environment fallback" do
           allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return(nil)
           ENV['PYPI_URL'] = 'http://10.0.0.5:3141/root/pypi'
-          status = double("status", success?: true)
-          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'http://10.0.0.5:3141/root/pypi/simple', '-r', anything).and_return(["Command succeeded", status])
+          expect(Open3).not_to receive(:capture2e)
+          expect(Logger).to receive(:error).with(/Invalid pypi_url/)
           PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
         end
 
         it "falls back to pypi.org when neither the setting nor PYPI_URL is set" do
           allow(PluginModel).to receive(:get_setting).with('pypi_url', scope: 'DEFAULT').and_return(nil)
           status = double("status", success?: true)
-          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://pypi.org/simple', '-r', anything).and_return(["Command succeeded", status])
+          expect(Open3).to receive(:capture2e).with('/openc3/bin/pipinstall', '-i', 'https://pypi.org/simple', '--require-hashes', '-r', anything).and_return(["Command succeeded", status])
           PluginModel.install_phase2({ "name" => "name", "variables" => {}, "plugin_txt_lines" => [] }, scope: "DEFAULT")
         end
       end
