@@ -21,12 +21,15 @@ Bundler.require(*Rails.groups)
 require 'prometheus/client/data_stores/direct_file_store'
 Prometheus::Client.config.data_store = Prometheus::Client::DataStores::DirectFileStore.new(dir: "/tmp/api_metrics")
 
+require_relative '../lib/allowed_origins'
+
 module ScriptRunnerApi
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.0
-    # Add to hosts to prevent "Blocked host" errors
-    config.hosts.clear
+    # Only answer requests addressed to the configured COSMOS URL(s), this
+    # service's own hostname or loopback (see lib/allowed_origins.rb)
+    config.hosts = AllowedOrigins.hosts
 
     # Configuration for the application, engines, and railties goes here.
     #
@@ -41,7 +44,10 @@ module ScriptRunnerApi
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
 
-    config.action_cable.disable_request_forgery_protection = true
+    # Browser WebSocket connections must come from an allowed origin. anycable-go
+    # forwards the Origin header to the RPC server (see Procfile) so this is
+    # enforced in RunningScriptChannel / AllScriptsChannel connections.
+    config.action_cable.allowed_request_origins = AllowedOrigins.origins
     config.action_cable.mount_path = '/script-api/cable'
 
     OpenC3::Logger.microservice_name = 'SCRIPT__RUNNER__API'

@@ -1,6 +1,8 @@
 web: bin/rails s -b 0.0.0.0 -p 2902
 # Go logging is log_level (https://docs.anycable.io/anycable-go/configuration?id=logging-settings)
-ws: anycable-go --host 0.0.0.0 --port 3902 --path /script-api/cable
+# --headers forwards the browser Origin header to the Rails RPC so
+# config.action_cable.allowed_request_origins is enforced (default is cookie only)
+ws: anycable-go --host 0.0.0.0 --port 3902 --path /script-api/cable --headers cookie,origin
 # Ruby logging is log-level (https://docs.anycable.io/ruby/logging?id=logging)
 # but Rails overrides this so we set it in config/application.rb
 rpc: bundle exec anycable --broadcast_adapter http --http_broadcast_url http://127.0.0.1:8090/_broadcast
