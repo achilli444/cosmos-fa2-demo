@@ -130,3 +130,5 @@ Per-service runtime flags - `OPENC3_NO_*`, `OPENC3_FORCE_INSTALL`, `OPENC3_ALLOW
 ## Admin Console settings
 
 `OPENC3_SETTING_<NAME>` variables on the init container seed the [Admin Settings tab](../tools/admin.md#settings) at deploy time, so a fresh install comes up with your time zone, time format, theme and package URLs already set. They are not listed in `compose.yaml`; add them to `compose.override.yaml`. See [cli initsettings](../getting-started/cli.md#initsettings).
+
+The news feed is **off by default**: COSMOS makes no request to `news.openc3.com` unless an operator opts in, either in the Admin Console (Settings > News Feed) or with `OPENC3_SETTING_NEWS_FEED=true`. When enabled, the daily poll is a bare `GET /news`; the installed COSMOS version and edition are not sent.

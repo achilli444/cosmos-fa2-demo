@@ -119,7 +119,31 @@ module OpenC3
         expect(NewsModel.all()).to eql '[]'
       end
 
+      it "makes no outbound request while the news feed is off (the default)" do
+        expect(Faraday).not_to receive(:new)
+        expect(@api.update_news(scope: 'DEFAULT')).to be_nil
+        expect(NewsModel.all()).to be_nil
+      end
+
+      it "makes no outbound request when news_feed is explicitly false" do
+        @api.set_setting('news_feed', false)
+        expect(Faraday).not_to receive(:new)
+        @api.update_news(scope: 'DEFAULT')
+        expect(NewsModel.all()).to be_nil
+      end
+
+      it "fetches the feed once opted in, without version or edition parameters" do
+        @api.set_setting('news_feed', true)
+        response = double('response', success?: true, body: '[]')
+        conn = double('conn')
+        expect(Faraday).to receive(:new).with(url: 'https://news.openc3.com').and_return(conn)
+        expect(conn).to receive(:get).with('/news').and_return(response)
+        @api.update_news(scope: 'DEFAULT')
+        expect(NewsModel.all()).to eql '[]'
+      end
+
       it "writes a news error if the feed can't be reached" do
+        @api.set_setting('news_feed', true)
         allow_any_instance_of(Faraday::Connection).to receive(:get).and_raise(Faraday::ConnectionFailed.new('no route'))
         @api.update_news(scope: 'DEFAULT')
         news = JSON.parse(NewsModel.all())
