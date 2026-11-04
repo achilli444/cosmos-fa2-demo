@@ -21,6 +21,8 @@ require 'set'
 # require 'drb/acl'
 require 'drb/drb'
 require 'openc3/io/json_rpc'
+require 'openc3/utilities/authorization'
+require 'openc3/utilities/security_audit'
 require 'openc3/io/json_drb_rack'
 require 'rackup'
 require 'puma'
@@ -274,19 +276,30 @@ module OpenC3
 
         if @method_whitelist.include?(request.method.downcase())
           begin
-            if request.keyword_params
-              result = @object.public_send(request.method.downcase().intern, *request.params, **request.keyword_params)
-            else
-              result = @object.public_send(request.method.downcase().intern, *request.params)
+            method_name = request.method.downcase()
+            result = SecurityAudit.with_context(method: method_name, source: SecurityAudit.source_from_headers(request_headers)) do
+              if request.keyword_params
+                @object.public_send(method_name.intern, *request.params, **request.keyword_params)
+              else
+                @object.public_send(method_name.intern, *request.params)
+              end
             end
             if request.id
               response = JsonRpcSuccessResponse.new(result, request.id)
             end
           rescue Exception => e
-            # Filter out the framework stack trace (rails, rack, puma etc)
-            lines = e.formatted.split("\n")
-            i = lines.find_index { |row| row.include?('actionpack') || row.include?('activesupport') }
-            Logger.error lines[0...i].join("\n")
+            if AuthError === e or ForbiddenError === e
+              # Security relevant: record who called what from where (never the token)
+              SecurityAudit.log(event: 'api_request', outcome: SecurityAudit::FAILURE,
+                                reason: "#{e.class.name.split('::').last}: #{e.message}",
+                                method: request.method, source: SecurityAudit.source_from_headers(request_headers),
+                                scope: (request.keyword_params || {})[:scope])
+            else
+              # Filter out the framework stack trace (rails, rack, puma etc)
+              lines = e.formatted.split("\n")
+              i = lines.find_index { |row| row.include?('actionpack') || row.include?('activesupport') }
+              Logger.error lines[0...i].join("\n")
+            end
 
             if request.id
               if NoMethodError === e

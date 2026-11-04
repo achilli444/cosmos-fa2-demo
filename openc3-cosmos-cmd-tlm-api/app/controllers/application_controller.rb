@@ -16,11 +16,22 @@
 # if purchased from OpenC3, Inc.
 
 require 'openc3/utilities/authorization'
+require 'openc3/utilities/security_audit'
 
 class ApplicationController < ActionController::API
   include OpenC3::Authorization
 
+  around_action :with_security_audit_context
+
   private
+
+  # Every security audit event raised while handling this request (see
+  # OpenC3::SecurityAudit) names the requesting client and user
+  def with_security_audit_context
+    OpenC3::SecurityAudit.with_context(source: request.remote_ip, user: username()) do
+      yield
+    end
+  end
 
   def user_full_name()
     # For user_info see openc3/utilities/authorization and
