@@ -76,7 +76,14 @@ class RouterTopic(Topic):
                             Topic.write_ack(topic, result, msg_id, db_shard=db_shard)
 
     @classmethod
-    def route_command(cls, packet, target_names, scope=OPENC3_SCOPE):
+    def route_command(cls, packet, target_names, scope=OPENC3_SCOPE, username=None, cmd_string=None, log_message=True):
+        # Routed commands carry the router name as the username so the interface
+        # microservice can attribute the transmitted command in the audit record.
+        msg_hash = {"cmd_buffer": bytes(packet.buffer_no_copy()), "log_message": str(log_message)}
+        if username is not None:
+            msg_hash["username"] = username
+        if cmd_string is not None:
+            msg_hash["cmd_string"] = cmd_string
         if packet.identified():
             topic = f"{{{scope}__CMD}}TARGET__{packet.target_name}"
             Topic.write_topic(
@@ -84,7 +91,7 @@ class RouterTopic(Topic):
                 {
                     "target_name": packet.target_name,
                     "cmd_name": packet.packet_name,
-                    "cmd_buffer": bytes(packet.buffer_no_copy()),
+                    **msg_hash,
                 },
                 "*",
                 100,
@@ -99,7 +106,7 @@ class RouterTopic(Topic):
                 {
                     "target_name": target_name,
                     "cmd_name": "UNKNOWN",
-                    "cmd_buffer": bytes(packet.buffer_no_copy()),
+                    **msg_hash,
                 },
                 "*",
                 100,

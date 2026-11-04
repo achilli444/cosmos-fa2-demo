@@ -217,10 +217,13 @@ module OpenC3
           @api.send(method, "INST ABORT")
           expect(message).to eql "#{method}(\"INST ABORT\")"
           message = nil
+          # log_message: false and DISABLE_MESSAGES only suppress the parameter detail,
+          # every transmitted command still produces a reduced audit record
           @api.send(method, "INST ABORT", log_message: false) # Don't log
-          expect(message).to be nil
+          expect(message).to eql 'cmd("INST ABORT") (messages disabled)'
+          message = nil
           @api.send(method, "INST SETPARAMS") # This has DISABLE_MESSAGES applied
-          expect(message).to be nil
+          expect(message).to eql 'cmd("INST SETPARAMS") (messages disabled)'
           @api.send(method, "INST SETPARAMS", log_message: true) # Force log
           expect(message).to eql "#{method}(\"INST SETPARAMS\")"
           # Check that array parameters are logged correctly
@@ -228,7 +231,7 @@ module OpenC3
           expect(message).to eql "#{method}(\"INST ARYCMD with ARRAY [1, 2, 3, 4]\")"
           message = nil
           @api.send(method, "INST ASCIICMD with STRING 'NOOP'") # NOOP has DISABLE_MESSAGES applied to the parameter
-          expect(message).to be nil
+          expect(message).to eql 'cmd("INST ASCIICMD") (messages disabled)'
           @api.send(method, "INST ASCIICMD with STRING 'NOOP'", log_message: true) # Force log
           expect(message).to eql "#{method}(\"INST ASCIICMD with STRING 'NOOP'\")"
           message = nil
@@ -236,7 +239,7 @@ module OpenC3
           expect { @api.send(method, "INST SETPARAMS", log_message: 0) }.to raise_error("Invalid log_message parameter: 0. Must be true or false.")
           expect { @api.send(method, "INST SETPARAMS", log_message: "YES") }.to raise_error("Invalid log_message parameter: YES. Must be true or false.")
           @api.send(method, "INST SETPARAMS", log_message: nil) # This actually works because nil is the default
-          expect(message).to be nil
+          expect(message).to eql 'cmd("INST SETPARAMS") (messages disabled)'
         end
       end
     end

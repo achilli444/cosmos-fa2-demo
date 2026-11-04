@@ -206,6 +206,10 @@ DISABLED:
     Attempts to send DISABLED commands result in an error message.
 DISABLE_MESSAGES:
   summary: Disable the Server from printing cmd(...) messages. Commands are still logged.
+  description: Suppresses the full cmd(...) message with its parameters. Every transmitted
+    command still produces a reduced message log record of the form
+    cmd("TARGET COMMAND") (messages disabled) attributed to the sending user or router,
+    and is still written to the binary command log.
 META:
   summary: Stores metadata for the current command
   description: Meta data is user specific data that can be used by custom tools

@@ -47,8 +47,9 @@ class RouterMicroservice(InterfaceMicroservice):
         # Don't route disabled target names
         if self.interface.cmd_target_enabled.get(target_name, False):
             try:
+                cmd_string = None
+                log_message = True  # Default is True
                 try:
-                    log_message = True  # Default is True
                     # If the packet has the DISABLE_MESSAGES keyword then no messages by default
                     if packet.messages_disabled:
                         log_message = False
@@ -60,17 +61,26 @@ class RouterMicroservice(InterfaceMicroservice):
                                 log_message = False
                                 break
 
-                    if log_message:
-                        if target and target_name != "UNKNOWN":
-                            self.logger.info(System.commands.format(packet, target.ignored_parameters))
-                        else:
+                    if target and target_name != "UNKNOWN":
+                        cmd_string = System.commands.format(packet, target.ignored_parameters)
+                    else:
+                        cmd_string = f"Unidentified packet of {len(packet.buffer_no_copy())} bytes routed to target {self.interface.cmd_target_names[0]}"
+                        if log_message:
                             self.logger.warn(
                                 f"Unidentified packet of {len(packet.buffer_no_copy())} bytes being routed to target {self.interface.cmd_target_names[0]}"
                             )
                 except Exception:
                     self.logger.error(f"Problem formatting command from router=\n{traceback.format_exc()}")
 
-                RouterTopic.route_command(packet, self.interface.cmd_target_names, scope=self.scope)
+                # The interface microservice writes the attributed message log entry when the command is transmitted
+                RouterTopic.route_command(
+                    packet,
+                    self.interface.cmd_target_names,
+                    scope=self.scope,
+                    username=self.interface.name,
+                    cmd_string=cmd_string,
+                    log_message=log_message,
+                )
             except Exception as error:
                 self.error = error
                 self.logger.error(f"Error routing command from {self.interface.name}\n{traceback.format_exc()}")

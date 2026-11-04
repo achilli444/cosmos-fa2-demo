@@ -48,8 +48,9 @@ module OpenC3
       # Don't route disabled target names
       if @interface.cmd_target_enabled[target_name]
         begin
+          cmd_string = nil
+          log_message = true # Default is true
           begin
-            log_message = true # Default is true
             # If the packet has the DISABLE_MESSAGES keyword then no messages by default
             log_message = false if packet.messages_disabled
             # Check if any of the parameters have DISABLE_MESSAGES
@@ -63,18 +64,18 @@ module OpenC3
               end
             end
 
-            if log_message
-              if target and target_name != 'UNKNOWN'
-                @logger.info System.commands.format(packet, target.ignored_parameters)
-              else
-                @logger.warn "Unidentified packet of #{packet.length} bytes being routed to target #{@interface.cmd_target_names[0]}"
-              end
+            if target and target_name != 'UNKNOWN'
+              cmd_string = System.commands.format(packet, target.ignored_parameters)
+            else
+              cmd_string = "Unidentified packet of #{packet.length} bytes routed to target #{@interface.cmd_target_names[0]}"
+              @logger.warn "Unidentified packet of #{packet.length} bytes being routed to target #{@interface.cmd_target_names[0]}" if log_message
             end
           rescue => err
             @logger.error "Problem formatting command from router:\n#{err.formatted}"
           end
 
-          RouterTopic.route_command(packet, @interface.cmd_target_names, scope: @scope)
+          # The interface microservice writes the attributed message log entry when the command is transmitted
+          RouterTopic.route_command(packet, @interface.cmd_target_names, scope: @scope, username: @interface.name, cmd_string: cmd_string, log_message: log_message)
         rescue Exception => err
           @error = err
           @logger.error "Error routing command from #{@interface.name}\n#{err.formatted}"
